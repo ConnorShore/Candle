@@ -1,0 +1,3 @@
+[submodule "Candle/vendor/spdlog"]
+	path = Candle/vendor/spdlog
+	url = https://github.com/gabime/spdlog
