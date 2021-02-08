@@ -1,5 +1,8 @@
 #include "Application.h"
 
+#include "Candle/Events/ApplicationEvent.h"
+#include "Candle/Log.h"
+
 namespace Candle {
 
 	Application::Application()
@@ -14,6 +17,9 @@ namespace Candle {
 
 	void Application::Run()
 	{
+		WindowResizeEvent e(1280, 720);
+		CANDLE_TRACE(e);
+
 		while (true);
 	}
 }

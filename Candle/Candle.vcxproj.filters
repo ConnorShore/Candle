@@ -4,6 +4,9 @@
     <Filter Include="Candle">
       <UniqueIdentifier>{2CF941AB-189B-6C81-0156-80D5ED96F3D1}</UniqueIdentifier>
     </Filter>
+    <Filter Include="Candle\Events">
+      <UniqueIdentifier>{901BF6C6-FCDB-71FD-C516-BB7A3196B6D9}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="src\Candle.h" />
@@ -15,6 +18,18 @@
     </ClInclude>
     <ClInclude Include="src\Candle\EntryPoint.h">
       <Filter>Candle</Filter>
+    </ClInclude>
+    <ClInclude Include="src\Candle\Events\ApplicationEvent.h">
+      <Filter>Candle\Events</Filter>
+    </ClInclude>
+    <ClInclude Include="src\Candle\Events\Event.h">
+      <Filter>Candle\Events</Filter>
+    </ClInclude>
+    <ClInclude Include="src\Candle\Events\KeyEvent.h">
+      <Filter>Candle\Events</Filter>
+    </ClInclude>
+    <ClInclude Include="src\Candle\Events\MouseEvent.h">
+      <Filter>Candle\Events</Filter>
     </ClInclude>
     <ClInclude Include="src\Candle\Log.h">
       <Filter>Candle</Filter>
