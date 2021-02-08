@@ -1,5 +1,7 @@
-#include "Application.h"
+#include "candlepch.h"
 
+#include "Application.h"
+#include "Candle/Events/Event.h"
 #include "Candle/Events/ApplicationEvent.h"
 #include "Candle/Log.h"
 

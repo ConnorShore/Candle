@@ -2,9 +2,6 @@
 
 #include "Candle/Core.h"
 
-#include <string>
-#include <functional>
-
 namespace Candle {
 
 	enum class EventType

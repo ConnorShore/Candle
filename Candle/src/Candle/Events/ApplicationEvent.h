@@ -2,8 +2,6 @@
 
 #include "Event.h"
 
-#include <sstream>
-
 namespace Candle {
 
 	class CANDLE_API WindowResizeEvent : public Event

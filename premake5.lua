@@ -18,6 +18,9 @@ project "Candle"
 	targetdir ("bin/" .. outputdir .. "/%{prj.name}")
 	objdir ("bin-int/" .. outputdir .. "/%{prj.name}")
 
+	pchheader "candlepch.h"
+	pchsource "Candle/src/candlepch.cpp"
+
 	files
 	{
 		"%{prj.name}/src/**.h",

@@ -34,6 +34,7 @@
     <ClInclude Include="src\Candle\Log.h">
       <Filter>Candle</Filter>
     </ClInclude>
+    <ClInclude Include="src\candlepch.h" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="src\Candle\Application.cpp">
@@ -42,5 +43,6 @@
     <ClCompile Include="src\Candle\Log.cpp">
       <Filter>Candle</Filter>
     </ClCompile>
+    <ClCompile Include="src\candlepch.cpp" />
   </ItemGroup>
 </Project>
