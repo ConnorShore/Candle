@@ -1,6 +1,8 @@
 #include "candlepch.h"
 #include "Application.h"
 
+#include <glad/glad.h>
+
 namespace Candle {
 
 #define BIND_EVENT_FN(x) std::bind(&Application::x, this, std::placeholders::_1)
@@ -40,6 +42,9 @@ namespace Candle {
 
 	void Application::Run()
 	{
+		glClearColor(0, 0, 1, 1);
+		glClear(GL_COLOR_BUFFER_BIT);
+
 		while (_isRunning) 
 		{
 			for (Layer* layer : _layerStack)

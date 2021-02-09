@@ -5,6 +5,8 @@
 #include "Candle/Events/KeyEvent.h"
 #include "Candle/Events/MouseEvent.h"
 
+#include <glad/glad.h>
+
 namespace Candle {
 
 	static bool s_glfwInitialized = false; // Make static as we may have multiple windows, but only want glwf initialized once
@@ -47,6 +49,10 @@ namespace Candle {
 
 		_window = glfwCreateWindow((int)props.Width, (int)props.Height, _data.Title.c_str(), nullptr, nullptr);
 		glfwMakeContextCurrent(_window);
+
+		int status = gladLoadGLLoader((GLADloadproc)glfwGetProcAddress);
+		CANDLE_CORE_ASSERT(status, "Failed to initialize Glad!");
+
 		glfwSetWindowUserPointer(_window, &_data);
 		SetVSync(true);
 
