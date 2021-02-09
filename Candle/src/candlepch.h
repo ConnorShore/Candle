@@ -12,6 +12,8 @@
 #include <unordered_map>>
 #include <unordered_set>
 
+#include "Candle/Log.h"
+
 #ifdef CANDLE_PLATFORM_WINDOWS
 	#include <Windows.h>
 #endif

@@ -1,27 +1,24 @@
 #include "candlepch.h"
 
 #include "Application.h"
-#include "Candle/Events/Event.h"
+#include "Events/Event.h"
 #include "Candle/Events/ApplicationEvent.h"
-#include "Candle/Log.h"
 
 namespace Candle {
 
 	Application::Application()
 	{
-
+		_window = std::unique_ptr<Window>(Window::Create());
 	}
 
 	Application::~Application()
 	{
-
 	}
 
 	void Application::Run()
 	{
-		WindowResizeEvent e(1280, 720);
-		CANDLE_TRACE(e);
-
-		while (true);
+		while (_isRunning) {
+			_window->OnUpdate();
+		}
 	}
 }

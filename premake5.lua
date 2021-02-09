@@ -10,6 +10,13 @@ workspace "Candle"
 
 outputdir = "%{cfg.buildcfg}-%{cfg.system}-%{cfg.architecture}"
 
+-- Include directories relative to root folder (solution directory)
+IncludeDir = {}
+IncludeDir["GLFW"] = "Candle/vendor/GLFW/include"
+
+-- Include glfw premake file in this premake file
+include "Candle/vendor/GLFW"
+
 project "Candle"
 	location "Candle"
 	kind "SharedLib"
@@ -30,7 +37,14 @@ project "Candle"
 	includedirs
 	{
 		"%{prj.name}/src",
-		"%{prj.name}/vendor/spdlog/include"
+		"%{prj.name}/vendor/spdlog/include",
+		"%{IncludeDir.GLFW}"
+	}
+
+	links
+	{
+		"GLFW",
+		"opengl32.lib"
 	}
 
 	filter "system:windows"
@@ -50,7 +64,11 @@ project "Candle"
 		}
 	
 	filter "configurations:Debug"
-		defines "CANDLE_DEBUG"
+		defines 
+		{
+			"CANDLE_DEBUG",
+			"CANDLE_ENABLE_ASSERTS"
+		}
 		symbols "On"
 	
 	filter "configurations:Release"
@@ -97,7 +115,11 @@ project "Sandbox"
 		}
 	
 	filter "configurations:Debug"
-		defines "CANDLE_DEBUG"
+		defines
+		{
+			"CANDLE_DEBUG",
+			"CANDLE_ENABLE_ASSERTS"
+		}
 		symbols "On"
 	
 	filter "configurations:Release"
