@@ -43,8 +43,8 @@ namespace Candle {
 		{
 			return GetCateogryFlags() & category;
 		}
-	protected:
-		bool _handled = false;
+
+		bool Handled = false;
 	};
 
 	class EventDispatcher
@@ -59,7 +59,7 @@ namespace Candle {
 		{
 			if (_event.GetEventType() == T::GetStaticType())
 			{
-				_event._handled = func(*(T*)&_event);
+				_event.Handled = func(*(T*)&_event);
 				return true;
 			}
 

@@ -15,17 +15,36 @@ namespace Candle {
 	{
 	}
 
+	void Application::PushLayer(Layer* layer)
+	{
+		_layerStack.PushLayer(layer);
+	}
+
+	void Application::PushOverlay(Layer* overlay)
+	{
+		_layerStack.PushOverlay(overlay);
+	}
+
 	void Application::OnEvent(Event& e)
 	{
 		EventDispatcher dispatcher(e);
 		dispatcher.Dispatch<WindowCloseEvent>(BIND_EVENT_FN(OnWindowClose));
 
-		CANDLE_CORE_TRACE("{0}", e);
+		for (auto it = _layerStack.end(); it != _layerStack.begin(); ) 
+		{
+			(*--it)->OnEvent(e);
+			if (e.Handled)
+				break;
+		}
 	}
 
 	void Application::Run()
 	{
-		while (_isRunning) {
+		while (_isRunning) 
+		{
+			for (Layer* layer : _layerStack)
+				layer->OnUpdate();
+
 			_window->OnUpdate();
 		}
 	}

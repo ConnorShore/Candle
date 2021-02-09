@@ -37,6 +37,12 @@
     <ClInclude Include="src\Candle\Events\MouseEvent.h">
       <Filter>Candle\Events</Filter>
     </ClInclude>
+    <ClInclude Include="src\Candle\Layer.h">
+      <Filter>Candle</Filter>
+    </ClInclude>
+    <ClInclude Include="src\Candle\LayerStack.h">
+      <Filter>Candle</Filter>
+    </ClInclude>
     <ClInclude Include="src\Candle\Log.h">
       <Filter>Candle</Filter>
     </ClInclude>
@@ -50,6 +56,12 @@
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="src\Candle\Application.cpp">
+      <Filter>Candle</Filter>
+    </ClCompile>
+    <ClCompile Include="src\Candle\Layer.cpp">
+      <Filter>Candle</Filter>
+    </ClCompile>
+    <ClCompile Include="src\Candle\LayerStack.cpp">
       <Filter>Candle</Filter>
     </ClCompile>
     <ClCompile Include="src\Candle\Log.cpp">

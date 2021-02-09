@@ -64,19 +64,18 @@ project "Candle"
 		}
 	
 	filter "configurations:Debug"
-		defines 
-		{
-			"CANDLE_DEBUG",
-			"CANDLE_ENABLE_ASSERTS"
-		}
+		defines "CANDLE_DEBUG"
+		buildoptions "/MDd"
 		symbols "On"
 	
 	filter "configurations:Release"
 		defines "CANDLE_RELEASE"
+		buildoptions "/MD"
 		optimize "On"
 
 	filter "configurations:Dist"
 		defines "CANDLE_DIST"
+		buildoptions "/MD"
 		optimize "On"
 
 project "Sandbox"
@@ -115,17 +114,16 @@ project "Sandbox"
 		}
 	
 	filter "configurations:Debug"
-		defines
-		{
-			"CANDLE_DEBUG",
-			"CANDLE_ENABLE_ASSERTS"
-		}
+		defines "CANDLE_DEBUG"
+		buildoptions "/MDd"
 		symbols "On"
 	
 	filter "configurations:Release"
 		defines "CANDLE_RELEASE"
+		buildoptions "/MD"
 		optimize "On"
 
 	filter "configurations:Dist"
 		defines "CANDLE_DIST"
+		buildoptions "/MD"
 		optimize "On"

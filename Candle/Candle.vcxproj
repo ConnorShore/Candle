@@ -79,11 +79,12 @@
       <PrecompiledHeader>Use</PrecompiledHeader>
       <PrecompiledHeaderFile>candlepch.h</PrecompiledHeaderFile>
       <WarningLevel>Level3</WarningLevel>
-      <PreprocessorDefinitions>CANDLE_PLATFORM_WINDOWS;CANDLE_BUILD_DLL;CANDLE_DEBUG;CANDLE_ENABLE_ASSERTS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <PreprocessorDefinitions>CANDLE_PLATFORM_WINDOWS;CANDLE_BUILD_DLL;CANDLE_DEBUG;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <AdditionalIncludeDirectories>src;vendor\spdlog\include;vendor\GLFW\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <DebugInformationFormat>EditAndContinue</DebugInformationFormat>
       <Optimization>Disabled</Optimization>
       <RuntimeLibrary>MultiThreadedDebug</RuntimeLibrary>
+      <AdditionalOptions>/MDd %(AdditionalOptions)</AdditionalOptions>
       <LanguageStandard>stdcpp17</LanguageStandard>
     </ClCompile>
     <Link>
@@ -109,6 +110,7 @@
       <MinimalRebuild>false</MinimalRebuild>
       <StringPooling>true</StringPooling>
       <RuntimeLibrary>MultiThreaded</RuntimeLibrary>
+      <AdditionalOptions>/MD %(AdditionalOptions)</AdditionalOptions>
       <LanguageStandard>stdcpp17</LanguageStandard>
     </ClCompile>
     <Link>
@@ -135,6 +137,7 @@
       <MinimalRebuild>false</MinimalRebuild>
       <StringPooling>true</StringPooling>
       <RuntimeLibrary>MultiThreaded</RuntimeLibrary>
+      <AdditionalOptions>/MD %(AdditionalOptions)</AdditionalOptions>
       <LanguageStandard>stdcpp17</LanguageStandard>
     </ClCompile>
     <Link>
@@ -157,6 +160,8 @@
     <ClInclude Include="src\Candle\Events\Event.h" />
     <ClInclude Include="src\Candle\Events\KeyEvent.h" />
     <ClInclude Include="src\Candle\Events\MouseEvent.h" />
+    <ClInclude Include="src\Candle\Layer.h" />
+    <ClInclude Include="src\Candle\LayerStack.h" />
     <ClInclude Include="src\Candle\Log.h" />
     <ClInclude Include="src\Candle\Window.h" />
     <ClInclude Include="src\Platform\Windows\WindowsWindow.h" />
@@ -164,6 +169,8 @@
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="src\Candle\Application.cpp" />
+    <ClCompile Include="src\Candle\Layer.cpp" />
+    <ClCompile Include="src\Candle\LayerStack.cpp" />
     <ClCompile Include="src\Candle\Log.cpp" />
     <ClCompile Include="src\Platform\Windows\WindowsWindow.cpp" />
     <ClCompile Include="src\candlepch.cpp">

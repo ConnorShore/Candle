@@ -1,9 +1,10 @@
 #pragma once
 
 #include "Core.h"
-#include "Events/Event.h"
-#include "Candle/Events/ApplicationEvent.h"
 #include "Window.h"
+#include "LayerStack.h"
+#include "CAndle/Events/Event.h"
+#include "Candle/Events/ApplicationEvent.h"
 
 namespace Candle {
 
@@ -13,6 +14,9 @@ namespace Candle {
 		Application();
 		virtual ~Application();
 
+		void PushLayer(Layer* layer);
+		void PushOverlay(Layer* overlay);
+
 		void OnEvent(Event& e);
 		void Run();
 	private:
@@ -21,6 +25,7 @@ namespace Candle {
 	private:
 		std::unique_ptr<Window> _window;
 		bool _isRunning = true;
+		LayerStack _layerStack;
 	};
 
 	// To be defined in the client

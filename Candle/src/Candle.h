@@ -7,6 +7,7 @@
 // --------------------------------
 
 #include "Candle/Application.h"
+#include "Candle/Layer.h"
 #include "Candle/Log.h"
 
 // -----Entry Point----------------
