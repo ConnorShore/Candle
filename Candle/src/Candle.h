@@ -9,6 +9,11 @@
 #include "Candle/Application.h"
 #include "Candle/Layer.h"
 #include "Candle/Log.h"
+
+#include "Candle/Input.h"
+#include "Candle/KeyCodes.h"
+#include "Candle/MouseButtonCodes.h"
+
 #include "Candle/ImGui/ImGuiLayer.h"
 
 // -----Entry Point----------------

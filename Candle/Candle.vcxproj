@@ -162,9 +162,11 @@
     <ClInclude Include="src\Candle\Events\MouseEvent.h" />
     <ClInclude Include="src\Candle\ImGui\ImGuiLayer.h" />
     <ClInclude Include="src\Candle\Input.h" />
+    <ClInclude Include="src\Candle\KeyCodes.h" />
     <ClInclude Include="src\Candle\Layer.h" />
     <ClInclude Include="src\Candle\LayerStack.h" />
     <ClInclude Include="src\Candle\Log.h" />
+    <ClInclude Include="src\Candle\MouseButtonCodes.h" />
     <ClInclude Include="src\Candle\Window.h" />
     <ClInclude Include="src\Platform\OpenGL\ImGuiOpenGLRenderer.h" />
     <ClInclude Include="src\Platform\Windows\WindowsInput.h" />
@@ -198,4 +200,4 @@
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
   </ImportGroup>
-</Project> 
+</Project>

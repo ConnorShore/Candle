@@ -7,12 +7,14 @@ public:
 
 	void OnUpdate() override
 	{
-		CANDLE_INFO("ExampleLayer::Update");
+		//CANDLE_INFO("ExampleLayer::Update");
 	}
 
 	void OnEvent(Candle::Event& e) override
 	{
-		CANDLE_TRACE("{0}", e);
+		//CANDLE_TRACE("{0}", e);
+		if (Candle::Input::IsKeyPressed(CANDLE_KEY_TAB))
+			CANDLE_TRACE("Tab key is pressed");
 	}
 };
 

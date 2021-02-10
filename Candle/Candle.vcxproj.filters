@@ -71,6 +71,8 @@
       <Filter>Platform\Windows</Filter>
     </ClInclude>
     <ClInclude Include="src\candlepch.h" />
+    <ClInclude Include="src\Candle\KeyCodes.h" />
+    <ClInclude Include="src\Candle\MouseButtonCodes.h" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="src\Candle\Application.cpp">
