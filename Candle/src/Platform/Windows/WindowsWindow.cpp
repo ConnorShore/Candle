@@ -102,6 +102,13 @@ namespace Candle {
 				}
 			});
 
+		glfwSetCharCallback(_window, [](GLFWwindow* window, unsigned int keycode)
+			{
+				WindowData& data = *(WindowData*)glfwGetWindowUserPointer(window);
+				KeyTypedEvent evt(keycode);
+				data.EventCallback(evt);
+			});
+
 		glfwSetMouseButtonCallback(_window, [](GLFWwindow* window, int button, int action, int mods)
 			{
 				WindowData& data = *(WindowData*)glfwGetWindowUserPointer(window);

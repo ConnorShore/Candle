@@ -40,6 +40,9 @@ namespace Candle {
 			return ss.str();
 		}
 
+		inline float GetXOffset() { return _xOffset; }
+		inline float GetYOffset() { return _yOffset; }
+
 		EVENT_CLASS_TYPE(MouseScrolled)
 		EVENT_CLASS_CATEGORY(EventCategoryMouse | EventCategoryInput)
 

@@ -19,6 +19,9 @@ namespace Candle {
 
 		void OnEvent(Event& e);
 		void Run();
+
+		inline Window& GetWindow() { return *_window; }
+		inline static Application& Get() { return *s_instance; }
 	private:
 		bool OnWindowClose(WindowCloseEvent& e);
 
@@ -26,6 +29,8 @@ namespace Candle {
 		std::unique_ptr<Window> _window;
 		bool _isRunning = true;
 		LayerStack _layerStack;
+
+		static Application* s_instance;
 	};
 
 	// To be defined in the client

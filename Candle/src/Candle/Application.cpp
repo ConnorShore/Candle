@@ -5,12 +5,15 @@
 
 namespace Candle {
 
-#define BIND_EVENT_FN(x) std::bind(&Application::x, this, std::placeholders::_1)
+	Application* Application::s_instance = nullptr;
 
 	Application::Application()
 	{
+		CANDLE_CORE_ASSERT(!s_instance, "Application already exists!");
+		s_instance = this;
+
 		_window = std::unique_ptr<Window>(Window::Create());
-		_window->SetEventCallback(BIND_EVENT_FN(OnEvent));
+		_window->SetEventCallback(CANDLE_BIND_EVENT_FN(Application::OnEvent));
 	}
 
 	Application::~Application()
@@ -20,17 +23,19 @@ namespace Candle {
 	void Application::PushLayer(Layer* layer)
 	{
 		_layerStack.PushLayer(layer);
+		layer->OnAttach();
 	}
 
 	void Application::PushOverlay(Layer* overlay)
 	{
 		_layerStack.PushOverlay(overlay);
+		overlay->OnAttach();
 	}
 
 	void Application::OnEvent(Event& e)
 	{
 		EventDispatcher dispatcher(e);
-		dispatcher.Dispatch<WindowCloseEvent>(BIND_EVENT_FN(OnWindowClose));
+		dispatcher.Dispatch<WindowCloseEvent>(CANDLE_BIND_EVENT_FN(Application::OnWindowClose));
 
 		for (auto it = _layerStack.end(); it != _layerStack.begin(); ) 
 		{
@@ -42,11 +47,11 @@ namespace Candle {
 
 	void Application::Run()
 	{
-		glClearColor(0, 0, 1, 1);
-		glClear(GL_COLOR_BUFFER_BIT);
-
 		while (_isRunning) 
 		{
+			glClearColor(0, 0, 1, 1);
+			glClear(GL_COLOR_BUFFER_BIT);
+
 			for (Layer* layer : _layerStack)
 				layer->OnUpdate();
 
