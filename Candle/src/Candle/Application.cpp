@@ -1,5 +1,6 @@
 #include "candlepch.h"
 #include "Application.h"
+#include "Input.h"
 
 #include <glad/glad.h>
 
@@ -54,6 +55,9 @@ namespace Candle {
 
 			for (Layer* layer : _layerStack)
 				layer->OnUpdate();
+
+			auto [x, y] = Input::GetMousePosition();
+			CANDLE_CORE_TRACE("{0}, {1}", x, y);
 
 			_window->OnUpdate();
 		}

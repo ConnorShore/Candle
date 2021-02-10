@@ -161,11 +161,13 @@
     <ClInclude Include="src\Candle\Events\KeyEvent.h" />
     <ClInclude Include="src\Candle\Events\MouseEvent.h" />
     <ClInclude Include="src\Candle\ImGui\ImGuiLayer.h" />
+    <ClInclude Include="src\Candle\Input.h" />
     <ClInclude Include="src\Candle\Layer.h" />
     <ClInclude Include="src\Candle\LayerStack.h" />
     <ClInclude Include="src\Candle\Log.h" />
     <ClInclude Include="src\Candle\Window.h" />
     <ClInclude Include="src\Platform\OpenGL\ImGuiOpenGLRenderer.h" />
+    <ClInclude Include="src\Platform\Windows\WindowsInput.h" />
     <ClInclude Include="src\Platform\Windows\WindowsWindow.h" />
     <ClInclude Include="src\candlepch.h" />
   </ItemGroup>
@@ -176,6 +178,7 @@
     <ClCompile Include="src\Candle\LayerStack.cpp" />
     <ClCompile Include="src\Candle\Log.cpp" />
     <ClCompile Include="src\Platform\OpenGL\ImGuiOpenGLRenderer.cpp" />
+    <ClCompile Include="src\Platform\Windows\WindowsInput.cpp" />
     <ClCompile Include="src\Platform\Windows\WindowsWindow.cpp" />
     <ClCompile Include="src\candlepch.cpp">
       <PrecompiledHeader>Create</PrecompiledHeader>
@@ -195,4 +198,4 @@
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
   </ImportGroup>
-</Project>
+</Project> 

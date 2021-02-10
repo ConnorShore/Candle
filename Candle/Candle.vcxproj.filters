@@ -43,6 +43,12 @@
     <ClInclude Include="src\Candle\Events\MouseEvent.h">
       <Filter>Candle\Events</Filter>
     </ClInclude>
+    <ClInclude Include="src\Candle\ImGui\ImGuiLayer.h">
+      <Filter>Candle\ImGui</Filter>
+    </ClInclude>
+    <ClInclude Include="src\Candle\Input.h">
+      <Filter>Candle</Filter>
+    </ClInclude>
     <ClInclude Include="src\Candle\Layer.h">
       <Filter>Candle</Filter>
     </ClInclude>
@@ -55,20 +61,23 @@
     <ClInclude Include="src\Candle\Window.h">
       <Filter>Candle</Filter>
     </ClInclude>
-    <ClInclude Include="src\candlepch.h" />
-    <ClInclude Include="src\Candle\ImGui\ImGuiLayer.h">
-      <Filter>Candle\ImGui</Filter>
-    </ClInclude>
     <ClInclude Include="src\Platform\OpenGL\ImGuiOpenGLRenderer.h">
       <Filter>Platform\OpenGL</Filter>
+    </ClInclude>
+    <ClInclude Include="src\Platform\Windows\WindowsInput.h">
+      <Filter>Platform\Windows</Filter>
     </ClInclude>
     <ClInclude Include="src\Platform\Windows\WindowsWindow.h">
       <Filter>Platform\Windows</Filter>
     </ClInclude>
+    <ClInclude Include="src\candlepch.h" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="src\Candle\Application.cpp">
       <Filter>Candle</Filter>
+    </ClCompile>
+    <ClCompile Include="src\Candle\ImGui\ImGuiLayer.cpp">
+      <Filter>Candle\ImGui</Filter>
     </ClCompile>
     <ClCompile Include="src\Candle\Layer.cpp">
       <Filter>Candle</Filter>
@@ -79,15 +88,15 @@
     <ClCompile Include="src\Candle\Log.cpp">
       <Filter>Candle</Filter>
     </ClCompile>
-    <ClCompile Include="src\candlepch.cpp" />
-    <ClCompile Include="src\Candle\ImGui\ImGuiLayer.cpp">
-      <Filter>Candle\ImGui</Filter>
-    </ClCompile>
     <ClCompile Include="src\Platform\OpenGL\ImGuiOpenGLRenderer.cpp">
       <Filter>Platform\OpenGL</Filter>
+    </ClCompile>
+    <ClCompile Include="src\Platform\Windows\WindowsInput.cpp">
+      <Filter>Platform\Windows</Filter>
     </ClCompile>
     <ClCompile Include="src\Platform\Windows\WindowsWindow.cpp">
       <Filter>Platform\Windows</Filter>
     </ClCompile>
+    <ClCompile Include="src\candlepch.cpp" />
   </ItemGroup>
 </Project>

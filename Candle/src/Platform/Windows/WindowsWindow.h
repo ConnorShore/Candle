@@ -17,6 +17,8 @@ namespace Candle {
 		inline unsigned int GetWidth() const override { return _data.Width; }
 		inline unsigned int GetHeight() const override { return _data.Height; }
 
+		inline void* GetNativeWindow() const override { return _window; }
+
 		inline void SetEventCallback(const EventCallbackFn& callback) override { _data.EventCallback = callback; }
 		void SetVSync(bool enabled) override;
 		bool IsVSync() const override;
