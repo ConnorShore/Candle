@@ -5,7 +5,6 @@ namespace Candle {
 
 	LayerStack::LayerStack()
 	{
-		_layerInsert = _layers.begin();
 	}
 
 	LayerStack::~LayerStack()
@@ -16,8 +15,7 @@ namespace Candle {
 
 	void LayerStack::PushLayer(Layer* layer)
 	{
-		_layerInsert = _layers.emplace(_layerInsert, layer);
-		_layerInsert++;
+		_layers.emplace(_layers.begin() + _layerInsertIndex++, layer);
 	}
 
 	void LayerStack::PushOverlay(Layer* overlay)
@@ -31,7 +29,7 @@ namespace Candle {
 		if (it != _layers.end())
 		{
 			_layers.erase(it);
-			_layerInsert--;
+			_layerInsertIndex--;
 		}
 	}
 

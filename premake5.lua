@@ -24,7 +24,7 @@ include "Candle/vendor/imgui"
 
 project "Candle"
 	location "Candle"
-	kind "SharedLib"
+	kind "StaticLib"
 	language "C++"
 
 	targetdir ("bin/" .. outputdir .. "/%{prj.name}")
@@ -109,7 +109,8 @@ project "Sandbox"
 	{
 		"Candle/vendor/spdlog/include",
 		"Candle/src",
-		"%{IncludeDir.glm}"
+		"Candle/vendor",
+		"%{IncludeDir.glm}",
 	}
 
 	links

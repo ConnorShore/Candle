@@ -1,5 +1,7 @@
 #include <Candle.h>
 
+#include "imgui/imgui.h"
+
 class ExampleLayer : public Candle::Layer
 {
 public:
@@ -8,6 +10,13 @@ public:
 	void OnUpdate() override
 	{
 		//CANDLE_INFO("ExampleLayer::Update");
+	}
+
+	void OnImGuiRender() override
+	{
+		ImGui::Begin("Test");
+		ImGui::Text("Hello World");
+		ImGui::End();
 	}
 
 	void OnEvent(Candle::Event& e) override
@@ -24,7 +33,6 @@ public:
 	SandboxApp()
 	{
 		PushLayer(new ExampleLayer());
-		PushOverlay(new Candle::ImGuiLayer());
 	}
 
 	~SandboxApp()

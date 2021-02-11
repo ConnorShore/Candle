@@ -15,6 +15,9 @@ namespace Candle {
 
 		_window = std::unique_ptr<Window>(Window::Create());
 		_window->SetEventCallback(CANDLE_BIND_EVENT_FN(Application::OnEvent));
+
+		_imGuiLayer = new ImGuiLayer();
+		PushOverlay(_imGuiLayer);
 	}
 
 	Application::~Application()
@@ -53,9 +56,19 @@ namespace Candle {
 			glClearColor(0, 0, 1, 1);
 			glClear(GL_COLOR_BUFFER_BIT);
 
+			// Update layers
 			for (Layer* layer : _layerStack)
 				layer->OnUpdate();
+			
+			// Im gui render
+			_imGuiLayer->Begin();
 
+			for (Layer* layer : _layerStack)
+				layer->OnImGuiRender();
+
+			_imGuiLayer->End();
+
+			// Finally update window
 			_window->OnUpdate();
 		}
 	}

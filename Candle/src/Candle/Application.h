@@ -6,6 +6,8 @@
 #include "CAndle/Events/Event.h"
 #include "Candle/Events/ApplicationEvent.h"
 
+#include "Candle/ImGui/ImGuiLayer.h"
+
 namespace Candle {
 
 	class CANDLE_API Application
@@ -29,6 +31,8 @@ namespace Candle {
 		std::unique_ptr<Window> _window;
 		bool _isRunning = true;
 		LayerStack _layerStack;
+
+		ImGuiLayer* _imGuiLayer;
 
 		static Application* s_instance;
 	};
