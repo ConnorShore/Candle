@@ -1,11 +1,15 @@
 #pragma once
 
 #ifdef CANDLE_PLATFORM_WINDOWS
+#if CANDLE_DYNAMIC_LINK
 	#ifdef CANDLE_BUILD_DLL
 		#define CANDLE_API __declspec(dllexport)
 	#else
 		#define CANDLE_API __declspec(dllimport)
 	#endif
+#else
+	#define CANDLE_API
+#endif
 #else
 	#error Candle only supports Windows!
 #endif
