@@ -8,6 +8,8 @@
 
 #include "Candle/ImGui/ImGuiLayer.h"
 
+#include "Candle/Renderer/Shader.h"
+
 namespace Candle {
 
 	class CANDLE_API Application
@@ -37,6 +39,8 @@ namespace Candle {
 		static Application* s_instance;
 
 		unsigned int _vertexArray, _vertexBuffer, _indexBuffer;
+
+		std::unique_ptr<Shader> _shader;
 	};
 
 	// To be defined in the client

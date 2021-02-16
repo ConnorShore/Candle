@@ -46,6 +46,35 @@ namespace Candle {
 		};
 
 		glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(indices), indices, GL_STATIC_DRAW);
+
+		std::string vertexSrc = R"(
+			#version 330 core
+
+			layout(location=0) in vec3 vertexPos;
+
+			out vec3 fragmentPos;
+
+			void main()
+			{
+				fragmentPos = vertexPos;
+				gl_Position = vec4(vertexPos, 1.0);
+			}
+		)";
+
+		std::string fragmentSrc = R"(
+			#version 330 core
+
+			in vec3 fragmentPos;
+
+			out vec4 color;
+
+			void main()
+			{
+				color = vec4(fragmentPos * 0.25 + 0.5, 1.0);
+			}
+		)";
+
+		_shader.reset(new Shader(vertexSrc, fragmentSrc));
 	}
 
 	Application::~Application()
@@ -84,8 +113,12 @@ namespace Candle {
 			glClearColor(0, 0, 0.2f, 1);
 			glClear(GL_COLOR_BUFFER_BIT);
 
+			_shader->Bind();
+
 			glBindVertexArray(_vertexArray);
 			glDrawElements(GL_TRIANGLES, 3, GL_UNSIGNED_INT, nullptr);
+
+			_shader->Unbind();
 
 			// Update layers
 			for (Layer* layer : _layerStack)
