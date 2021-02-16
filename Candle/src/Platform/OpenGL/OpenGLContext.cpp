@@ -16,6 +16,11 @@ namespace Candle {
 		glfwMakeContextCurrent(_windowHandle);
 		int status = gladLoadGLLoader((GLADloadproc)glfwGetProcAddress);
 		CANDLE_CORE_ASSERT(status, "Failed to initialize Glad!");
+
+		CANDLE_CORE_INFO("OpenGL Info:");
+		CANDLE_CORE_INFO("  Vendor: {0}", glGetString(GL_VENDOR));
+		CANDLE_CORE_INFO("  Renderer: {0}", glGetString(GL_RENDERER));
+		CANDLE_CORE_INFO("  Version: {0}", glGetString(GL_VERSION));
 	}
 
 	void OpenGLContext::SwapBuffer()

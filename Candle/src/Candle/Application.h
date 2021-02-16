@@ -35,6 +35,8 @@ namespace Candle {
 		ImGuiLayer* _imGuiLayer;
 
 		static Application* s_instance;
+
+		unsigned int _vertexArray, _vertexBuffer, _indexBuffer;
 	};
 
 	// To be defined in the client
