@@ -140,6 +140,7 @@
     </Lib>
   </ItemDefinitionGroup>
   <ItemGroup>
+    <ClInclude Include="src\Platform\OpenGL\OpenGLContext.h" />
     <ClInclude Include="src\Candle.h" />
     <ClInclude Include="src\Candle\Application.h" />
     <ClInclude Include="src\Candle\Core.h" />
@@ -155,6 +156,7 @@
     <ClInclude Include="src\Candle\LayerStack.h" />
     <ClInclude Include="src\Candle\Log.h" />
     <ClInclude Include="src\Candle\MouseButtonCodes.h" />
+    <ClInclude Include="src\Candle\Renderer\GraphicsContext.h" />
     <ClInclude Include="src\Candle\Window.h" />
     <ClInclude Include="src\Platform\Windows\WindowsInput.h" />
     <ClInclude Include="src\Platform\Windows\WindowsWindow.h" />
@@ -574,6 +576,7 @@
     <ClInclude Include="vendor\glm\glm\vector_relational.hpp" />
   </ItemGroup>
   <ItemGroup>
+    <ClCompile Include="src\Platform\OpenGL\OpenGLContext.cpp" />
     <ClCompile Include="src\Candle\Application.cpp" />
     <ClCompile Include="src\Candle\ImGui\ImGuiBuild.cpp" />
     <ClCompile Include="src\Candle\ImGui\ImGuiLayer.cpp" />
