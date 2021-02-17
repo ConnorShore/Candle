@@ -68,7 +68,7 @@ namespace Candle {
 			}
 		)";
 
-		_shader.reset(new Shader(vertexSrc, fragmentSrc));
+		_shader.reset(Shader::Create(vertexSrc, fragmentSrc));
 	}
 
 	Application::~Application()

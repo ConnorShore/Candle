@@ -162,6 +162,7 @@
     <ClInclude Include="src\Candle\MouseButtonCodes.h" />
     <ClInclude Include="src\Candle\Renderer\GraphicsContext.h" />
     <ClInclude Include="src\Candle\Window.h" />
+    <ClInclude Include="src\Platform\OpenGL\OpenGLShader.h" />
     <ClInclude Include="src\Platform\Windows\WindowsInput.h" />
     <ClInclude Include="src\Platform\Windows\WindowsWindow.h" />
     <ClInclude Include="src\candlepch.h" />
@@ -591,6 +592,7 @@
     <ClCompile Include="src\Candle\Layer.cpp" />
     <ClCompile Include="src\Candle\LayerStack.cpp" />
     <ClCompile Include="src\Candle\Log.cpp" />
+    <ClCompile Include="src\Platform\OpenGL\OpenGLShader.cpp" />
     <ClCompile Include="src\Platform\Windows\WindowsInput.cpp" />
     <ClCompile Include="src\Platform\Windows\WindowsWindow.cpp" />
     <ClCompile Include="src\candlepch.cpp">
