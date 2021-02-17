@@ -9,6 +9,7 @@
 #include "Candle/ImGui/ImGuiLayer.h"
 
 #include "Candle/Renderer/Shader.h"
+#include "Candle/Renderer/Buffer.h"
 
 namespace Candle {
 
@@ -38,9 +39,11 @@ namespace Candle {
 
 		static Application* s_instance;
 
-		unsigned int _vertexArray, _vertexBuffer, _indexBuffer;
+		unsigned int _vertexArray;
 
 		std::unique_ptr<Shader> _shader;
+		std::unique_ptr<VertexBuffer> _vertexBuffer;
+		std::unique_ptr<IndexBuffer> _indexBuffer;
 	};
 
 	// To be defined in the client

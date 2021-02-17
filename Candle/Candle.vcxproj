@@ -140,7 +140,10 @@
     </Lib>
   </ItemDefinitionGroup>
   <ItemGroup>
+    <ClInclude Include="src\Candle\Renderer\Buffer.h" />
+    <ClInclude Include="src\Candle\Renderer\Renderer.h" />
     <ClInclude Include="src\Candle\Renderer\Shader.h" />
+    <ClInclude Include="src\Platform\OpenGL\OpenGLBuffer.h" />
     <ClInclude Include="src\Platform\OpenGL\OpenGLContext.h" />
     <ClInclude Include="src\Candle.h" />
     <ClInclude Include="src\Candle\Application.h" />
@@ -577,7 +580,10 @@
     <ClInclude Include="vendor\glm\glm\vector_relational.hpp" />
   </ItemGroup>
   <ItemGroup>
+    <ClCompile Include="src\Candle\Renderer\Buffer.cpp" />
+    <ClCompile Include="src\Candle\Renderer\Renderer.cpp" />
     <ClCompile Include="src\Candle\Renderer\Shader.cpp" />
+    <ClCompile Include="src\Platform\OpenGL\OpenGLBuffer.cpp" />
     <ClCompile Include="src\Platform\OpenGL\OpenGLContext.cpp" />
     <ClCompile Include="src\Candle\Application.cpp" />
     <ClCompile Include="src\Candle\ImGui\ImGuiBuild.cpp" />
