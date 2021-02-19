@@ -8,8 +8,9 @@
 
 #include "Candle/ImGui/ImGuiLayer.h"
 
-#include "Candle/Renderer/Shader.h"
+#include "Candle/Renderer/VertexArray.h"
 #include "Candle/Renderer/Buffer.h"
+#include "Candle/Renderer/Shader.h"
 
 namespace Candle {
 
@@ -32,6 +33,7 @@ namespace Candle {
 
 	private:
 		std::unique_ptr<Window> _window;
+
 		bool _isRunning = true;
 		LayerStack _layerStack;
 
@@ -39,11 +41,11 @@ namespace Candle {
 
 		static Application* s_instance;
 
-		unsigned int _vertexArray;
+		std::shared_ptr<Shader> _shader;
+		std::shared_ptr<Shader> _squareShader;
 
-		std::unique_ptr<Shader> _shader;
-		std::unique_ptr<VertexBuffer> _vertexBuffer;
-		std::unique_ptr<IndexBuffer> _indexBuffer;
+		std::shared_ptr<VertexArray> _vertexArray;
+		std::shared_ptr<VertexArray> _squareVertexArray;
 	};
 
 	// To be defined in the client
