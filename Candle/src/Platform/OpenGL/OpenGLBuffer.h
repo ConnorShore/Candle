@@ -3,7 +3,7 @@
 #include "Candle/Renderer/Buffer.h"
 
 namespace Candle {
-	class CANDLE_API OpenGLVertexBuffer : public VertexBuffer
+	class OpenGLVertexBuffer : public VertexBuffer
 	{
 	public:
 		OpenGLVertexBuffer(float* vertices, size_t size);
@@ -20,7 +20,7 @@ namespace Candle {
 		BufferLayout _layout;
 	};
 
-	class CANDLE_API OpenGLIndexBuffer : public IndexBuffer
+	class OpenGLIndexBuffer : public IndexBuffer
 	{
 	public:
 		OpenGLIndexBuffer(uint32_t* vertices, uint32_t count);

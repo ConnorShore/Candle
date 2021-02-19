@@ -4,7 +4,7 @@
 
 namespace Candle {
 
-	class CANDLE_API OpenGLShader : public Shader
+	class OpenGLShader : public Shader
 	{
 	public:
 		OpenGLShader(const std::string& vertexSrc, const std::string& fragmentSrc);

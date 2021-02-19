@@ -4,7 +4,7 @@
 
 namespace Candle {
 
-    class CANDLE_API OpenGLVertexArray : public VertexArray
+    class OpenGLVertexArray : public VertexArray
     {
     public:
         OpenGLVertexArray();

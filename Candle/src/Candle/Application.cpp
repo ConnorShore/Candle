@@ -2,9 +2,8 @@
 #include "Application.h"
 #include "Input.h"
 
+#include "Candle/Renderer/Renderer.h"
 #include "Platform/OpenGL/OpenGLBuffer.h"
-
-#include <glad/glad.h>
 
 namespace Candle {
 
@@ -175,25 +174,20 @@ namespace Candle {
 	{
 		while (_isRunning) 
 		{
-			glClearColor(0, 0, 0.2f, 1);
-			glClear(GL_COLOR_BUFFER_BIT);
+			RenderCommand::SetClearColor({ 0.0f, 0.0f, 0.2f, 1.0f });
+			RenderCommand::Clear();
 
-			_squareShader->Bind();
-			_squareVertexArray->Bind();
+			{
+				Renderer::BeginScene();
 
-			glDrawElements(GL_TRIANGLES, _squareVertexArray->GetIndexBuffers()->GetCount(), GL_UNSIGNED_INT, nullptr);
+				_squareShader->Bind();
+				Renderer::Submit(_squareVertexArray);
 
-			_squareVertexArray->Unbind();
-			_squareShader->Unbind();
+				_shader->Bind();
+				Renderer::Submit(_vertexArray);
 
-
-			_shader->Bind();
-			_vertexArray->Bind();
-
-			glDrawElements(GL_TRIANGLES, _vertexArray->GetIndexBuffers()->GetCount(), GL_UNSIGNED_INT, nullptr);
-
-			_vertexArray->Unbind();
-			_shader->Unbind();
+				Renderer::EndScene();
+			}
 
 			// Update layers
 			for (Layer* layer : _layerStack)
