@@ -3,7 +3,6 @@
 #include "Candle/Renderer/Buffer.h"
 
 namespace Candle {
-
 	class CANDLE_API OpenGLVertexBuffer : public VertexBuffer
 	{
 	public:
@@ -13,8 +12,12 @@ namespace Candle {
 		virtual void Bind() const override;
 		virtual void Unbind() const override;
 
+		virtual const BufferLayout& GetLayout() const override { return _layout; }
+		virtual void SetLayout(const BufferLayout& layout) override { _layout = layout; }
+
 	private:
 		uint32_t _renderId;
+		BufferLayout _layout;
 	};
 
 	class CANDLE_API OpenGLIndexBuffer : public IndexBuffer
