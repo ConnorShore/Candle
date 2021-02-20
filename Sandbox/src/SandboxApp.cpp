@@ -133,31 +133,33 @@ public:
 	}
 
 
-	void OnUpdate() override
+	void OnUpdate(Candle::Timestep timestep) override
 	{
+		CANDLE_TRACE("Delta Time: {0} s [{1} ms]", timestep, timestep.GetMilliseconds());
+
 		if (Candle::Input::IsKeyPressed(CANDLE_KEY_W))
 		{
-			_cameraPosition.y += _cameraMoveSpeed;
+			_cameraPosition.y += _cameraMoveSpeed * timestep;
 		}
 		if (Candle::Input::IsKeyPressed(CANDLE_KEY_A))
 		{
-			_cameraPosition.x -= _cameraMoveSpeed;
+			_cameraPosition.x -= _cameraMoveSpeed * timestep;
 		}
 		if (Candle::Input::IsKeyPressed(CANDLE_KEY_S))
 		{
-			_cameraPosition.y -= _cameraMoveSpeed;
+			_cameraPosition.y -= _cameraMoveSpeed * timestep;
 		}
 		if (Candle::Input::IsKeyPressed(CANDLE_KEY_D))
 		{
-			_cameraPosition.x += _cameraMoveSpeed;
+			_cameraPosition.x += _cameraMoveSpeed * timestep;
 		}
 		if (Candle::Input::IsKeyPressed(CANDLE_KEY_E))
 		{
-			_cameraRotation -= _cameraRotationSpeed;
+			_cameraRotation -= _cameraRotationSpeed * timestep;
 		}
 		if (Candle::Input::IsKeyPressed(CANDLE_KEY_Q))
 		{
-			_cameraRotation += _cameraRotationSpeed;
+			_cameraRotation += _cameraRotationSpeed * timestep;
 		}
 
 		Candle::RenderCommand::SetClearColor({ 0.0f, 0.0f, 0.2f, 1.0f });
@@ -201,9 +203,9 @@ private:
 
 	Candle::OrthographicCamera _camera;
 	glm::vec3 _cameraPosition;
-	float _cameraMoveSpeed = 0.05f;
-	float _cameraRotationSpeed = 0.5f;
 	float _cameraRotation = 0.0f;
+	float _cameraMoveSpeed = 3.0f;
+	float _cameraRotationSpeed = 90.0f;
 };
 
 class SandboxApp : public Candle::Application

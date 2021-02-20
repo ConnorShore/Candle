@@ -1,9 +1,10 @@
 #pragma once
 
-#include "Core.h"
-#include "Window.h"
-#include "LayerStack.h"
-#include "CAndle/Events/Event.h"
+#include "Candle/Core.h"
+#include "Candle/Window.h"
+#include "Candle/LayerStack.h"
+#include "Candle/Events/Event.h"
+#include "Candle/Core/Timestep.h"
 #include "Candle/Events/ApplicationEvent.h"
 
 #include "Candle/ImGui/ImGuiLayer.h"
@@ -36,6 +37,9 @@ namespace Candle {
 
 		ImGuiLayer* _imGuiLayer;
 
+		float _lastFrameTime = 0.0f;
+
+	private:
 		static Application* s_instance;
 	};
 

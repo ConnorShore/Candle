@@ -5,6 +5,8 @@
 #include "Candle/Renderer/Renderer.h"
 #include "Platform/OpenGL/OpenGLBuffer.h"
 
+#include <glfw/glfw3.h>
+
 
 namespace Candle {
 
@@ -56,9 +58,13 @@ namespace Candle {
 	{
 		while (_isRunning) 
 		{
+			float time = (float)glfwGetTime();	// TODO: Platform::GetTime()
+			Timestep timestep = time - _lastFrameTime;
+			_lastFrameTime = time;
+
 			// Update layers
 			for (Layer* layer : _layerStack)
-				layer->OnUpdate();
+				layer->OnUpdate(timestep);
 			
 			// Im gui render
 			_imGuiLayer->Begin();

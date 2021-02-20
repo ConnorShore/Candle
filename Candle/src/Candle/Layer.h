@@ -1,6 +1,7 @@
 #pragma once
 
 #include "Candle/Core.h"
+#include "Candle/Core/Timestep.h"
 #include "Candle/Events/Event.h"
 
 namespace Candle {
@@ -13,7 +14,7 @@ namespace Candle {
 
 		virtual void OnAttach() {}
 		virtual void OnDetach() {}
-		virtual void OnUpdate() {}
+		virtual void OnUpdate(Timestep timestep) {}
 		virtual void OnImGuiRender() {}
 		virtual void OnEvent(Event& event) {}
 
