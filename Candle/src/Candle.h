@@ -2,9 +2,9 @@
 
 // For application use only, not engine
 
-// -----General--------------------
+// -----General---------------------
 #include <stdio.h>
-// --------------------------------
+// ---------------------------------
 
 #include "Candle/Application.h"
 #include "Candle/Layer.h"
@@ -16,6 +16,20 @@
 
 #include "Candle/ImGui/ImGuiLayer.h"
 
-// -----Entry Point----------------
+
+// -----Renderer--------------------
+
+#include "Candle/Renderer/Renderer.h"
+#include "Candle/Renderer/RenderCommand.h"
+
+#include "Candle/Renderer/Buffer.h"
+#include "Candle/Renderer/Shader.h"
+#include "Candle/Renderer/VertexArray.h"
+
+#include "Candle/Renderer/OrthographicCamera.h"
+
+// ---------------------------------
+
+// -----Entry Point-----------------
 #include "Candle/EntryPoint.h"
-// --------------------------------
+// ---------------------------------

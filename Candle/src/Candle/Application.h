@@ -8,11 +8,6 @@
 
 #include "Candle/ImGui/ImGuiLayer.h"
 
-#include "Candle/Renderer/VertexArray.h"
-#include "Candle/Renderer/Buffer.h"
-#include "Candle/Renderer/Shader.h"
-
-#include "Candle/Renderer/OrthographicCamera.h"
 
 namespace Candle {
 
@@ -42,14 +37,6 @@ namespace Candle {
 		ImGuiLayer* _imGuiLayer;
 
 		static Application* s_instance;
-
-		std::shared_ptr<Shader> _shader;
-		std::shared_ptr<Shader> _squareShader;
-
-		std::shared_ptr<VertexArray> _vertexArray;
-		std::shared_ptr<VertexArray> _squareVertexArray;
-
-		OrthographicCamera _camera;
 	};
 
 	// To be defined in the client
