@@ -3,9 +3,11 @@
 
 namespace Candle {
 
-	void Renderer::BeginScene()
-	{
+	Renderer::SceneData* Renderer::_sceneData = new Renderer::SceneData;
 
+	void Renderer::BeginScene(OrthographicCamera& camera)
+	{
+		_sceneData->ViewProjectionMatrix = camera.GetViewProjectionMatrix();
 	}
 
 	void Renderer::EndScene()
@@ -13,10 +15,15 @@ namespace Candle {
 
 	}
 
-	void Renderer::Submit(const std::shared_ptr<VertexArray>& vertexArray)
+	void Renderer::Submit(const std::shared_ptr<Shader>& shader, const std::shared_ptr<VertexArray>& vertexArray)
 	{
 		vertexArray->Bind();
+		shader->Bind();
+		shader->UploadUniformMat4("viewProjectionMatrix", _sceneData->ViewProjectionMatrix);
+
 		RenderCommand::DrawIndexed(vertexArray);
+
+		shader->Unbind();
 		vertexArray->Unbind();
 	}
 

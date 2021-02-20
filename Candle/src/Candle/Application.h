@@ -12,6 +12,8 @@
 #include "Candle/Renderer/Buffer.h"
 #include "Candle/Renderer/Shader.h"
 
+#include "Candle/Renderer/OrthographicCamera.h"
+
 namespace Candle {
 
 	class CANDLE_API Application
@@ -46,6 +48,8 @@ namespace Candle {
 
 		std::shared_ptr<VertexArray> _vertexArray;
 		std::shared_ptr<VertexArray> _squareVertexArray;
+
+		OrthographicCamera _camera;
 	};
 
 	// To be defined in the client

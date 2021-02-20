@@ -5,11 +5,12 @@
 #include "Candle/Renderer/Renderer.h"
 #include "Platform/OpenGL/OpenGLBuffer.h"
 
+
 namespace Candle {
 
 	Application* Application::s_instance = nullptr;
 
-	Application::Application()
+	Application::Application() : _camera(-1.6f, 1.6f, -0.9f, 0.9f)
 	{
 		CANDLE_CORE_ASSERT(!s_instance, "Application already exists!");
 		s_instance = this;
@@ -81,12 +82,14 @@ namespace Candle {
 			layout(location=0) in vec3 vertexPos;
 			layout(location=1) in vec4 vertexColor;
 
+			uniform mat4 viewProjectionMatrix;
+
 			out vec3 fragmentPos;
 			out vec4 fragmentColor;
 
 			void main()
 			{
-				gl_Position = vec4(vertexPos, 1.0);
+				gl_Position = viewProjectionMatrix * vec4(vertexPos, 1.0);
 
 				fragmentPos = vertexPos;
 				fragmentColor = vertexColor;
@@ -115,11 +118,13 @@ namespace Candle {
 
 			layout(location=0) in vec3 vertexPos;
 
+			uniform mat4 viewProjectionMatrix;
+
 			out vec3 fragmentPos;
 
 			void main()
 			{
-				gl_Position = vec4(vertexPos, 1.0);
+				gl_Position = viewProjectionMatrix * vec4(vertexPos, 1.0);
 
 				fragmentPos = vertexPos;
 			}
@@ -177,17 +182,16 @@ namespace Candle {
 			RenderCommand::SetClearColor({ 0.0f, 0.0f, 0.2f, 1.0f });
 			RenderCommand::Clear();
 
-			{
-				Renderer::BeginScene();
+			_camera.SetPosition({ 0.5f, 0.2f, 0.0f });
+			_camera.SetRotation(45.0f);
+			
+			Renderer::BeginScene(_camera);
 
-				_squareShader->Bind();
-				Renderer::Submit(_squareVertexArray);
+			Renderer::Submit(_squareShader, _squareVertexArray);
+			Renderer::Submit(_shader, _vertexArray);
 
-				_shader->Bind();
-				Renderer::Submit(_vertexArray);
-
-				Renderer::EndScene();
-			}
+			Renderer::EndScene();
+			
 
 			// Update layers
 			for (Layer* layer : _layerStack)
