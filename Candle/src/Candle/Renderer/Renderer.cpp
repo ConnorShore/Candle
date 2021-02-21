@@ -15,10 +15,12 @@ namespace Candle {
 
 	}
 
-	void Renderer::Submit(const std::shared_ptr<Shader>& shader, const std::shared_ptr<VertexArray>& vertexArray)
+	void Renderer::Submit(const std::shared_ptr<Shader>& shader, const std::shared_ptr<VertexArray>& vertexArray, const glm::mat4& transform)
 	{
 		vertexArray->Bind();
 		shader->Bind();
+
+		shader->UploadUniformMat4("transform", transform);
 		shader->UploadUniformMat4("viewProjectionMatrix", _sceneData->ViewProjectionMatrix);
 
 		RenderCommand::DrawIndexed(vertexArray);

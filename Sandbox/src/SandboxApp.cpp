@@ -1,5 +1,7 @@
 #include <Candle.h>
 
+#include <glm/gtc/matrix_transform.hpp>
+
 class ExampleLayer : public Candle::Layer
 {
 public:
@@ -38,10 +40,10 @@ public:
 		_squareVertexArray.reset(Candle::VertexArray::Create());
 
 		float vertices2[3 * 4] = {
-			-0.75f, -0.75f, 0.0f,
-			 0.75f, -0.75f, 0.0f,
-			 0.75f,  0.75f, 0.0f,
-			-0.75f,  0.75f, 0.0f
+			 0.5f, -0.5f, 0.0f,
+			 0.5f,  0.5f, 0.0f,
+			-0.5f,  0.5f, 0.0f,
+			-0.5f, -0.5f, 0.0f
 		};
 
 		std::shared_ptr<Candle::VertexBuffer> squareVB;
@@ -68,6 +70,7 @@ public:
 			layout(location=0) in vec3 vertexPos;
 			layout(location=1) in vec4 vertexColor;
 
+			uniform mat4 transform;
 			uniform mat4 viewProjectionMatrix;
 
 			out vec3 fragmentPos;
@@ -75,7 +78,7 @@ public:
 
 			void main()
 			{
-				gl_Position = viewProjectionMatrix * vec4(vertexPos, 1.0);
+				gl_Position = viewProjectionMatrix * transform * vec4(vertexPos, 1.0);
 
 				fragmentPos = vertexPos;
 				fragmentColor = vertexColor;
@@ -104,13 +107,14 @@ public:
 
 			layout(location=0) in vec3 vertexPos;
 
+			uniform mat4 transform;
 			uniform mat4 viewProjectionMatrix;
 
 			out vec3 fragmentPos;
 
 			void main()
 			{
-				gl_Position = viewProjectionMatrix * vec4(vertexPos, 1.0);
+				gl_Position = viewProjectionMatrix * transform * vec4(vertexPos, 1.0);
 
 				fragmentPos = vertexPos;
 			}
@@ -135,8 +139,6 @@ public:
 
 	void OnUpdate(Candle::Timestep timestep) override
 	{
-		CANDLE_TRACE("Delta Time: {0} s [{1} ms]", timestep, timestep.GetMilliseconds());
-
 		if (Candle::Input::IsKeyPressed(CANDLE_KEY_W))
 		{
 			_cameraPosition.y += _cameraMoveSpeed * timestep;
@@ -170,8 +172,19 @@ public:
 
 		Candle::Renderer::BeginScene(_camera);
 
-		Candle::Renderer::Submit(_squareShader, _squareVertexArray);
-		Candle::Renderer::Submit(_shader, _vertexArray);
+		glm::mat4 scale = glm::scale(glm::mat4(1.0f), glm::vec3(0.1f));
+
+		for (int i = 0; i < 15; i++)
+		{
+			for (int j = 0; j < 10; j++)
+			{
+				glm::vec3 pos(j * 0.11f, i * 0.11f, 0.0f);
+				glm::mat4 transform = glm::translate(glm::mat4(1.0f), pos) * scale;
+				Candle::Renderer::Submit(_squareShader, _squareVertexArray, transform);
+			}
+		}
+
+		//Candle::Renderer::Submit(_shader, _vertexArray);
 
 		Candle::Renderer::EndScene();
 	}
@@ -194,7 +207,6 @@ public:
 	}
 
 private:
-
 	std::shared_ptr<Candle::Shader> _shader;
 	std::shared_ptr<Candle::Shader> _squareShader;
 
