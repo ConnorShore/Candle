@@ -126,6 +126,12 @@ namespace Candle {
 		glUseProgram(0);
 	}
 
+	void OpenGLShader::UploadUniformFloat4(const std::string& name, const glm::vec4& values) const
+	{
+		GLint location = glGetUniformLocation(_rendererId, name.c_str());
+		glUniform4f(location, values.x, values.y, values.z, values.w);
+	}
+
 	void OpenGLShader::UploadUniformMat4(const std::string& name, const glm::mat4& matrix) const
 	{
 		GLint location = glGetUniformLocation(_rendererId, name.c_str());

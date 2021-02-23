@@ -102,7 +102,7 @@ public:
 		_shader.reset(Candle::Shader::Create(vertexSrc, fragmentSrc));
 
 
-		std::string squareVertexSrc = R"(
+		std::string flatColorShaderVertexSrc = R"(
 			#version 330 core
 
 			layout(location=0) in vec3 vertexPos;
@@ -110,30 +110,35 @@ public:
 			uniform mat4 transform;
 			uniform mat4 viewProjectionMatrix;
 
+			uniform vec4 u_Color;
+
 			out vec3 fragmentPos;
+			out vec4 fragmentColor;
 
 			void main()
 			{
 				gl_Position = viewProjectionMatrix * transform * vec4(vertexPos, 1.0);
 
 				fragmentPos = vertexPos;
+				fragmentColor = u_Color;
 			}
 		)";
 
-		std::string squareFragmentSrc = R"(
+		std::string flatColorFragmentSrc = R"(
 			#version 330 core
 
 			layout(location = 0) out vec4 color;
 
 			in vec3 fragmentPos;
+			in vec4 fragmentColor;
 
 			void main()
 			{
-				color = vec4(0.2, 0.3, 0.85, 1.0);
+				color = fragmentColor;
 			}
 		)";
 
-		_squareShader.reset(Candle::Shader::Create(squareVertexSrc, squareFragmentSrc));
+		_flatShader.reset(Candle::Shader::Create(flatColorShaderVertexSrc, flatColorFragmentSrc));
 	}
 
 
@@ -174,17 +179,26 @@ public:
 
 		glm::mat4 scale = glm::scale(glm::mat4(1.0f), glm::vec3(0.1f));
 
+		glm::vec4 redColor(1.0f, 0.0f, 0.0f, 1.0f);
+		glm::vec4 blueColor(0.0f, 0.0f, 1.0f, 1.0f);
+		
 		for (int i = 0; i < 15; i++)
 		{
 			for (int j = 0; j < 10; j++)
 			{
 				glm::vec3 pos(j * 0.11f, i * 0.11f, 0.0f);
 				glm::mat4 transform = glm::translate(glm::mat4(1.0f), pos) * scale;
-				Candle::Renderer::Submit(_squareShader, _squareVertexArray, transform);
+				if (i % 2 == 0 && j % 2 == 0)
+					_flatShader->UploadUniformFloat4("u_Color", redColor);
+				else
+					_flatShader->UploadUniformFloat4("u_Color", blueColor);
+
+				Candle::Renderer::Submit(_flatShader, _squareVertexArray, transform);
+
 			}
 		}
 
-		//Candle::Renderer::Submit(_shader, _vertexArray);
+		Candle::Renderer::Submit(_shader, _vertexArray);
 
 		Candle::Renderer::EndScene();
 	}
@@ -208,7 +222,7 @@ public:
 
 private:
 	std::shared_ptr<Candle::Shader> _shader;
-	std::shared_ptr<Candle::Shader> _squareShader;
+	std::shared_ptr<Candle::Shader> _flatShader;
 
 	std::shared_ptr<Candle::VertexArray> _vertexArray;
 	std::shared_ptr<Candle::VertexArray> _squareVertexArray;

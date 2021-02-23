@@ -24,9 +24,6 @@ namespace Candle {
 		shader->UploadUniformMat4("viewProjectionMatrix", _sceneData->ViewProjectionMatrix);
 
 		RenderCommand::DrawIndexed(vertexArray);
-
-		shader->Unbind();
-		vertexArray->Unbind();
 	}
 
 }
