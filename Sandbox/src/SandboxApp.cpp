@@ -1,6 +1,10 @@
 #include <Candle.h>
 
+#include <Platform/OpenGL/OpenGLShader.h>
+
 #include <glm/gtc/matrix_transform.hpp>
+#include <imgui/imgui.cpp>
+#include <glm/glm/gtc/type_ptr.hpp>
 
 class ExampleLayer : public Candle::Layer
 {
@@ -110,17 +114,13 @@ public:
 			uniform mat4 transform;
 			uniform mat4 viewProjectionMatrix;
 
-			uniform vec4 u_Color;
-
 			out vec3 fragmentPos;
-			out vec4 fragmentColor;
 
 			void main()
 			{
 				gl_Position = viewProjectionMatrix * transform * vec4(vertexPos, 1.0);
 
 				fragmentPos = vertexPos;
-				fragmentColor = u_Color;
 			}
 		)";
 
@@ -130,11 +130,12 @@ public:
 			layout(location = 0) out vec4 color;
 
 			in vec3 fragmentPos;
-			in vec4 fragmentColor;
+
+			uniform vec3 u_Color;
 
 			void main()
 			{
-				color = fragmentColor;
+				color = vec4(u_Color, 1.0);
 			}
 		)";
 
@@ -179,8 +180,8 @@ public:
 
 		glm::mat4 scale = glm::scale(glm::mat4(1.0f), glm::vec3(0.1f));
 
-		glm::vec4 redColor(1.0f, 0.0f, 0.0f, 1.0f);
-		glm::vec4 blueColor(0.0f, 0.0f, 1.0f, 1.0f);
+		_flatShader->Bind();
+		std::dynamic_pointer_cast<Candle::OpenGLShader>(_flatShader)->UploadUniformFloat3("u_Color", _squareColor);
 		
 		for (int i = 0; i < 15; i++)
 		{
@@ -188,13 +189,8 @@ public:
 			{
 				glm::vec3 pos(j * 0.11f, i * 0.11f, 0.0f);
 				glm::mat4 transform = glm::translate(glm::mat4(1.0f), pos) * scale;
-				if (i % 2 == 0 && j % 2 == 0)
-					_flatShader->UploadUniformFloat4("u_Color", redColor);
-				else
-					_flatShader->UploadUniformFloat4("u_Color", blueColor);
 
 				Candle::Renderer::Submit(_flatShader, _squareVertexArray, transform);
-
 			}
 		}
 
@@ -205,7 +201,11 @@ public:
 
 	void OnImGuiRender() override
 	{
+		ImGui::Begin("Settings");
 
+		ImGui::ColorEdit3("Square Color", glm::value_ptr(_squareColor));
+
+		ImGui::End();
 	}
 
 	void OnEvent(Candle::Event& e) override
@@ -229,9 +229,12 @@ private:
 
 	Candle::OrthographicCamera _camera;
 	glm::vec3 _cameraPosition;
+
 	float _cameraRotation = 0.0f;
 	float _cameraMoveSpeed = 3.0f;
 	float _cameraRotationSpeed = 90.0f;
+
+	glm::vec3 _squareColor = { 0.2f, 0.3f, 0.85f };
 };
 
 class SandboxApp : public Candle::Application

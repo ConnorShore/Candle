@@ -1,6 +1,8 @@
 #include "candlepch.h"
 #include "Renderer.h"
 
+#include "Platform/OpenGL/OpenGLShader.h"
+
 namespace Candle {
 
 	Renderer::SceneData* Renderer::_sceneData = new Renderer::SceneData;
@@ -20,8 +22,8 @@ namespace Candle {
 		vertexArray->Bind();
 		shader->Bind();
 
-		shader->UploadUniformMat4("transform", transform);
-		shader->UploadUniformMat4("viewProjectionMatrix", _sceneData->ViewProjectionMatrix);
+		std::dynamic_pointer_cast<OpenGLShader>(shader)->UploadUniformMat4("transform", transform);
+		std::dynamic_pointer_cast<OpenGLShader>(shader)->UploadUniformMat4("viewProjectionMatrix", _sceneData->ViewProjectionMatrix);
 
 		RenderCommand::DrawIndexed(vertexArray);
 	}
