@@ -1,5 +1,7 @@
 #pragma once
 
+#include <memory>
+
 #ifdef CANDLE_PLATFORM_WINDOWS
 #if CANDLE_DYNAMIC_LINK
 	#ifdef CANDLE_BUILD_DLL
@@ -23,4 +25,15 @@
 #endif
 
 #define BIT(x) (1<<x)
+
 #define CANDLE_BIND_EVENT_FN(func) std::bind(&func, this, std::placeholders::_1)
+
+namespace Candle {
+
+	template<typename T>
+	using Scope = std::unique_ptr<T>;
+
+	template<typename T>
+	using Ref = std::shared_ptr<T>;
+
+}

@@ -30,7 +30,7 @@ namespace Candle {
 		bool OnWindowClose(WindowCloseEvent& e);
 
 	private:
-		std::unique_ptr<Window> _window;
+		Scope<Window> _window;
 
 		bool _isRunning = true;
 		LayerStack _layerStack;

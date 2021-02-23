@@ -17,7 +17,7 @@ namespace Candle {
 		CANDLE_CORE_ASSERT(!s_instance, "Application already exists!");
 		s_instance = this;
 
-		_window = std::unique_ptr<Window>(Window::Create());
+		_window = Scope<Window>(Window::Create());
 		_window->SetEventCallback(CANDLE_BIND_EVENT_FN(Application::OnEvent));
 
 		_imGuiLayer = new ImGuiLayer();

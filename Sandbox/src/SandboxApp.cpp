@@ -22,7 +22,7 @@ public:
 			 0.0f,  0.5f, 0.0f,    0.0f, 0.0f, 1.0f, 1.0f,
 		};
 
-		std::shared_ptr<Candle::VertexBuffer> triangleVB;
+		Candle::Ref<Candle::VertexBuffer> triangleVB;
 		triangleVB.reset(Candle::VertexBuffer::Create(vertices, sizeof(vertices)));
 
 		Candle::BufferLayout layout = {
@@ -36,7 +36,7 @@ public:
 		uint32_t indices[3] = {
 			0, 1, 2
 		};
-		std::shared_ptr<Candle::IndexBuffer> triangleIB;
+		Candle::Ref<Candle::IndexBuffer> triangleIB;
 		triangleIB.reset(Candle::IndexBuffer::Create(indices, 3));
 		_vertexArray->AddIndexBuffer(triangleIB);
 
@@ -50,7 +50,7 @@ public:
 			-0.5f, -0.5f, 0.0f
 		};
 
-		std::shared_ptr<Candle::VertexBuffer> squareVB;
+		Candle::Ref<Candle::VertexBuffer> squareVB;
 		squareVB.reset(Candle::VertexBuffer::Create(vertices2, sizeof(vertices)));
 
 		squareVB->SetLayout({
@@ -64,7 +64,7 @@ public:
 			2, 3, 0
 		};
 
-		std::shared_ptr<Candle::IndexBuffer> squareIB;
+		Candle::Ref<Candle::IndexBuffer> squareIB;
 		squareIB.reset(Candle::IndexBuffer::Create(indices2, 6));
 		_squareVertexArray->AddIndexBuffer(squareIB);
 
@@ -216,16 +216,15 @@ public:
 
 	bool OnKeyPressedEvent(Candle::KeyPressedEvent evt)
 	{
-
 		return false;
 	}
 
 private:
-	std::shared_ptr<Candle::Shader> _shader;
-	std::shared_ptr<Candle::Shader> _flatShader;
+	Candle::Ref<Candle::Shader> _shader;
+	Candle::Ref<Candle::Shader> _flatShader;
 
-	std::shared_ptr<Candle::VertexArray> _vertexArray;
-	std::shared_ptr<Candle::VertexArray> _squareVertexArray;
+	Candle::Ref<Candle::VertexArray> _vertexArray;
+	Candle::Ref<Candle::VertexArray> _squareVertexArray;
 
 	Candle::OrthographicCamera _camera;
 	glm::vec3 _cameraPosition;
