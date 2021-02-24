@@ -20,6 +20,8 @@ namespace Candle {
 		_window = Scope<Window>(Window::Create());
 		_window->SetEventCallback(CANDLE_BIND_EVENT_FN(Application::OnEvent));
 
+		Renderer::Init();
+
 		_imGuiLayer = new ImGuiLayer();
 		PushOverlay(_imGuiLayer);
 

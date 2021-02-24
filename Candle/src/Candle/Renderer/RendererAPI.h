@@ -21,6 +21,8 @@ namespace Candle {
 
 	public:
 		virtual ~RendererAPI() { }
+
+		virtual void Init() = 0;
 	
 		virtual void Clear() = 0;
 		virtual void SetClearColor(const glm::vec4& color) = 0;

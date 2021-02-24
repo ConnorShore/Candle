@@ -9,6 +9,8 @@ namespace Candle {
 	class CANDLE_API Renderer
 	{
 	public:
+		
+		static void Init();
 
 		static void BeginScene(OrthographicCamera& camera);	// TODO: Scene parameters
 		static void EndScene();

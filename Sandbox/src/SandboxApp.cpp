@@ -181,6 +181,7 @@ public:
 		_textureShader.reset(Candle::Shader::Create(textureShaderVertexSrc, textureShaderFragmentSrc));
 
 		_texture = Candle::Texture2D::Create("assets/textures/Checkerboard.png");
+		_logoTexture = Candle::Texture2D::Create("assets/textures/ChernoLogo.png");
 
 		_textureShader->Bind();
 		std::dynamic_pointer_cast<Candle::OpenGLShader>(_textureShader)->UploadUniformInt("texture2D", 0);
@@ -243,6 +244,10 @@ public:
 		_texture->Bind(0);
 		Candle::Renderer::Submit(_textureShader, _squareVertexArray, glm::scale(glm::mat4(1.0f), glm::vec3(1.5f)));
 
+		// Texture square
+		_logoTexture->Bind(0);
+		Candle::Renderer::Submit(_textureShader, _squareVertexArray, glm::scale(glm::mat4(1.0f), glm::vec3(1.5f)));
+
 		// Triangle
 		//Candle::Renderer::Submit(_shader, _vertexArray);
 
@@ -274,7 +279,7 @@ private:
 	Candle::Ref<Candle::Shader> _flatShader;
 	Candle::Ref<Candle::Shader> _textureShader;
 
-	Candle::Ref<Candle::Texture2D> _texture;
+	Candle::Ref<Candle::Texture2D> _texture, _logoTexture;
 
 	Candle::Ref<Candle::VertexArray> _vertexArray;
 	Candle::Ref<Candle::VertexArray> _squareVertexArray;
