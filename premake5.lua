@@ -16,6 +16,7 @@ IncludeDir["GLFW"] = "Candle/vendor/GLFW/include"
 IncludeDir["Glad"] = "Candle/vendor/Glad/include"
 IncludeDir["ImGui"] = "Candle/vendor/imgui"
 IncludeDir["glm"] = "Candle/vendor/glm"
+IncludeDir["stb_image"] = "Candle/vendor/stb_image"
 
 -- Include glfw premake file in this premake file
 include "Candle/vendor/GLFW"
@@ -39,6 +40,8 @@ project "Candle"
 	{
 		"%{prj.name}/src/**.h",
 		"%{prj.name}/src/**.cpp",
+		"%{prj.name}/vendor/stb_image/**.h",
+		"%{prj.name}/vendor/stb_image/**.cpp",
 		"%{prj.name}/vendor/glm/glm/**.hpp",
 		"%{prj.name}/vendor/glm/glm/**.inl"
 	}
@@ -55,7 +58,8 @@ project "Candle"
 		"%{IncludeDir.GLFW}",
 		"%{IncludeDir.Glad}",
 		"%{IncludeDir.ImGui}",
-		"%{IncludeDir.glm}"
+		"%{IncludeDir.glm}",
+		"%{IncludeDir.stb_image}"
 	}
 
 	links

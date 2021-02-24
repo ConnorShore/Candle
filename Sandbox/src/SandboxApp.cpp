@@ -2,8 +2,10 @@
 
 #include <Platform/OpenGL/OpenGLShader.h>
 
-#include <glm/gtc/matrix_transform.hpp>
 #include <imgui/imgui.cpp>
+
+#include <glm/glm.hpp>
+#include <glm/gtc/matrix_transform.hpp>
 #include <glm/glm/gtc/type_ptr.hpp>
 
 class ExampleLayer : public Candle::Layer
@@ -43,11 +45,11 @@ public:
 		// Square
 		_squareVertexArray.reset(Candle::VertexArray::Create());
 
-		float vertices2[3 * 4] = {
-			 0.5f, -0.5f, 0.0f,
-			 0.5f,  0.5f, 0.0f,
-			-0.5f,  0.5f, 0.0f,
-			-0.5f, -0.5f, 0.0f
+		float vertices2[4 * 5] = {
+			 0.5f, -0.5f, 0.0f,		1.0f, 0.0f,
+			 0.5f,  0.5f, 0.0f,		1.0f, 1.0f,
+			-0.5f,  0.5f, 0.0f,		0.0f, 1.0f,
+			-0.5f, -0.5f, 0.0f,		0.0f, 0.0f
 		};
 
 		Candle::Ref<Candle::VertexBuffer> squareVB;
@@ -55,7 +57,8 @@ public:
 
 		squareVB->SetLayout({
 			{ Candle::ShaderDataType::Float3, "vertexPos" },
-			});
+			{ Candle::ShaderDataType::Float2, "vertexUV" },
+		});
 
 		_squareVertexArray->AddVertexBuffer(squareVB);
 
@@ -140,6 +143,47 @@ public:
 		)";
 
 		_flatShader.reset(Candle::Shader::Create(flatColorShaderVertexSrc, flatColorFragmentSrc));
+
+		std::string textureShaderVertexSrc = R"(
+			#version 330 core
+
+			layout(location=0) in vec3 vertexPos;
+			layout(location=1) in vec2 vertexUV;
+
+			uniform mat4 transform;
+			uniform mat4 viewProjectionMatrix;
+
+			out vec2 fragmentUV;
+
+			void main()
+			{
+				gl_Position = viewProjectionMatrix * transform * vec4(vertexPos, 1.0);
+
+				fragmentUV = vertexUV;
+			}
+		)";
+
+		std::string textureShaderFragmentSrc = R"(
+			#version 330 core
+
+			layout(location = 0) out vec4 color;
+
+			in vec2 fragmentUV;
+
+			uniform sampler2D texture2D;
+
+			void main()
+			{
+				color = texture(texture2D, fragmentUV);
+			}
+		)";
+
+		_textureShader.reset(Candle::Shader::Create(textureShaderVertexSrc, textureShaderFragmentSrc));
+
+		_texture = Candle::Texture2D::Create("assets/textures/Checkerboard.png");
+
+		_textureShader->Bind();
+		std::dynamic_pointer_cast<Candle::OpenGLShader>(_textureShader)->UploadUniformInt("texture2D", 0);
 	}
 
 
@@ -183,6 +227,7 @@ public:
 		_flatShader->Bind();
 		std::dynamic_pointer_cast<Candle::OpenGLShader>(_flatShader)->UploadUniformFloat3("u_Color", _squareColor);
 		
+		// Square grid
 		for (int i = 0; i < 15; i++)
 		{
 			for (int j = 0; j < 10; j++)
@@ -194,7 +239,12 @@ public:
 			}
 		}
 
-		Candle::Renderer::Submit(_shader, _vertexArray);
+		// Texture square
+		_texture->Bind(0);
+		Candle::Renderer::Submit(_textureShader, _squareVertexArray, glm::scale(glm::mat4(1.0f), glm::vec3(1.5f)));
+
+		// Triangle
+		//Candle::Renderer::Submit(_shader, _vertexArray);
 
 		Candle::Renderer::EndScene();
 	}
@@ -222,6 +272,9 @@ public:
 private:
 	Candle::Ref<Candle::Shader> _shader;
 	Candle::Ref<Candle::Shader> _flatShader;
+	Candle::Ref<Candle::Shader> _textureShader;
+
+	Candle::Ref<Candle::Texture2D> _texture;
 
 	Candle::Ref<Candle::VertexArray> _vertexArray;
 	Candle::Ref<Candle::VertexArray> _squareVertexArray;
