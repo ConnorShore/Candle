@@ -144,41 +144,7 @@ public:
 
 		_flatShader.reset(Candle::Shader::Create(flatColorShaderVertexSrc, flatColorFragmentSrc));
 
-		std::string textureShaderVertexSrc = R"(
-			#version 330 core
-
-			layout(location=0) in vec3 vertexPos;
-			layout(location=1) in vec2 vertexUV;
-
-			uniform mat4 transform;
-			uniform mat4 viewProjectionMatrix;
-
-			out vec2 fragmentUV;
-
-			void main()
-			{
-				gl_Position = viewProjectionMatrix * transform * vec4(vertexPos, 1.0);
-
-				fragmentUV = vertexUV;
-			}
-		)";
-
-		std::string textureShaderFragmentSrc = R"(
-			#version 330 core
-
-			layout(location = 0) out vec4 color;
-
-			in vec2 fragmentUV;
-
-			uniform sampler2D texture2D;
-
-			void main()
-			{
-				color = texture(texture2D, fragmentUV);
-			}
-		)";
-
-		_textureShader.reset(Candle::Shader::Create(textureShaderVertexSrc, textureShaderFragmentSrc));
+		_textureShader.reset(Candle::Shader::Create("assets/shaders/Texture.glsl"));
 
 		_texture = Candle::Texture2D::Create("assets/textures/Checkerboard.png");
 		_logoTexture = Candle::Texture2D::Create("assets/textures/ChernoLogo.png");

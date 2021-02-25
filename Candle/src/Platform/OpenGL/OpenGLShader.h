@@ -4,12 +4,16 @@
 
 #include <glm/glm.hpp>
 
+// TODO: Remove (hack!)
+typedef unsigned int GLenum;
+
 namespace Candle {
 
 	class OpenGLShader : public Shader
 	{
 	public:
 		OpenGLShader(const std::string& vertexSrc, const std::string& fragmentSrc);
+		OpenGLShader(const std::string& filePath);
 		~OpenGLShader();
 
 		void Bind() const override;
@@ -24,6 +28,11 @@ namespace Candle {
 
 		void UploadUniformMat3(const std::string& name, const glm::mat3& matrix) const;
 		void UploadUniformMat4(const std::string& name, const glm::mat4& matrix) const;
+
+	private:
+		std::string ReadFile(const std::string& filePath);
+		std::unordered_map<GLenum, std::string> PreProcess(const std::string& source);
+		void Compile(const std::unordered_map<GLenum, std::string>& shaderSources);
 
 	private:
 		uint32_t _rendererId;
