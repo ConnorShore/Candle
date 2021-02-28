@@ -19,8 +19,10 @@ namespace Candle {
 		return 0;
 	}
 
-	OpenGLShader::OpenGLShader(const std::string& vertexSrc, const std::string& fragmentSrc)
+	OpenGLShader::OpenGLShader(const std::string& name, const std::string& vertexSrc, const std::string& fragmentSrc)
 	{
+		_name = name;
+
 		std::unordered_map<GLenum, std::string> sources;
 		sources[GL_VERTEX_SHADER] = vertexSrc;
 		sources[GL_FRAGMENT_SHADER] = fragmentSrc;
@@ -32,6 +34,14 @@ namespace Candle {
 		std::string shaderSource = ReadFile(filePath);
 		auto sources = PreProcess(shaderSource);
 		Compile(sources);
+
+		// Extract name from filePath
+		// asserts/shaders/Texture.glsl -> Texture
+		auto lastSlash = filePath.find_last_of("/\\");
+		lastSlash = lastSlash == std::string::npos ? 0 : lastSlash + 1;
+		auto lastDot = filePath.rfind('.');
+		auto count = lastDot == std::string::npos ? filePath.size() - lastSlash : lastDot - lastSlash;
+		_name = filePath.substr(lastSlash, count);
 	}
 
 	OpenGLShader::~OpenGLShader()
@@ -42,7 +52,7 @@ namespace Candle {
 	std::string OpenGLShader::ReadFile(const std::string& filePath)
 	{
 		std::string result;
-		std::ifstream in(filePath, std::ios::in, std::ios::binary);
+		std::ifstream in(filePath, std::ios::in | std::ios::binary);
 		if (in)
 		{
 			in.seekg(0, std::ios::end);	// move ptr to end of file
@@ -84,9 +94,19 @@ namespace Candle {
 
 	void OpenGLShader::Compile(const std::unordered_map<GLenum, std::string>& shaderSources)
 	{
-		GLuint program = glCreateProgram();
-		std::vector<GLenum> glShaderIDs(shaderSources.size());
+		const unsigned int NUM_SHADERS = 2;
 
+		GLuint program = glCreateProgram();
+
+		CANDLE_CORE_ASSERT(shaderSources < NUM_SHADERS, "We only support {0} shaders for now!", NUM_SHADERS);
+
+		// Use array instead of vector to avoid heap allocation (array does stack allocation [much faster than heap allocation])
+		std::array<GLenum, NUM_SHADERS> glShaderIDs;
+
+		//std::vector<GLenum> glShaderIDs;
+		//glShaderIDs.reserve(shaderSources.size());
+
+		unsigned int shaderIndex = 0;
 		for (auto& kv : shaderSources)
 		{
 			GLenum type = kv.first;
@@ -121,7 +141,9 @@ namespace Candle {
 			}
 
 			glAttachShader(program, shader);
-			glShaderIDs.push_back(shader);
+			glShaderIDs[shaderIndex++] = shader;
+			
+			//glShaderIDs.push_back(shader);
 		}
 
 		// Link our program

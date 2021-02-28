@@ -106,7 +106,7 @@ public:
 			}
 		)";
 
-		_shader.reset(Candle::Shader::Create(vertexSrc, fragmentSrc));
+		_shader = Candle::Shader::Create("VertexPosColor", vertexSrc, fragmentSrc);
 
 
 		std::string flatColorShaderVertexSrc = R"(
@@ -142,15 +142,15 @@ public:
 			}
 		)";
 
-		_flatShader.reset(Candle::Shader::Create(flatColorShaderVertexSrc, flatColorFragmentSrc));
+		_flatShader = Candle::Shader::Create("FlatColor", flatColorShaderVertexSrc, flatColorFragmentSrc);
 
-		_textureShader.reset(Candle::Shader::Create("assets/shaders/Texture.glsl"));
+		auto textureShader = _shaderLibrary.Load("assets/shaders/Texture.glsl");
 
 		_texture = Candle::Texture2D::Create("assets/textures/Checkerboard.png");
 		_logoTexture = Candle::Texture2D::Create("assets/textures/ChernoLogo.png");
 
-		_textureShader->Bind();
-		std::dynamic_pointer_cast<Candle::OpenGLShader>(_textureShader)->UploadUniformInt("texture2D", 0);
+		textureShader->Bind();
+		std::dynamic_pointer_cast<Candle::OpenGLShader>(textureShader)->UploadUniformInt("texture2D", 0);
 	}
 
 
@@ -207,12 +207,13 @@ public:
 		}
 
 		// Texture square
+		auto textureShader = _shaderLibrary.Get("Texture");
 		_texture->Bind(0);
-		Candle::Renderer::Submit(_textureShader, _squareVertexArray, glm::scale(glm::mat4(1.0f), glm::vec3(1.5f)));
+		Candle::Renderer::Submit(textureShader, _squareVertexArray, glm::scale(glm::mat4(1.0f), glm::vec3(1.5f)));
 
 		// Texture square
 		_logoTexture->Bind(0);
-		Candle::Renderer::Submit(_textureShader, _squareVertexArray, glm::scale(glm::mat4(1.0f), glm::vec3(1.5f)));
+		Candle::Renderer::Submit(textureShader, _squareVertexArray, glm::scale(glm::mat4(1.0f), glm::vec3(1.5f)));
 
 		// Triangle
 		//Candle::Renderer::Submit(_shader, _vertexArray);
@@ -241,9 +242,10 @@ public:
 	}
 
 private:
+	Candle::ShaderLibrary _shaderLibrary;
+
 	Candle::Ref<Candle::Shader> _shader;
 	Candle::Ref<Candle::Shader> _flatShader;
-	Candle::Ref<Candle::Shader> _textureShader;
 
 	Candle::Ref<Candle::Texture2D> _texture, _logoTexture;
 
