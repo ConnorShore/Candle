@@ -43,6 +43,7 @@
 build/
 Build/
 build-*/
+bin/*
 
 # CMake generated files
 CMakeFiles/
@@ -67,3 +68,29 @@ vcpkg_installed/
 # test output & cache
 Testing/
 .cache/
+
+# Visual Studio project and solution files
+# (premake-generated; regenerate with scripts/Windows/GenerateProject.bat)
+*.vcxproj
+*.vcxproj.filters
+*.vcxproj.user
+*.suo
+*.user
+*.ipch
+*.aps
+*.ncb
+*.opendb
+*.VC.db
+*.sln
+*.slnx
+.vs/
+
+# Python cache and compiled files
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Claude files
+*.claude
+CLAUDE.md
