@@ -7,6 +7,8 @@ namespace Candle {
 		: m_Specification(appSpecs)
 	{
 		std::cout << "Application created: " << m_Specification.Name << std::endl;
+
+		//m_Platform = Platform::Create(); <- Once scoped ptr implementation is done
 	}
 
 	Application::~Application()
