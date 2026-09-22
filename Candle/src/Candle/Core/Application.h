@@ -1,17 +1,25 @@
 #pragma once
 
-namespace Candle
-{
+#include "Core.h"
+#include "ApplicationSpecification.h"
+
+namespace Candle {
+
     class Application
     {
     public:
-        Application() = default;
-        virtual ~Application() = default;
+        Application(const ApplicationSpecification& appSpecs);
+		virtual ~Application();
 
-        void HelloWorld();
+		virtual void OnInit() = 0;
+		virtual void OnShutdown() = 0;
+
+        void Run();
 
     private:
+		ApplicationSpecification m_Specification;
 
+	};
 
-    };
+	Scoped<Application> CreateApplication(int argc, char** argv);
 }

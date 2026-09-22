@@ -1,21 +1,22 @@
 #include "cdlpch.h"
 #include "Application.h"
 
-#include <glm/glm.hpp>
-#include <SDL3/SDL.h>
+namespace Candle {
 
-namespace Candle
-{
-    void Application::HelloWorld()
-    {
-        if (!SDL_Init(SDL_INIT_VIDEO))
-        {
-			std::cout << "Failed to initialize SDL: " << SDL_GetError() << std::endl;
-            return;
-        }
+	Application::Application(const ApplicationSpecification& appSpecs)
+		: m_Specification(appSpecs)
+	{
+		std::cout << "Application created: " << m_Specification.Name << std::endl;
+	}
 
-		glm::vec3 test(1.0f, 2.0f, 3.0f);
-        std::cout << "Hello, World: " << test.x + test.y + test.z << std::endl;
-    }
+	Application::~Application()
+	{
+		std::cout << "Application destroyed: " << m_Specification.Name << std::endl;
+	}
+
+	void Application::Run()
+	{
+		std::cout << "Application running: " << m_Specification.Name << std::endl;
+	}
 
 }
