@@ -30,6 +30,8 @@
 #include <type_traits>
 #include <filesystem>
 
-#ifdef EB_PLATFORM_WINDOWS
+#ifdef CDL_PLATFORM_WINDOWS
 	#include <Windows.h>
 #endif
+
+#include "Candle/Core/Core.h"
