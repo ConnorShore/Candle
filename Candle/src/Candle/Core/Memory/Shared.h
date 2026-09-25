@@ -2,7 +2,7 @@
 
 #include <memory>
 
-namespace Cande {
+namespace Candle {
 
 	// TODO: Create custom implementation
 	template<typename T>
