@@ -1,10 +1,17 @@
 #pragma once
 
-#include <format>
-#include <iostream>
-#include <cassert>
+// Leaf header: the runtime asserts expand to logger calls, so use sites need Logger.h (Core.h provides it).
 
-// Temporary assertion macro for debugging purposes. This will be replaced with a more robust logging and assertion system in the future.
-#define CDL_CORE_ASSERT(x, ...) { if(!(x)) { std::cout << std::format("Assertion Failed: {0}", __VA_ARGS__) << std::endl; assert(false); } }
+// Static asserts cost nothing at runtime, so they stay on in every configuration; the message must be a string literal.
+#define CDL_CORE_STATIC_ASSERT(x, msg) static_assert(x, msg)
+#define CDL_STATIC_ASSERT(x, msg) static_assert(x, msg)
 
-#define CDL_CORE_STATIC_ASSERT(x, ...) { if(!(x)) { std::cout << std::format("Static Assertion Failed: {0}", __VA_ARGS__) << std::endl; static_assert(false, "Static Assertion Failed"); } }
+#ifdef CDL_ENABLE_ASSERTS
+
+#define CDL_CORE_ASSERT(x, ...) { if(!(x)) { CDL_CORE_ERROR(::Candle::LogChannel::Application, "Assertion Failed: {0}", __VA_ARGS__); __debugbreak(); } }
+#define CDL_ASSERT(x, ...) { if(!(x)) { CDL_ERROR(::Candle::LogChannel::Application, "Assertion Failed: {0}", __VA_ARGS__); __debugbreak(); } }
+
+#else
+#define CDL_CORE_ASSERT(...)
+#define CDL_ASSERT(...)
+#endif

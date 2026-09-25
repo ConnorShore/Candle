@@ -15,6 +15,7 @@ namespace Candle {
 	public:
 		static void Init();
 
+		// Time //
 		static Tick GetStartTick();
 		static Tick GetTick();
 
@@ -39,6 +40,13 @@ namespace Candle {
 			return std::chrono::system_clock::time_point{
 				std::chrono::microseconds{ ToUnixMicroseconds(tick) } };
 		}
+
+		// Threads //
+		static uint32_t GetCurrentThreadId();
+
+		// Console //
+		static bool EnableConsoleAnsiColors();
+		static bool DisableConsoleAnsiColors();
 
 	private:
 		// Defined per platform alongside the tick queries

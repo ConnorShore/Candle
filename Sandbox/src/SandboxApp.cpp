@@ -16,12 +16,12 @@ namespace Candle {
 
 		void OnInit() override
 		{
-			std::cout << "SandboxApp initialized!" << std::endl;
+			CDL_INFO(LogChannel::Application, "SandboxApp initialized!");
 		}
 
 		void OnShutdown() override
 		{
-			std::cout << "SandboxApp shutdown!" << std::endl;
+			CDL_INFO(LogChannel::Application, "SandboxApp shudown!");
 		}
 	};
 
@@ -46,6 +46,13 @@ namespace Candle {
 
 		spec.CommandLineArgsCount = argc;
 		spec.CommandLineArgs = argv;
+
+		// Logger settings for the Sandbox application
+		spec.LoggerSpec.Level = LogLevel::Trace;
+		spec.LoggerSpec.ChannelMask = 0xFFFF; // Enable all channels
+		spec.LoggerSpec.LogToConsole = true;
+		spec.LoggerSpec.LogToFile = true;
+		spec.LoggerSpec.LogFilePath = "logs/Sandbox.log";
 
 		return Scoped<SandboxApp>(new SandboxApp(spec));
 	}

@@ -1,24 +1,29 @@
 #include "cdlpch.h"
 #include "Application.h"
 
+#include "Candle/Platform/Platform.h"
+
 namespace Candle {
 
 	Application::Application(const ApplicationSpecification& appSpecs)
 		: m_Specification(appSpecs)
 	{
-		std::cout << "Application created: " << m_Specification.Name << std::endl;
+		Platform::Init();
+		Logger::Init(m_Specification.LoggerSpec);
 
-		//m_Platform = Platform::Create(); <- Once scoped ptr implementation is done
+		CDL_CORE_INFO(LogChannel::Application, "Application created: {}", m_Specification.Name);
 	}
 
 	Application::~Application()
 	{
-		std::cout << "Application destroyed: " << m_Specification.Name << std::endl;
+		Logger::Shutdown();
+
+		CDL_CORE_INFO(LogChannel::Application, "Application destroyed: {}", m_Specification.Name);
 	}
 
 	void Application::Run()
 	{
-		std::cout << "Application running: " << m_Specification.Name << std::endl;
+		CDL_CORE_INFO(LogChannel::Application, "Application running: {}", m_Specification.Name);
 	}
 
 }

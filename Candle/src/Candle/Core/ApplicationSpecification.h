@@ -3,6 +3,8 @@
 #include <string>
 #include <filesystem>
 
+#include "Candle/Core/Logger.h"
+
 namespace Candle {
 
 	struct ApplicationSpecification
@@ -14,6 +16,8 @@ namespace Candle {
 
 		int CommandLineArgsCount = 0;
 		char** CommandLineArgs = nullptr;
+
+		LoggerSpecification LoggerSpec;
 	};
 
 }
