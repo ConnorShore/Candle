@@ -6,6 +6,10 @@ workspace "Candle"
 
    defines { "GLM_FORCE_CTOR_INIT" }
 
+   filter "configurations:not Dist"
+      defines { "CDL_ENABLE_ASSERTS" }
+   filter {}
+
 outputdir = "%{cfg.buildcfg}-%{cfg.system}-%{cfg.architecture}"
 
 group "Dependencies"

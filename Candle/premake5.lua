@@ -42,11 +42,11 @@
       systemversion "latest"
 
    filter "configurations:Debug"
-      defines { "CDL_DEBUG", "CDL_ENABLE_ASSERTS" }
+      defines { "CDL_DEBUG" }
       symbols "On"
 
    filter "configurations:Release"
-      defines { "CDL_RELEASE", "CDL_ENABLE_ASSERTS" }
+      defines { "CDL_RELEASE" }
       optimize "On"
 
    filter "configurations:Profile"

@@ -16,9 +16,9 @@ namespace Candle {
 
 	Application::~Application()
 	{
-		Logger::Shutdown();
-
 		CDL_CORE_INFO(LogChannel::Application, "Application destroyed: {}", m_Specification.Name);
+
+		Logger::Shutdown();
 	}
 
 	void Application::Run()

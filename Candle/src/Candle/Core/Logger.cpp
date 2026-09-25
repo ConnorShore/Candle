@@ -237,7 +237,11 @@ namespace Candle {
 
 	void Logger::PushRecord(const LogRecord& record)
 	{
-		Ring().TryPush(record);
+		bool pushSucceeded = Ring().TryPush(record);
+
+		// If the ring is full, the record is dropped. If it's a fatal record, we must write it to stderr immediately.
+		if (!pushSucceeded && record.Level == LogLevel::Fatal)
+			EmergencyWrite(record);
 	}
 
 	void Logger::EmergencyWrite(const LogRecord& record)

@@ -8,6 +8,7 @@
 #include <Windows.h>
 
 namespace Candle {
+
 	bool Platform::EnableConsoleAnsiColors()
 	{
 		const HANDLE out = GetStdHandle(STD_OUTPUT_HANDLE);
