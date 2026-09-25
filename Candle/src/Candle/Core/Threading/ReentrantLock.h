@@ -13,7 +13,7 @@ namespace Candle {
 	class ReentrantLock
 	{
 	public:
-		inline void Aquire()
+		inline void Acquire()
 		{
 const size_t threadId = static_cast<size_t>(Platform::GetCurrentThreadId());
 
@@ -53,36 +53,36 @@ const size_t threadId = static_cast<size_t>(Platform::GetCurrentThreadId());
 			}
 		}
 
-		inline bool TryAquire()
+		inline bool TryAcquire()
 		{
 			std::hash<std::thread::id> hasher;
 			size_t threadId = hasher(std::this_thread::get_id());
-			bool aquired = false;
+			bool Acquired = false;
 
 			if (m_Atomic.load(std::memory_order_relaxed) == threadId)
 			{
-				aquired = true;
+				Acquired = true;
 			}
 			else
 			{
 				size_t unlockVal = 0;
-				aquired = m_Atomic.compare_exchange_strong(unlockVal, threadId, std::memory_order_relaxed, std::memory_order_relaxed);
+				Acquired = m_Atomic.compare_exchange_strong(unlockVal, threadId, std::memory_order_relaxed, std::memory_order_relaxed);
 			}
 
 			// If the lock was successfully acquired, increment the reference count and ensure memory visibility
-			if (aquired)
+			if (Acquired)
 			{
 				++m_RefCount;
 				std::atomic_thread_fence(std::memory_order_acquire);
 			}
 
-			return aquired;
+			return Acquired;
 		}
 
 		// Standard lock methods to be used by standard library locking mechanisms like std::unique_lock
-		inline void lock() { Aquire(); }
+		inline void lock() { Acquire(); }
 		inline void unlock() { Release(); }
-		inline bool try_lock() { return TryAquire(); }
+		inline bool try_lock() { return TryAcquire(); }
 
 	private:
 		std::atomic<std::size_t> m_Atomic{ 0 };

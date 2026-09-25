@@ -8,7 +8,7 @@ namespace Candle {
 	public:
 		ScopedLock(LockType& lock) : m_Lock(lock)
 		{
-			m_Lock.Aquire();
+			m_Lock.Acquire();
 		}
 ScopedLock(ScopedLock&&) = delete;
 		}

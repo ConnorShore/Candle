@@ -13,12 +13,12 @@ namespace Candle {
 		SpinLock() = default;
 		~SpinLock() = default;
 
-		inline bool TryAquire()
+		inline bool TryAcquire()
 		{
 			return !m_Flag.test_and_set(std::memory_order_acquire);
 		}
 
-		inline void Aquire()
+		inline void Acquire()
 		{
 			while (m_Flag.test_and_set(std::memory_order_acquire))
 			{
@@ -33,9 +33,9 @@ namespace Candle {
 		}
 
 		// Standard lock methods to be used by standard library locking mechanisms like std::unique_lock
-		inline void lock() { Aquire(); }
+		inline void lock() { Acquire(); }
 		inline void unlock() { Release(); }
-		inline bool try_lock() { return TryAquire(); }
+		inline bool try_lock() { return TryAcquire(); }
 
 	private:
 		std::atomic_flag m_Flag = ATOMIC_FLAG_INIT;
