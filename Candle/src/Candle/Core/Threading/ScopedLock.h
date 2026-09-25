@@ -10,9 +10,7 @@ namespace Candle {
 		{
 			m_Lock.Aquire();
 		}
-		ScopedLock(ScopedLock&& other) noexcept : m_Lock(other.m_Lock)
-		{
-			other.m_Lock.Release();
+ScopedLock(ScopedLock&&) = delete;
 		}
 
 		~ScopedLock()

@@ -41,7 +41,7 @@ namespace Candle {
 	};
 
 	// Bitwise OR/AND operators for LogChannel to allow combining channels
-	inline uint16_t operator|(LogChannel lhs, LogChannel rhs) { return static_cast<uint16_t>(lhs) | static_cast<uint16_t>(rhs); }
+inline LogChannel operator|(LogChannel lhs, LogChannel rhs) { return static_cast<LogChannel>(static_cast<uint16_t>(lhs) | static_cast<uint16_t>(rhs)); }
 	inline uint16_t operator&(LogChannel lhs, LogChannel rhs) { return static_cast<uint16_t>(lhs) & static_cast<uint16_t>(rhs); }
 
 	struct LogRecord

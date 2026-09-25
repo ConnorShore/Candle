@@ -2,6 +2,7 @@
 
 #include "Candle/Core/Core.h"
 
+#include <condition_variable>
 #include <mutex>
 
 namespace Candle {
