@@ -1,7 +1,6 @@
 #pragma once
 
-#define CDL_CORE_STATIC_ASSERT(x, msg) static_assert(x, msg)
-#define CDL_STATIC_ASSERT(x, msg) static_assert(x, msg)
+#define CDL_STATIC_ASSERT(...) static_assert(__VA_ARGS__)
 
 #ifdef CDL_ENABLE_ASSERTS
 

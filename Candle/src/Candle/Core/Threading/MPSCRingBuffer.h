@@ -15,9 +15,9 @@ namespace Candle {
 	template<typename T>
 	class MPSCRingBuffer
 	{
-		CDL_CORE_STATIC_ASSERT(std::is_trivially_copyable_v<T>,
+		CDL_STATIC_ASSERT(std::is_trivially_copyable_v<T>,
 			"Slots are published by raw copy, so T must be trivially copyable.");
-		CDL_CORE_STATIC_ASSERT(std::is_default_constructible_v<T>,
+		CDL_STATIC_ASSERT(std::is_default_constructible_v<T>,
 			"The slot array is default-constructed up front.");
 
 	public:
