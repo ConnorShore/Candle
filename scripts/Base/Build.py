@@ -120,20 +120,40 @@ def build(configuration: str = DEFAULT_CONFIGURATION) -> int:
 
     return result.returncode
 
-VALID_COMMANDS = ("clean", "generate", "build")
+
+def run_tests(configuration: str = DEFAULT_CONFIGURATION, test_args: list[str] | None = None) -> int:
+    """Runs Candle-Test for the given configuration. Never builds first -- use 'build test'."""
+    test_exe = PROJECT_ROOT / "bin" / f"{configuration}-windows-x86_64" / "Candle-Test" / "Candle-Test.exe"
+    if not test_exe.is_file():
+        print(f"ERROR: Test executable not found: {test_exe}. Run 'build test' first.", file=sys.stderr)
+        return 1
+
+    # Run from the repo root to match the project's debugdir, so script and debugger runs agree.
+    result = subprocess.run([str(test_exe), *(test_args or [])], cwd=PROJECT_ROOT, check=False)
+    return result.returncode
+
+VALID_COMMANDS = ("clean", "generate", "build", "test")
 
 def main():
     commands = []
     configuration = DEFAULT_CONFIGURATION
+    test_args = []
 
     for arg in sys.argv[1:]:
         if arg in CONFIGURATIONS:
             configuration = arg
         elif arg in VALID_COMMANDS:
             commands.append(arg)
+        elif arg.startswith("--"):
+            # Candle-Test's own options (--filter=, --run=, --list) pass straight through.
+            test_args.append(arg)
         else:
             print(f"Unknown argument: '{arg}'")
             sys.exit(1)
+
+    if test_args and "test" not in commands:
+        print(f"Test arguments {test_args} given without the 'test' command.")
+        sys.exit(1)
 
     if not commands:
         commands = ["clean", "generate", "build"]
@@ -145,6 +165,10 @@ def main():
             generate_projects()
         elif command == "build":
             code = build(configuration)
+            if code != 0:
+                sys.exit(code)
+        elif command == "test":
+            code = run_tests(configuration, test_args)
             if code != 0:
                 sys.exit(code)
 

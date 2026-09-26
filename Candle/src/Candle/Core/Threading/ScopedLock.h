@@ -10,8 +10,6 @@ namespace Candle {
 		{
 			m_Lock.Acquire();
 		}
-ScopedLock(ScopedLock&&) = delete;
-		}
 
 		~ScopedLock()
 		{
