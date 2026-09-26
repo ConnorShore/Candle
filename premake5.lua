@@ -19,3 +19,4 @@ group ""
 
 include "Candle"
 include "Sandbox"
+include "Candle-Test"

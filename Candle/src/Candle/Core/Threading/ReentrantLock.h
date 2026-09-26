@@ -15,7 +15,7 @@ namespace Candle {
 	public:
 		inline void Acquire()
 		{
-const size_t threadId = static_cast<size_t>(Platform::GetCurrentThreadId());
+			const size_t threadId = static_cast<size_t>(Platform::GetCurrentThreadId());
 
 			if (m_Atomic.load(std::memory_order_relaxed) != threadId)
 			{
@@ -40,8 +40,7 @@ const size_t threadId = static_cast<size_t>(Platform::GetCurrentThreadId());
 			// Use release semantics to ensure that all writes made while holding the lock are visible
 			std::atomic_thread_fence(std::memory_order_release);
 
-			std::hash<std::thread::id> hasher;
-			size_t threadId = hasher(std::this_thread::get_id());
+			const size_t threadId = static_cast<size_t>(Platform::GetCurrentThreadId());
 			size_t actual = m_Atomic.load(std::memory_order_relaxed);
 
 			//assert(actual == threadId);	// TODO: Add assertion here once implemented
@@ -55,8 +54,7 @@ const size_t threadId = static_cast<size_t>(Platform::GetCurrentThreadId());
 
 		inline bool TryAcquire()
 		{
-			std::hash<std::thread::id> hasher;
-			size_t threadId = hasher(std::this_thread::get_id());
+			const size_t threadId = static_cast<size_t>(Platform::GetCurrentThreadId());
 			bool Acquired = false;
 
 			if (m_Atomic.load(std::memory_order_relaxed) == threadId)
