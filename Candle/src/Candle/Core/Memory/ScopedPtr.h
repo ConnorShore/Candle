@@ -52,7 +52,7 @@ namespace Candle {
 		ScopedPtr& operator=(ScopedPtr&& ptr) noexcept { Reset(ptr.Release()); return *this; }
 
 		template<typename U> requires std::is_convertible_v<U*, T*>
-		ScopedPtr& operator=(ScopedPtr<U>&& ptr) noexcept { return *this = ScopedPtr(std::move(ptr)); }
+ScopedPtr& operator=(ScopedPtr<U>&& ptr) noexcept { Reset(ptr.Release()); return *this; }
 
 		T& operator*() const { return *m_Ptr; }
 		T* operator->() const { return m_Ptr; }
