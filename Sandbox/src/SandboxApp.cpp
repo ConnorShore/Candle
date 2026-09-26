@@ -25,7 +25,7 @@ namespace Candle {
 		}
 	};
 
-	Scoped<Application> CreateApplication(int argc, char** argv)
+	ScopedPtr<Application> CreateApplication(int argc, char** argv)
 	{
 		ApplicationSpecification spec;
 		spec.Name = "Candle Sandbox";
@@ -54,6 +54,6 @@ namespace Candle {
 		spec.LoggerSpec.LogToFile = true;
 		spec.LoggerSpec.LogFilePath = "logs/Sandbox.log";
 
-		return Scoped<SandboxApp>(new SandboxApp(spec));
+		return ScopedPtr<SandboxApp>(new SandboxApp(spec));
 	}
 }

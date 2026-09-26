@@ -8,7 +8,7 @@
 
 #ifdef CDL_PLATFORM_WINDOWS
 
-extern Candle::Scoped<Candle::Application> Candle::CreateApplication(int argc, char** argv);
+extern Candle::ScopedPtr<Candle::Application> Candle::CreateApplication(int argc, char** argv);
 
 int main(int argc, char** argv)
 {

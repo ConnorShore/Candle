@@ -21,5 +21,5 @@
 #include "Candle/Core/Asserts.h"
 #include "Candle/Core/Logger.h"
 
-#include "Candle/Core/Memory/Scoped.h"
-#include "Candle/Core/Memory/Shared.h"
+#include "Candle/Core/Memory/ScopedPtr.h"
+#include "Candle/Core/Memory/SharedPtr.h"

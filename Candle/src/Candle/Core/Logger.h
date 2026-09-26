@@ -7,7 +7,7 @@
 #include <format>
 
 #include "Candle/Core/Asserts.h"
-#include "Candle/Core/Memory/Scoped.h"
+#include "Candle/Core/Memory/ScopedPtr.h"
 #include "Candle/Platform/Platform.h"
 
 namespace Candle {
@@ -53,7 +53,7 @@ inline LogChannel operator|(LogChannel lhs, LogChannel rhs) { return static_cast
 		LogChannel Channel = LogChannel::None;
 		char Message[240] = { 0 };
 	};
-	CDL_CORE_STATIC_ASSERT(sizeof(LogRecord) == 256, "LogRecord size is not 256 bytes. Check for padding or alignment issues.");	// 256 is 4 cache lines
+	CDL_STATIC_ASSERT(sizeof(LogRecord) == 256, "LogRecord size is not 256 bytes. Check for padding or alignment issues.");	// 256 is 4 cache lines
 
 	// Simple display helpers (safe to call from any thread)
 	const char* LogLevelName(LogLevel level);
@@ -78,7 +78,7 @@ inline LogChannel operator|(LogChannel lhs, LogChannel rhs) { return static_cast
 		static void Init(const LoggerSpecification& spec = {});
 		static void Shutdown();
 
-		static void AddSink(Scoped<LogSink> sink);
+		static void AddSink(ScopedPtr<LogSink> sink);
 		static bool Flush();
 
 		inline static bool Enabled(LogLevel level, LogChannel channel)

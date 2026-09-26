@@ -32,9 +32,9 @@ namespace Candle {
 			return *s_Ring;
 		}
 
-		std::vector<Scoped<LogSink>>& Sinks()
+		std::vector<ScopedPtr<LogSink>>& Sinks()
 		{
-			static std::vector<Scoped<LogSink>> s_Sinks;
+			static std::vector<ScopedPtr<LogSink>> s_Sinks;
 			return s_Sinks;
 		}
 
@@ -59,7 +59,7 @@ namespace Candle {
 				if (count == 0)
 					break;
 
-				for (const Scoped<LogSink>& sink : Sinks())
+				for (const ScopedPtr<LogSink>& sink : Sinks())
 					sink->Write(batch, count);
 
 				total += count;
@@ -86,7 +86,7 @@ namespace Candle {
 				dropped - s_DroppedReported);
 			*result.out = '\0';
 
-			for (const Scoped<LogSink>& sink : Sinks())
+			for (const ScopedPtr<LogSink>& sink : Sinks())
 				sink->Write(&record, 1);
 
 			s_DroppedReported = dropped;
@@ -112,7 +112,7 @@ namespace Candle {
 
 				if (flushRequested || flushDue || !running)
 				{
-					for (const Scoped<LogSink>& sink : Sinks())
+					for (const ScopedPtr<LogSink>& sink : Sinks())
 						sink->Flush();
 
 					lastFlush = now;
@@ -179,10 +179,10 @@ namespace Candle {
 		s_ChannelMask.store(spec.ChannelMask, std::memory_order_relaxed);
 
 		if (spec.LogToConsole)
-			AddSink(std::make_unique<ConsoleSink>());
+			AddSink(ScopedPtr<ConsoleSink>::Create());
 
 		if (spec.LogToFile)
-			AddSink(std::make_unique<FileSink>(spec.LogFilePath));
+			AddSink(ScopedPtr<FileSink>::Create(spec.LogFilePath));
 
 		s_Running.store(true, std::memory_order_release);
 		s_DrainThread = std::thread(DrainThreadMain);
@@ -200,13 +200,13 @@ namespace Candle {
 		// because the drain thread is gone, so there is no second consumer.
 		DrainOnce();
 
-		for (const Scoped<LogSink>& sink : Sinks())
+		for (const ScopedPtr<LogSink>& sink : Sinks())
 			sink->Flush();
 
 		Sinks().clear();
 	}
 
-	void Logger::AddSink(Scoped<LogSink> sink)
+	void Logger::AddSink(ScopedPtr<LogSink> sink)
 	{
 		CDL_CORE_ASSERT(!s_Running.load(std::memory_order_relaxed),
 			"Sinks must be added before Logger::Init -- the drain thread owns them unsynchronised");
