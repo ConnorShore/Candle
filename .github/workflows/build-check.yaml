@@ -1,0 +1,18 @@
+name: learn-github-actions
+run-name: Candle Build Check
+
+on:
+  pull_request:
+    branches: [ "main" ]
+
+jobs:
+  build:
+    runs-on: windows-2025-vs2026
+    steps:
+      - uses: actions/checkout@v6
+      - name: Generate Candle Projects and Solution
+        run: python scripts/Base/Build.py generate
+      - name: Build Candle
+        run: python scripts/Base/Build.py build
+      - name: Test Candle
+        run: python scripts/Base/Build.py test
