@@ -85,6 +85,6 @@ CDL_TEST_CASE(Application, RequestQuitFromAnotherThreadStopsRun, Unit)
 	CDL_NOTE(std::format("Run returned after {:.3f} ms", runMs));
 
 	// Run cannot return before the flag is set, and the quitter sleeps at least 20 ms first.
-	CDL_EXPECT_GE(runMs, 200.0);
+	CDL_EXPECT_GE(runMs, 20.0);
 	CDL_EXPECT_LT(runMs, 1000.0);
 }
