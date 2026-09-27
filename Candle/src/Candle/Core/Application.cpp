@@ -23,15 +23,26 @@ namespace Candle {
 
 	void Application::Run()
 	{
-
+		double timeSinceLastLog = 0.0f;	// Temporary variable to track time since last log message
+		Tick startTick = Platform::GetTick();
 		while (!IsQuitRequested())
 		{
-			Tick startTick = Platform::GetTick();
-
 			// TODO: Implement game logic
 
-			m_DeltaTime = TimeStep(Platform::ToSeconds(startTick, Platform::GetTick()));
-			CDL_CORE_INFO(LogChannel::Application, "Application running: {}; Frame FPS: {}", m_Specification.Name, (1.0f / m_DeltaTime));
+			// Update the frame stats
+			Tick endTick = Platform::GetTick();
+			m_FrameStats.DeltaTime = TimeStep(Platform::ToSeconds(startTick, endTick));
+			m_FrameStats.TotalTime += m_FrameStats.DeltaTime;
+			m_FrameStats.FrameCount++;
+			startTick = endTick;
+
+			// Display log every 1/2 second
+			timeSinceLastLog += m_FrameStats.DeltaTime;
+			if (timeSinceLastLog >= 0.5f)
+			{
+				CDL_CORE_INFO(LogChannel::Application, "Application running: {}; Frame FPS: {}", m_Specification.Name, (1.0f / m_FrameStats.DeltaTime));
+				timeSinceLastLog = 0.0f;
+			}
 		}
 	}
 

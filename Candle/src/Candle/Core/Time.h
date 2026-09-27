@@ -3,6 +3,7 @@
 #include <chrono>
 
 #include "Logger.h"
+#include "Candle/Platform/Platform.h"
 
 namespace Candle {
 
@@ -26,35 +27,26 @@ namespace Candle {
 	class Timer
 	{
 	public:
-		Timer() = default;
+		Timer() { Reset(); }
 		~Timer() = default;
-
-		inline void Start()
-		{
-			m_StartTime = std::chrono::high_resolution_clock::now();
-		}
 
 		inline double ElapsedSeconds() const
 		{
-			auto endTime = std::chrono::high_resolution_clock::now();
-			std::chrono::duration<double> elapsed = endTime - m_StartTime;
-			return elapsed.count();
+			return Platform::ToSeconds(m_StartTick, Platform::GetTick());
 		}
 
 		inline double ElapsedMilliseconds() const
 		{
-			auto endTime = std::chrono::high_resolution_clock::now();
-			std::chrono::duration<double, std::milli> elapsed = endTime - m_StartTime;
-			return elapsed.count();
+			return Platform::ToMilliseconds(m_StartTick, Platform::GetTick());
 		}
 
 		inline void Reset()
 		{
-			Start();
+			m_StartTick = Platform::GetTick();
 		}
 
 	private:
-		std::chrono::high_resolution_clock::time_point m_StartTime;
+		Tick m_StartTick;
 	};
 
 	class ScopedTimer
@@ -63,7 +55,7 @@ namespace Candle {
 		ScopedTimer(const std::string& name, LogChannel channel = LogChannel::Application)
 			: m_Name(name), m_Channel(channel)
 		{
-			m_Timer.Start();
+			m_Timer.Reset();
 		}
 
 		~ScopedTimer()
