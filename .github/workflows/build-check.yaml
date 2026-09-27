@@ -11,6 +11,11 @@ jobs:
       - uses: actions/checkout@v6
         with:
           submodules: recursive
+      - name: Install Vulkan SDK
+        uses: jakoch/install-vulkan-sdk-action@v1
+        with:
+          vulkan_version: 1.4.357.0
+          cache: true
       - name: Initialize repository dependencies
         run: python scripts/Base/InitializeRepo.py
       - name: Generate Candle Projects and Solution

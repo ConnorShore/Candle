@@ -17,7 +17,7 @@ project "imgui"
    {
       "imgui",
       "imgui/backends",
-      "SDL3/include",
+      "../SDL3/SDL3/include",
       "$(VULKAN_SDK)/Include",
    }
 

@@ -15,9 +15,41 @@ PREMAKE_URL = (
     "v5.0.0-beta8/premake-5.0.0-beta8-windows.zip"
 )
 PREMAKE_SHA256 = "e64ce2ed8778e0098f63674cca61fe33941b5f0c8d9a4afd651152bdea3758ab"
+VULKAN_SDK_URL = "https://vulkan.lunarg.com/sdk/home"
 
 
 def main() -> int:
+    premake_result = install_premake()
+    if premake_result != 0:
+        return premake_result
+    return check_vulkan_sdk()
+
+
+def check_vulkan_sdk() -> int:
+    # The SDK is a system-wide install, so it is verified here rather than installed.
+    sdk_root = os.environ.get("VULKAN_SDK")
+    if not sdk_root:
+        print(
+            "ERROR: VULKAN_SDK is not set. Install the Vulkan SDK from "
+            f"{VULKAN_SDK_URL}, then open a new terminal so the variable is visible.",
+            file=sys.stderr,
+        )
+        return 1
+
+    header = Path(sdk_root) / "Include" / "vulkan" / "vulkan.h"
+    if not header.is_file():
+        print(
+            f"ERROR: VULKAN_SDK points to {sdk_root}, but {header} does not exist. "
+            f"Reinstall the Vulkan SDK from {VULKAN_SDK_URL}.",
+            file=sys.stderr,
+        )
+        return 1
+
+    print(f"Vulkan SDK found: {sdk_root}")
+    return 0
+
+
+def install_premake() -> int:
     if PREMAKE_EXECUTABLE.is_file():
         print(f"Premake already exists: {PREMAKE_EXECUTABLE}")
         return 0
