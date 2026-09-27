@@ -23,7 +23,16 @@ namespace Candle {
 
 	void Application::Run()
 	{
-		CDL_CORE_INFO(LogChannel::Application, "Application running: {}", m_Specification.Name);
+
+		while (!IsQuitRequested())
+		{
+			Tick startTick = Platform::GetTick();
+
+			// TODO: Implement game logic
+
+			m_DeltaTime = TimeStep(Platform::ToSeconds(startTick, Platform::GetTick()));
+			CDL_CORE_INFO(LogChannel::Application, "Application running: {}; Frame FPS: {}", m_Specification.Name, (1.0f / m_DeltaTime));
+		}
 	}
 
 }

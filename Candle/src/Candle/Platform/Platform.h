@@ -8,6 +8,8 @@ namespace Candle {
 	struct Tick
 	{
 		uint64_t Value = 0;
+
+		inline explicit operator uint64_t() const { return Value; }
 	};
 
 	class Platform
@@ -27,6 +29,11 @@ namespace Candle {
 		inline static double ToSeconds(const Tick& start, const Tick& end)
 		{
 			return static_cast<double>(end.Value - start.Value) / s_TickFrequency;
+		}
+
+		inline static double ToMilliseconds(const Tick& start, const Tick& end)
+		{
+			return static_cast<double>(end.Value - start.Value) * 1'000.0 / s_TickFrequency;
 		}
 
 		inline static uint64_t ToUnixMicroseconds(const Tick& tick)
