@@ -44,6 +44,29 @@ CDL_TEST_CASE(Platform, ZeroIntervalIsZero, Unit)
 	CDL_CHECK_EQ(Platform::ToSeconds(tick, tick), 0.0);
 }
 
+CDL_TEST_CASE(Platform, MillisecondsAgreeWithOtherConversions, Unit)
+{
+	const Tick start = Platform::GetTick();
+	std::this_thread::sleep_for(std::chrono::milliseconds(5));
+	const Tick end = Platform::GetTick();
+
+	const double ms = Platform::ToMilliseconds(start, end);
+	CDL_EXPECT_GE(ms, 5.0);
+	CDL_EXPECT_NEAR(ms, Platform::ToSeconds(start, end) * 1000.0, 1e-6);
+	CDL_EXPECT_NEAR(ms, static_cast<double>(Platform::ToMicroseconds(start, end)) / 1000.0, 1e-3);
+
+	const Tick tick = Platform::GetTick();
+	CDL_CHECK_EQ(Platform::ToMilliseconds(tick, tick), 0.0);
+}
+
+CDL_TEST_CASE(Platform, TickConvertsOnlyExplicitly, Unit)
+{
+	static_assert(!std::is_convertible_v<Tick, uint64_t>, "Tick must not convert to an integer implicitly");
+
+	const Tick tick{ 123'456'789ULL };
+	CDL_CHECK_EQ(static_cast<uint64_t>(tick), 123'456'789ULL);
+}
+
 CDL_TEST_CASE(Platform, UnixTimeTracksSystemClock, Unit)
 {
 	using namespace std::chrono;

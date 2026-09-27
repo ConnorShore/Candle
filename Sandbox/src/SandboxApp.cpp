@@ -1,6 +1,8 @@
 #include <Candle.h>
 #include <Candle/Core/EntryPoint.h>
 
+#include <thread>
+
 namespace Candle {
 
 	class SandboxApp : public Application
@@ -17,12 +19,20 @@ namespace Candle {
 		void OnInit() override
 		{
 			CDL_INFO(LogChannel::Application, "SandboxApp initialized!");
+
+			m_Thread = std::jthread([this]() {
+				std::this_thread::sleep_for(std::chrono::seconds(3));
+				RequestQuit();
+				});
 		}
 
 		void OnShutdown() override
 		{
 			CDL_INFO(LogChannel::Application, "SandboxApp shudown!");
 		}
+
+	private:
+		std::jthread m_Thread;
 	};
 
 	ScopedPtr<Application> CreateApplication(int argc, char** argv)
