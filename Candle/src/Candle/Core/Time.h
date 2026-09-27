@@ -1,6 +1,7 @@
 #pragma once
 
 #include <chrono>
+#include <string>
 
 #include "Logger.h"
 #include "Candle/Platform/Platform.h"
