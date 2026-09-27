@@ -9,6 +9,8 @@ jobs:
     runs-on: windows-2025-vs2026
     steps:
       - uses: actions/checkout@v6
+        with:
+          submodules: recursive
       - name: Initialize repository dependencies
         run: python scripts/Base/InitializeRepo.py
       - name: Generate Candle Projects and Solution
