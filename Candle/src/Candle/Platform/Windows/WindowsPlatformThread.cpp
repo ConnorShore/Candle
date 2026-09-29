@@ -10,6 +10,20 @@
 
 namespace Candle {
 
+	namespace {
+
+		std::wstring ConvertToWideString(const char* str)
+		{
+			if (!str)
+				return std::wstring();
+			int size_needed = MultiByteToWideChar(CP_UTF8, 0, str, -1, nullptr, 0);
+			std::wstring wstr(size_needed, 0);
+			MultiByteToWideChar(CP_UTF8, 0, str, -1, &wstr[0], size_needed);
+			return wstr;
+		}
+
+	}
+
 	uint32_t Platform::GetCurrentThreadId()
 	{
 		return static_cast<uint32_t>(::GetCurrentThreadId());
@@ -17,7 +31,7 @@ namespace Candle {
 
 	void Platform::SetCurrentThreadName(const char* name)
 	{
-		SetThreadDescription(::GetCurrentThread(), std::wstring(name, name + strlen(name)).c_str());
+		SetThreadDescription(::GetCurrentThread(), ConvertToWideString(name).c_str());
 	}
 
 	void Platform::SetCurrentThreadPriority(ThreadPriority priority)
