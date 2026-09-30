@@ -1,7 +1,10 @@
 #pragma once
 
+#include "Candle/Core/Threading/ThreadPriority.h"
+
 #include <chrono>
 #include <cstdint>
+#include <thread>
 
 namespace Candle {
 
@@ -10,6 +13,12 @@ namespace Candle {
 		uint64_t Value = 0;
 
 		inline explicit operator uint64_t() const { return Value; }
+	};
+
+	struct CPUTopology
+	{
+		uint32_t NumPhysicalCores = 0;
+		uint32_t NumLogicalCores = 0;
 	};
 
 	class Platform
@@ -50,6 +59,13 @@ namespace Candle {
 
 		// Threads //
 		static uint32_t GetCurrentThreadId();
+		static void SetCurrentThreadName(const char* name);
+		static void SetCurrentThreadPriority(ThreadPriority priority);
+		static void SetCurrentThreadAffinityMask(uint64_t mask);
+		static void SleepCurrentThread(uint32_t milliseconds);
+		static CPUTopology QueryCPUTopology();
+		static uint32_t GetCurrentThreadProcessor();
+		static uint32_t GetThreadId(std::thread::native_handle_type handle);
 
 		// Console //
 		static bool EnableConsoleAnsiColors();
