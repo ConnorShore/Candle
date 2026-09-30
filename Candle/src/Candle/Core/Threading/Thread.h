@@ -63,8 +63,8 @@ namespace Candle {
 		uint32_t GetId() { return Platform::GetThreadId(m_Thread.native_handle()); }
 
 	private:
-		std::jthread m_Thread;
 		ThreadDescriptor m_Descriptor;
+		std::jthread m_Thread;
 	};
 
 }
