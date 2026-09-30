@@ -2,6 +2,8 @@
 #include "Candle/Core/Asserts.h"
 #include "Candle/Platform/Platform.h"
 
+#include <bit>
+
 #ifndef CDL_PLATFORM_WINDOWS
 #error "WindowsPlatformThread.cpp is Windows-only."
 #endif
