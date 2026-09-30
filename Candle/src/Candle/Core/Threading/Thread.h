@@ -30,37 +30,36 @@ namespace Candle {
 	public:
 		explicit Thread(const ThreadDescriptor& descriptor) : m_Descriptor(descriptor) {}
 		explicit Thread(const std::string& name) : m_Descriptor({ name }) {}
+		~Thread() = default;
 
 		// Delete copy constructor and assignment operator to prevent copying
 		Thread(const Thread&) = delete;
 		Thread& operator=(const Thread&) = delete;
 
-		~Thread() = default;
-
 		template<typename Func, typename... Args>
 			requires ThreadFunc<Func, Args...>
-		void Start(Func&& func, Args&&... args)
+		inline void Start(Func&& func, Args&&... args)
 		{
-			m_Thread = std::jthread([this, func = std::forward<Func>(func)](std::stop_token stoken, std::decay_t<Args>... fargs) mutable {
-				if (!m_Descriptor.Name.empty())
-					Platform::SetCurrentThreadName(m_Descriptor.Name.c_str());
-				if (m_Descriptor.AffinityMask != 0)
-					Platform::SetCurrentThreadAffinityMask(m_Descriptor.AffinityMask);
+			m_Thread = std::jthread([descriptor = m_Descriptor, func = std::forward<Func>(func)](std::stop_token stoken, std::decay_t<Args>... fargs) mutable {
+				if (!descriptor.Name.empty())
+					Platform::SetCurrentThreadName(descriptor.Name.c_str());
+				if (descriptor.AffinityMask != 0)
+					Platform::SetCurrentThreadAffinityMask(descriptor.AffinityMask);
 
-				Platform::SetCurrentThreadPriority(m_Descriptor.Priority);
+				Platform::SetCurrentThreadPriority(descriptor.Priority);
 
 				// Call the function with or without the stop_token based on its signature
 				if constexpr (std::invocable<std::decay_t<Func>&, std::stop_token, std::decay_t<Args>...>)
-					func(std::move(stoken), std::move(fargs)...);
+					std::invoke(func, std::move(stoken), std::move(fargs)...);
 				else
-					func(std::move(fargs)...);
+					std::invoke(func, std::move(fargs)...);
 				}, std::forward<Args>(args)...);
 		}
 
-		void Join() { if (m_Thread.joinable()) m_Thread.join(); }
-		void StopRequest() { m_Thread.request_stop(); }
+		inline void Join() { if (m_Thread.joinable()) m_Thread.join(); }
+		inline void StopRequest() { m_Thread.request_stop(); }
 
-		uint32_t GetId() { return Platform::GetThreadId(m_Thread.native_handle()); }
+		inline const uint32_t GetId() { return Platform::GetThreadId(m_Thread.native_handle()); }
 
 	private:
 		ThreadDescriptor m_Descriptor;
