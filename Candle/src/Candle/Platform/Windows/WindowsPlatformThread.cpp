@@ -59,7 +59,8 @@ namespace Candle {
 
 	void Platform::SetCurrentThreadAffinityMask(uint64_t mask)
 	{
-		SetThreadAffinityMask(::GetCurrentThread(), static_cast<DWORD_PTR>(mask));
+		if (::SetThreadAffinityMask(::GetCurrentThread(), static_cast<DWORD_PTR>(mask)) == 0)
+			CDL_CORE_ERROR(LogChannel::Thread, "Failed to set thread affinity mask on Windows!");
 	}
 
 	void Platform::SleepCurrentThread(uint32_t milliseconds)
