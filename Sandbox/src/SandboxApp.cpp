@@ -1,9 +1,16 @@
 #include <Candle.h>
 #include <Candle/Core/EntryPoint.h>
+#include <Candle/Core/Job/JobSystem.h>
 
 #include <thread>
 
 namespace Candle {
+
+	static void TestFunction(uintptr_t jobId)
+	{
+		CDL_INFO(LogChannel::Application, "Executing job with ID: {}", jobId);
+		Platform::SleepCurrentThread(100); // Simulate work
+	}
 
 	class SandboxApp : public Application
 	{
@@ -20,8 +27,42 @@ namespace Candle {
 		{
 			CDL_INFO(LogChannel::Application, "SandboxApp initialized!");
 
+			m_JobSystem.Start();
+
+			std::array<JobHandle, 1000> jobHandles;
+			for (int i = 0; i < 1000; ++i) {
+				JobSpec spec = {
+					.m_EntryFunc = &TestFunction,
+					.m_FuncData = static_cast<uintptr_t>(i),
+					.m_Priority = JobPriority::Normal,
+					.m_Name = "TestJob"
+				};
+				jobHandles[i] = m_JobSystem.KickJob(spec);
+			}
+
+			// Create group of jobs that depend on the first 10 jobs
+			auto handle2 = m_JobSystem.KickJobs(50, {
+				.m_EntryFunc = &TestFunction,
+				.m_FuncData = 100,
+				.m_Priority = JobPriority::High,
+				.m_Name = "DependentJob1"
+				}, jobHandles);
+			auto handle3 = m_JobSystem.KickJobs(25, {
+				.m_EntryFunc = &TestFunction,
+				.m_FuncData = 100,
+				.m_Priority = JobPriority::High,
+				.m_Name = "DependentJob2"
+				}, jobHandles);
+			m_JobSystem.KickJobs(25, {
+				.m_EntryFunc = &TestFunction,
+				.m_FuncData = 100,
+				.m_Priority = JobPriority::High,
+				.m_Name = "DependentJobFINAL"
+				}, { handle2, handle3 });
+
 			m_Thread = std::jthread([this]() {
-				std::this_thread::sleep_for(std::chrono::seconds(3));
+				Platform::SleepCurrentThread(60'000);
+				m_JobSystem.Stop();
 				RequestQuit();
 				});
 		}
@@ -33,6 +74,7 @@ namespace Candle {
 
 	private:
 		std::jthread m_Thread;
+		JobSystem m_JobSystem;
 	};
 
 	ScopedPtr<Application> CreateApplication(int argc, char** argv)

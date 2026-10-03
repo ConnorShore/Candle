@@ -2,9 +2,7 @@
 #include "TestHelpers.h"
 
 #include <charconv>
-#include <chrono>
 #include <string_view>
-#include <thread>
 
 using namespace Candle;
 using namespace Candle::Test;
@@ -50,7 +48,7 @@ CDL_TEST_CASE(Time, TimerStartsAtConstruction, Unit)
 CDL_TEST_CASE(Time, TimerMeasuresASleep, Unit)
 {
 	const Timer timer;
-	std::this_thread::sleep_for(std::chrono::milliseconds(20));
+	Platform::SleepCurrentThread(20);
 
 	const double ms = timer.ElapsedMilliseconds();
 	const double seconds = timer.ElapsedSeconds();
@@ -80,7 +78,7 @@ CDL_TEST_CASE(Time, TimerElapsedNeverDecreases, Unit)
 CDL_TEST_CASE(Time, TimerResetRestartsTheInterval, Unit)
 {
 	Timer timer;
-	std::this_thread::sleep_for(std::chrono::milliseconds(20));
+	Platform::SleepCurrentThread(20);
 	const double beforeReset = timer.ElapsedMilliseconds();
 
 	timer.Reset();
@@ -95,7 +93,7 @@ CDL_TEST_CASE(Time, ScopedTimerLogsOnDestruction, Unit)
 	LoggerFixture logger;
 	{
 		ScopedTimer timer("TimeTests marker", LogChannel::Physics);
-		std::this_thread::sleep_for(std::chrono::milliseconds(5));
+		Platform::SleepCurrentThread(5);
 	}
 	CDL_CHECK(Logger::Flush());
 

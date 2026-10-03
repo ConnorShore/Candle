@@ -70,6 +70,11 @@ namespace Candle {
 		Sleep(milliseconds);
 	}
 
+	void Platform::YieldCurrentThread()
+	{
+		SwitchToThread();
+	}
+
 	CPUTopology Platform::QueryCPUTopology()
 	{
 		// The first call fails by design and reports the required buffer size.

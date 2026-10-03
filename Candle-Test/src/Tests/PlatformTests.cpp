@@ -23,7 +23,7 @@ CDL_TEST_CASE(Platform, TickIsMonotonic, Unit)
 CDL_TEST_CASE(Platform, ElapsedTimeMatchesASleep, Unit)
 {
 	const Tick start = Platform::GetTick();
-	std::this_thread::sleep_for(std::chrono::milliseconds(20));
+	Platform::SleepCurrentThread(20);
 	const Tick end = Platform::GetTick();
 
 	const uint64_t micros = Platform::ToMicroseconds(start, end);
@@ -47,7 +47,7 @@ CDL_TEST_CASE(Platform, ZeroIntervalIsZero, Unit)
 CDL_TEST_CASE(Platform, MillisecondsAgreeWithOtherConversions, Unit)
 {
 	const Tick start = Platform::GetTick();
-	std::this_thread::sleep_for(std::chrono::milliseconds(5));
+	Platform::SleepCurrentThread(5);
 	const Tick end = Platform::GetTick();
 
 	const double ms = Platform::ToMilliseconds(start, end);

@@ -57,7 +57,7 @@ namespace Candle {
 		}
 
 		inline void Join() { if (m_Thread.joinable()) m_Thread.join(); }
-		inline void StopRequest() { m_Thread.request_stop(); }
+		inline void RequestStop() { m_Thread.request_stop(); }
 
 		inline const uint32_t GetId() { return Platform::GetThreadId(m_Thread.native_handle()); }
 

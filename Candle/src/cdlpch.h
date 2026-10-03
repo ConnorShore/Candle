@@ -29,6 +29,7 @@
 #include <utility>
 #include <type_traits>
 #include <filesystem>
+#include <limits>
 
 #ifdef CDL_PLATFORM_WINDOWS
 	#include <Windows.h>
