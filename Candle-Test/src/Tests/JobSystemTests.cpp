@@ -4,6 +4,7 @@
 #include <Candle/Core/Job/JobSystem.h>
 
 #include <atomic>
+#include <deque>
 #include <thread>
 #include <vector>
 
@@ -75,7 +76,7 @@ namespace {
 		uint32_t Get() const { return Value.load(std::memory_order_acquire); }
 	};
 
-	void CountEntry(uintptr_t data)
+	void CountEntry(uintptr_t data, uint32_t)
 	{
 		auto* counter = reinterpret_cast<Counter*>(data);
 		if (counter->WorkMs > 0)
@@ -91,7 +92,7 @@ namespace {
 		std::atomic<uint32_t> Runs{ 0 };
 	};
 
-	void ObserveEntry(uintptr_t data)
+	void ObserveEntry(uintptr_t data, uint32_t)
 	{
 		auto* observer = reinterpret_cast<Observer*>(data);
 		observer->SeenAtStart.store(observer->Watched->Get(), std::memory_order_relaxed);
@@ -108,7 +109,7 @@ namespace {
 		std::atomic<uint32_t> Runs{ 0 };
 	};
 
-	void StampEntry(uintptr_t data)
+	void StampEntry(uintptr_t data, uint32_t)
 	{
 		auto* job = reinterpret_cast<Stamped*>(data);
 		job->Start.store(job->Clock->fetch_add(1), std::memory_order_relaxed);
@@ -122,6 +123,55 @@ namespace {
 	JobSpec Spec(EntryFn fn, T* data, JobPriority priority = JobPriority::Normal)
 	{
 		return { .m_EntryFunc = fn, .m_FuncData = reinterpret_cast<uintptr_t>(data), .m_Priority = priority, .m_Name = "TestJob" };
+	}
+
+	// One counter per batch index, so a test can see exactly which indices ran and how often.
+	struct IndexHits
+	{
+		explicit IndexHits(uint32_t count) : Hits(count) {}
+
+		std::vector<std::atomic<uint32_t>> Hits;
+		std::atomic<uint32_t> OutOfRange{ 0 };
+		std::atomic<uint32_t> Total{ 0 };
+
+		uint32_t Count(uint32_t runs) const
+		{
+			return static_cast<uint32_t>(std::ranges::count_if(Hits, [runs](const auto& h) { return h.load() == runs; }));
+		}
+	};
+
+	void HitIndexEntry(uintptr_t data, uint32_t index)
+	{
+		auto* hits = reinterpret_cast<IndexHits*>(data);
+		if (index < hits->Hits.size())
+			hits->Hits[index].fetch_add(1, std::memory_order_relaxed);
+		else
+			hits->OutOfRange.fetch_add(1, std::memory_order_relaxed);
+		hits->Total.fetch_add(1, std::memory_order_acq_rel);
+	}
+
+	// The parallel-for shape batches exist for: index i sums chunk i into its own partial.
+	// Each partial has exactly one writer, published to the test by the release on Done.
+	struct ChunkedSum
+	{
+		const std::vector<uint64_t>* Input = nullptr;
+		uint32_t ChunkSize = 0;
+		std::vector<uint64_t> Partials;
+		std::atomic<uint32_t> Done{ 0 };
+	};
+
+	void ChunkedSumEntry(uintptr_t data, uint32_t index)
+	{
+		auto* job = reinterpret_cast<ChunkedSum*>(data);
+		const size_t begin = static_cast<size_t>(index) * job->ChunkSize;
+		const size_t end = std::min(begin + job->ChunkSize, job->Input->size());
+
+		uint64_t sum = 0;
+		for (size_t i = begin; i < end; ++i)
+			sum += (*job->Input)[i];
+
+		job->Partials[index] = sum;
+		job->Done.fetch_add(1, std::memory_order_acq_rel);
 	}
 
 }
@@ -343,6 +393,165 @@ CDL_TEST_CASE(JobSystem, StopWithQueuedWorkReturns, Unit)
 }
 
 //////////////////////////////////////////////////////////////////////////
+// Batch indices
+//////////////////////////////////////////////////////////////////////////
+
+CDL_TEST_CASE(JobSystem, BatchEntryReceivesEveryIndexOnce, Unit)
+{
+	constexpr uint32_t batchSize = 256;
+	IndexHits hits(batchSize);
+	JobSystemFixture jobs;
+
+	jobs->KickJobs(batchSize, Spec(&HitIndexEntry, &hits));
+
+	const bool done = WaitUntil([&] { return hits.Total.load() >= batchSize; });
+	LetFinishJobComplete();
+
+	CDL_EXPECT_MSG(done, std::format("only {} of {} batch jobs ran", hits.Total.load(), batchSize));
+	CDL_EXPECT_EQ(hits.Count(1), batchSize);
+	CDL_EXPECT_EQ(hits.Count(0), 0u);
+	CDL_EXPECT_EQ(hits.OutOfRange.load(), 0u);
+}
+
+CDL_TEST_CASE(JobSystem, BatchOfEverySizeRunsEachIndexOnce, Unit)
+{
+	// Batches are split into contiguous chunks; every size up to 200 covers sizes below, at and above the
+	// chunk count, and every remainder, so an off-by-one at a chunk boundary shows up as a missing or doubled index.
+	constexpr uint32_t maxSize = 200;
+	std::deque<IndexHits> batches;	// deque, because IndexHits holds atomics and vector growth would need to move it.
+	for (uint32_t size = 1; size <= maxSize; ++size)
+		batches.emplace_back(size);
+	JobSystemFixture jobs;
+
+	for (IndexHits& batch : batches)
+		jobs->KickJobs(static_cast<uint32_t>(batch.Hits.size()), Spec(&HitIndexEntry, &batch));
+
+	const bool done = WaitUntil([&] {
+		return std::ranges::all_of(batches, [](const IndexHits& b) { return b.Total.load() >= b.Hits.size(); });
+	});
+	LetFinishJobComplete();
+
+	uint32_t wrongSizes = 0;
+	for (const IndexHits& batch : batches)
+	{
+		const bool exact = batch.Count(1) == batch.Hits.size() && batch.OutOfRange.load() == 0;
+		wrongSizes += exact ? 0 : 1;
+	}
+
+	CDL_EXPECT(done);
+	CDL_EXPECT_EQ(wrongSizes, 0u);
+}
+
+CDL_TEST_CASE(JobSystem, KickJobRunsIndexZero, Unit)
+{
+	IndexHits hits(1);
+	JobSystemFixture jobs;
+
+	jobs->KickJob(Spec(&HitIndexEntry, &hits));
+
+	CDL_CHECK(WaitUntil([&] { return hits.Total.load() >= 1; }));
+	LetFinishJobComplete();
+	CDL_EXPECT_EQ(hits.Hits[0].load(), 1u);
+	CDL_EXPECT_EQ(hits.OutOfRange.load(), 0u);
+}
+
+CDL_TEST_CASE(JobSystem, BatchSplitsWorkDeterministically, Unit)
+{
+	// Fixed chunks reduced in index order give the serial answer no matter how the batch was scheduled.
+	constexpr uint32_t elementCount = 100'000;
+	constexpr uint32_t chunkSize = 1'000;
+	constexpr uint32_t chunkCount = (elementCount + chunkSize - 1) / chunkSize;
+
+	std::vector<uint64_t> input(elementCount);
+	for (uint32_t i = 0; i < elementCount; ++i)
+		input[i] = (i * 2654435761u) % 1000;
+
+	ChunkedSum job{ .Input = &input, .ChunkSize = chunkSize, .Partials = std::vector<uint64_t>(chunkCount, 0) };
+	JobSystemFixture jobs;
+
+	jobs->KickJobs(chunkCount, Spec(&ChunkedSumEntry, &job));
+	CDL_CHECK_MSG(WaitUntil([&] { return job.Done.load() >= chunkCount; }), "batch never completed");
+
+	uint64_t serial = 0, parallel = 0;
+	uint32_t wrongPartials = 0;
+	for (uint32_t chunk = 0; chunk < chunkCount; ++chunk)
+	{
+		uint64_t expected = 0;
+		for (uint32_t i = chunk * chunkSize; i < std::min((chunk + 1) * chunkSize, elementCount); ++i)
+			expected += input[i];
+
+		serial += expected;
+		parallel += job.Partials[chunk];
+		wrongPartials += job.Partials[chunk] != expected ? 1 : 0;
+	}
+
+	CDL_EXPECT_EQ(wrongPartials, 0u);
+	CDL_EXPECT_EQ(parallel, serial);
+}
+
+CDL_TEST_CASE(JobSystem, WaitForJobWaitsForWholeBatch, Unit)
+{
+	constexpr uint32_t batchSize = 16;
+	Counter counter{ .WorkMs = 5 };
+	JobSystemFixture jobs;
+
+	const JobHandle handle = jobs->KickJobs(batchSize, Spec(&CountEntry, &counter));
+	jobs->WaitForJob(handle);
+
+	CDL_CHECK_EQ(counter.Get(), batchSize);
+}
+
+//////////////////////////////////////////////////////////////////////////
+// Invalid handles
+//////////////////////////////////////////////////////////////////////////
+
+CDL_TEST_CASE(JobSystem, DefaultHandleIsInvalid, Unit)
+{
+	constexpr JobHandle handle;
+	static_assert(!handle.IsValid());
+	CDL_CHECK_EQ(handle.m_Index, k_InvalidJobRunSlotIndex);
+}
+
+CDL_TEST_CASE(JobSystem, KickedHandleIsValid, Unit)
+{
+	Counter counter;
+	JobSystemFixture jobs;
+
+	const JobHandle handle = jobs->KickJob(Spec(&CountEntry, &counter));
+	CDL_CHECK(handle.IsValid());
+}
+
+CDL_TEST_CASE(JobSystem, InvalidDependencyIsIgnored, Unit)
+{
+	Counter counter;
+	JobSystemFixture jobs;
+
+	jobs->KickJob(Spec(&CountEntry, &counter), { JobHandle{} });
+
+	CDL_CHECK_MSG(WaitUntil([&] { return counter.Get() >= 1; }, 1000), "job depending only on an invalid handle never ran");
+}
+
+CDL_TEST_CASE(JobSystem, InvalidDependencyAlongsideRealOneStillWaits, Unit)
+{
+	Counter dep{ .WorkMs = 20 };
+	Observer successor{ .Watched = &dep };
+	JobSystemFixture jobs;
+
+	const JobHandle real = jobs->KickJob(Spec(&CountEntry, &dep));
+	jobs->KickJob(Spec(&ObserveEntry, &successor), { JobHandle{}, real });
+
+	CDL_CHECK_MSG(WaitUntil([&] { return successor.Runs.load() >= 1; }), "successor never ran");
+	CDL_CHECK_EQ(successor.SeenAtStart.load(), 1u);
+}
+
+CDL_TEST_CASE(JobSystem, WaitForJobOnInvalidHandleReturns, Unit)
+{
+	// Fails by hanging rather than by assertion.
+	JobSystemFixture jobs;
+	jobs->WaitForJob(JobHandle{});
+}
+
+//////////////////////////////////////////////////////////////////////////
 // Stress
 //////////////////////////////////////////////////////////////////////////
 
@@ -478,4 +687,49 @@ CDL_TEST_CASE(JobSystem, ConcurrentKickersLoseNothing, Stress)
 	CDL_EXPECT(done);
 	for (int thread = 0; thread < threadCount; ++thread)
 		CDL_EXPECT_EQ(counters[thread].Get(), perThread);
+}
+
+CDL_TEST_CASE(JobSystem, LargeBatchEachIndexOnce, Stress)
+{
+	// One slot, far more instances than workers, so every worker pulls many indices from the same batch.
+	constexpr uint32_t batchSize = 50'000;
+	IndexHits hits(batchSize);
+	JobSystemFixture jobs;
+
+	jobs->KickJobs(batchSize, Spec(&HitIndexEntry, &hits));
+
+	const bool done = WaitUntil([&] { return hits.Total.load() >= batchSize; });
+	LetFinishJobComplete();
+
+	CDL_EXPECT_MSG(done, std::format("only {} of {} batch jobs ran", hits.Total.load(), batchSize));
+	CDL_EXPECT_EQ(hits.Count(1), batchSize);
+	CDL_EXPECT_EQ(hits.OutOfRange.load(), 0u);
+}
+
+CDL_TEST_CASE(JobSystem, ConcurrentBatchesKeepIndicesSeparate, Stress)
+{
+	// Batches kicked from several threads at once interleave in the queues; each must still see only its own indices.
+	constexpr uint32_t batchSize = 1'000;
+	const int threadCount = StressThreadCount();
+	// deque, because IndexHits holds atomics and vector growth would need to move it.
+	std::deque<IndexHits> batches;
+	for (int i = 0; i < threadCount; ++i)
+		batches.emplace_back(batchSize);
+	JobSystemFixture jobs;
+
+	RunConcurrently(threadCount, [&](int thread) {
+		jobs->KickJobs(batchSize, Spec(&HitIndexEntry, &batches[thread]));
+	});
+
+	const bool done = WaitUntil([&] {
+		return std::ranges::all_of(batches, [](const IndexHits& b) { return b.Total.load() >= batchSize; });
+	});
+	LetFinishJobComplete();
+
+	CDL_EXPECT(done);
+	for (int thread = 0; thread < threadCount; ++thread)
+	{
+		CDL_EXPECT_EQ(batches[thread].Count(1), batchSize);
+		CDL_EXPECT_EQ(batches[thread].OutOfRange.load(), 0u);
+	}
 }

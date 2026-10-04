@@ -35,20 +35,24 @@ namespace Candle {
 			// Check for jobs in the queues based on priority
 			for (JobPriority priority : kPriorityOrder)
 			{
-				std::optional<uint32_t> slotIndex = m_JobSystem.TryPopJob(priority);
-				if (slotIndex.has_value())
+				std::optional<JobRunDecl> jobDeclOp = m_JobSystem.TryPopJob(priority);
+				if (jobDeclOp.has_value())
 				{
 					jobFound = true;
 
-					JobSpec jobSpec = m_JobSystem.GetJobSpec(slotIndex.value());
+					const JobRunDecl decl = jobDeclOp.value();
+					const JobRunSlot& slot = m_JobSystem.m_JobRunSlots[decl.m_RunSlotIndex];
 
-					CDL_CORE_INFO(LogChannel::Job, "JobWorker {} executing job: {} with priority: {}", m_Index, jobSpec.m_Name, static_cast<int>(jobSpec.m_Priority));
+					// Safe to read without the lock: the slot can't be recycled until this chunk calls FinishJob.
+					const JobSpec jobSpec = slot.m_JobSpec;
+					const uint32_t end = std::min(decl.m_FirstIndex + slot.m_ChunkSize, slot.m_BatchSize);
 
-					// Execute the job
-					jobSpec.m_EntryFunc(jobSpec.m_FuncData);
+					// Execute every index in this chunk
+					for (uint32_t index = decl.m_FirstIndex; index < end; ++index)
+						jobSpec.m_EntryFunc(jobSpec.m_FuncData, index);
 
-					// Once finished, finish the job
-					m_JobSystem.FinishJob(slotIndex.value());
+					// Once the whole chunk is done, count it towards finishing the slot
+					m_JobSystem.FinishJob(decl.m_RunSlotIndex);
 
 					break; // Exit the priority loop to check for jobs again from the highest priority
 				}

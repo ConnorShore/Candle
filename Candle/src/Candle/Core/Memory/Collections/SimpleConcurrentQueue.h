@@ -1,8 +1,10 @@
 #pragma once
 
-#include <queue>
-#include <mutex>
 #include <condition_variable>
+#include <cstdint>
+#include <mutex>
+#include <optional>
+#include <queue>
 
 namespace Candle {
 
@@ -21,6 +23,16 @@ namespace Candle {
 			std::lock_guard<std::mutex> lock(m_Mutex);
 			m_Queue.push(item);
 			m_CV.notify_one();
+		}
+
+		// Pushes make(0) .. make(count - 1) under a single lock, building each item in place rather than from a staging buffer.
+		template<typename MakeFn>
+		inline void PushGenerated(uint32_t count, MakeFn&& make)
+		{
+			std::lock_guard<std::mutex> lock(m_Mutex);
+			for (uint32_t i = 0; i < count; ++i)
+				m_Queue.push(make(i));
+			m_CV.notify_all();
 		}
 
 		inline T Pop()

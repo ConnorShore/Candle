@@ -6,9 +6,15 @@
 
 namespace Candle {
 
-	static void TestFunction(uintptr_t jobId)
+	static void TestFunction(uintptr_t jobId, uint32_t)
 	{
 		CDL_INFO(LogChannel::Application, "Executing job with ID: {}", jobId);
+		Platform::SleepCurrentThread(100); // Simulate work
+	}
+
+	static void TestBatchFunction(uintptr_t jobId, uint32_t index)
+	{
+		CDL_INFO(LogChannel::Application, "Executing batch job with ID: {}, index: {}", jobId, index);
 		Platform::SleepCurrentThread(100); // Simulate work
 	}
 
@@ -48,13 +54,13 @@ namespace Candle {
 				.m_Name = "DependentJob1"
 				}, jobHandles);
 			auto handle3 = m_JobSystem.KickJobs(25, {
-				.m_EntryFunc = &TestFunction,
+				.m_EntryFunc = &TestBatchFunction,
 				.m_FuncData = 100,
 				.m_Priority = JobPriority::High,
 				.m_Name = "DependentJob2"
 				}, jobHandles);
 			m_JobSystem.KickJobs(25, {
-				.m_EntryFunc = &TestFunction,
+				.m_EntryFunc = &TestBatchFunction,
 				.m_FuncData = 100,
 				.m_Priority = JobPriority::High,
 				.m_Name = "DependentJobFINAL"

@@ -26,20 +26,20 @@ namespace Candle {
 		JobHandle KickJobs(uint32_t numJobs, JobSpec spec, std::initializer_list<JobHandle> deps);
 		JobHandle KickJobs(uint32_t numJobs, JobSpec spec, std::span<const JobHandle> deps = {});
 
-		// Blocks the calling thread until the job's slot is recycled. Any non-worker thread.
-		// Never call from inside a job: if every worker blocks on queued work, nothing can run it (asserted).
+		// Blocks the calling thread until the job's slot is recycled; returns at once for an invalid handle.
+		// Any non-worker thread. Never call from inside a job: if every worker blocks on queued work, nothing can run it (asserted).
 		void WaitForJob(JobHandle job);
-		void FinishJob(uint32_t jobRunSlotIndex);
-
-		std::optional<uint32_t> TryPopJob(JobPriority priority);
-
-		inline JobSpec GetJobSpec(uint32_t jobRunSlotIndex) const { return m_JobRunSlots[jobRunSlotIndex].m_JobSpec; }
 
 	private:
 		void QueueJobSlot(uint32_t slotIndex);
+		void FinishJob(uint32_t jobRunSlotIndex);
+
+		std::optional<JobRunDecl> TryPopJob(JobPriority priority);
 
 	private:
 		static constexpr size_t k_MaxJobRunSlots = 4096;
+
+		friend class JobWorker;
 
 	private:
 		std::array<JobRunSlot, k_MaxJobRunSlots> m_JobRunSlots;

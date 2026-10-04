@@ -5,8 +5,6 @@
 
 namespace Candle {
 
-	constexpr uint32_t k_InvalidJobRunSlotIndex = std::numeric_limits<uint32_t>::max();
-
 	JobSystem::JobSystem()
 	{
 		// Populate run slots
@@ -57,6 +55,15 @@ namespace Candle {
 
 	JobHandle JobSystem::KickJobs(uint32_t numJobs, JobSpec spec, std::span<const JobHandle> deps /* ={} */)
 	{
+		CDL_CORE_ASSERT(spec.m_EntryFunc, "JobSpec must have an entry function");
+		CDL_CORE_ASSERT(numJobs > 0, "Cannot kick 0 jobs");
+
+		// About four chunks per worker: few queue operations, but enough slack that one slow chunk doesn't stall the batch.
+		// The max(1u, ...) only matters for numJobs == 0 in Dist, where it avoids a divide by zero.
+		const uint32_t maxChunks = static_cast<uint32_t>(m_Workers.size()) * 4;
+		const uint32_t chunkSize = std::max(1u, (numJobs + maxChunks - 1) / maxChunks);
+		const uint32_t chunkCount = (numJobs + chunkSize - 1) / chunkSize;
+
 		// Acquire the free slot lock to safely access the free slot index
 		m_SlotLock.Acquire();
 
@@ -72,11 +79,18 @@ namespace Candle {
 
 		uint32_t generation = slot.m_Generation;
 
-		slot.m_JobCount.store(numJobs);	// Run 1 job for this slot
+		slot.m_JobCount.store(chunkCount);
+		slot.m_BatchSize = numJobs;
+		slot.m_ChunkSize = chunkSize;
 		slot.m_JobSpec = spec;
 		int numDeps = 0;
 		for (const auto& dep : deps)
 		{
+			// An invalid handle is "no job", e.g. a failed kick or a default-constructed member
+			if (!dep.IsValid())
+				continue;
+			CDL_CORE_ASSERT(dep.m_Index < k_MaxJobRunSlots, "JobHandle index out of range");
+
 			// If dependency is finished, skip it
 			if (dep.m_Generation < m_JobRunSlots[dep.m_Index].m_Generation.load())
 				continue;
@@ -102,6 +116,10 @@ namespace Candle {
 		// Need to look into solutions in future if this becomes a bottleneck
 		CDL_CORE_ASSERT(!JobWorker::IsWorkerThread(), "WaitForJob called from a job worker; blocking a worker can deadlock the pool");
 
+		if (!job.IsValid())
+			return;
+		CDL_CORE_ASSERT(job.m_Index < k_MaxJobRunSlots, "JobHandle index out of range");
+
 		JobRunSlot& slot = m_JobRunSlots[job.m_Index];
 		uint32_t gen;
 		while ((gen = slot.m_Generation.load(std::memory_order_acquire)) <= job.m_Generation)
@@ -116,13 +134,11 @@ namespace Candle {
 		if (slot.m_JobCount.fetch_sub(1) > 1)
 			return;
 
-		CDL_CORE_WARN(LogChannel::Job, "JobRunSlot {} finished all jobs. Notifying successors.", jobRunSlotIndex);
-
 		// Aquire lock and free the slot for reuse
 		m_SlotLock.Acquire();
 		auto successors = std::move(slot.m_Successors);	// Move successors out of the slot to avoid holding the lock while notifying them
-		slot.m_Remaining.store(0);	// Reset remaining dependencies for this slot
-		slot.m_Generation.fetch_add(1);	// Increment generation for this slot
+		slot.m_Remaining.store(0);						// Reset remaining dependencies for this slot
+		slot.m_Generation.fetch_add(1);					// Increment generation for this slot
 		slot.m_NextFree = m_FreeSlot;
 		m_FreeSlot = jobRunSlotIndex;
 		m_SlotLock.Release();
@@ -140,28 +156,22 @@ namespace Candle {
 				QueueJobSlot(successorIndex);
 			}
 		}
-
-		CDL_CORE_INFO(LogChannel::Job, "JobRunSlot {} completed. Generation: {}", jobRunSlotIndex, slot.m_Generation.load());
 	}
 
-	std::optional<uint32_t> JobSystem::TryPopJob(JobPriority priority)
+	std::optional<JobRunDecl> JobSystem::TryPopJob(JobPriority priority)
 	{
 		return m_JobQueues[static_cast<size_t>(priority)].TryPop();
 	}
 
 	void JobSystem::QueueJobSlot(uint32_t slotIndex)
 	{
-		JobPriority priority = m_JobRunSlots[slotIndex].m_JobSpec.m_Priority;
+		const JobRunSlot& slot = m_JobRunSlots[slotIndex];
+		const uint32_t chunkCount = slot.m_JobCount.load();
+		const uint32_t chunkSize = slot.m_ChunkSize;
 
-		CDL_CORE_INFO(LogChannel::Job, "Queueing Job {} and job count: {}", m_JobRunSlots[slotIndex].m_JobSpec.m_Name, m_JobRunSlots[slotIndex].m_JobCount.load());
-
-		// Push the slot index into the job queue for the specified priority, once for each job in the slot
-		m_SlotLock.Acquire();
-		uint32_t jobCt = m_JobRunSlots[slotIndex].m_JobCount.load();
-		m_SlotLock.Release();
-
-		for (uint32_t i = 0; i < jobCt; ++i)
-			m_JobQueues[static_cast<size_t>(priority)].Push(slotIndex);
+		m_JobQueues[static_cast<size_t>(slot.m_JobSpec.m_Priority)].PushGenerated(chunkCount, [=](uint32_t chunk) {
+			return JobRunDecl{ .m_FirstIndex = chunk * chunkSize, .m_RunSlotIndex = slotIndex };
+		});
 	}
 
 }
