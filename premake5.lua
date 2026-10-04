@@ -10,9 +10,9 @@ workspace "Candle"
       defines { "CDL_ENABLE_ASSERTS" }
 
    -- Workspace-wide so every TU including Tracy.hpp agrees; a mismatch is silent ODR breakage.
-   -- ON_DEMAND stops Tracy buffering events without limit while no viewer is connected.
+   -- No TRACY_ON_DEMAND: it drops everything before the viewer connects, which hides startup.
    filter "configurations:Profile"
-      defines { "TRACY_ENABLE", "TRACY_ON_DEMAND" }
+      defines { "TRACY_ENABLE" }
    filter {}
 
 outputdir = "%{cfg.buildcfg}-%{cfg.system}-%{cfg.architecture}"
