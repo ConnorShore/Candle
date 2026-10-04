@@ -133,7 +133,7 @@ namespace Candle {
 				if (++idleSpins < 64)
 					CDL_THREAD_PAUSE();
 				else
-					std::this_thread::sleep_for(std::chrono::milliseconds(idleSpins < 1024 ? 1 : 8));
+					Platform::SleepCurrentThread(idleSpins < 1024 ? 1 : 8);
 			}
 		}
 
@@ -155,7 +155,7 @@ namespace Candle {
 	const char* LogChannelName(LogChannel channel)
 	{
 		static constexpr const char* s_Names[] = {
-			"App", "AI", "Animation", "Render", "Input", "Audio", "Physics", "Memory", "Thread", "Math"
+			"App", "AI", "Animation", "Render", "Input", "Audio", "Physics", "Memory", "Thread", "Math", "Job"
 		};
 
 		const uint16_t value = static_cast<uint16_t>(channel);
@@ -163,6 +163,7 @@ namespace Candle {
 			return "None";
 
 		const size_t index = static_cast<size_t>(std::countr_zero(value));
+		CDL_CORE_ASSERT(index < std::size(s_Names), "Mismatch in channel names and the enum size");
 		return index < std::size(s_Names) ? s_Names[index] : "?";
 	}
 

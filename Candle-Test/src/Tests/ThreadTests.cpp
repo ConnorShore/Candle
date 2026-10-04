@@ -42,11 +42,11 @@ CDL_TEST_CASE(Thread, StopRequest, Unit)
 		while (!stoken.stop_requested())
 		{
 			// Simulate work
-			std::this_thread::sleep_for(std::chrono::milliseconds(10));
+			Platform::SleepCurrentThread(10);
 		}
 		stopRequested = true;
 		});
-	thread.StopRequest();
+	thread.RequestStop();
 	thread.Join();
 	CDL_CHECK(stopRequested);
 }
@@ -126,7 +126,7 @@ CDL_TEST_CASE(Thread, GetIdMatchesIdSeenInsideThread, Unit)
 
 	// The handle outlives the body; only Join() closes it, so GetId is valid until then.
 	while (insideId.load(std::memory_order_acquire) == 0)
-		std::this_thread::yield();
+		Platform::YieldCurrentThread();
 
 	CDL_CHECK_EQ(thread.GetId(), insideId.load());
 	CDL_CHECK_NE(thread.GetId(), Platform::GetCurrentThreadId());
@@ -145,7 +145,7 @@ CDL_TEST_CASE(Thread, GetIdIsZeroWhenNotRunning, Unit)
 CDL_TEST_CASE(Thread, JoinAndStopBeforeStartAreNoOps, Unit)
 {
 	Thread thread("TestThread");
-	thread.StopRequest();
+	thread.RequestStop();
 	thread.Join();
 	thread.Join();
 	CDL_CHECK_EQ(thread.GetId(), 0u);
@@ -171,7 +171,7 @@ CDL_TEST_CASE(Thread, DestructorRequestsStopAndJoins, Unit)
 		Thread thread("TestThread");
 		thread.Start([&exited](std::stop_token stoken) {
 			while (!stoken.stop_requested())
-				std::this_thread::yield();
+				Platform::YieldCurrentThread();
 			exited = true;
 		});
 	}
@@ -188,7 +188,7 @@ CDL_TEST_CASE(Thread, AffinityMaskPinsToCore, Unit)
 		{
 			if (Platform::GetCurrentThreadProcessor() != 0)
 				alwaysOnCoreZero = false;
-			std::this_thread::yield();
+			Platform::YieldCurrentThread();
 		}
 	});
 	thread.Join();
@@ -212,7 +212,7 @@ CDL_TEST_CASE(Thread, ManyThreadsStopOnDestruction, Stress)
 			threads.back().Start([&started, &stopped](std::stop_token stoken) {
 				started.fetch_add(1, std::memory_order_relaxed);
 				while (!stoken.stop_requested())
-					std::this_thread::yield();
+					Platform::YieldCurrentThread();
 				stopped.fetch_add(1, std::memory_order_relaxed);
 			});
 		}

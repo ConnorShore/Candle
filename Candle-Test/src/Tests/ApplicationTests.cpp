@@ -4,7 +4,6 @@
 #include "TestFramework.h"
 #include "TestHelpers.h"
 
-#include <chrono>
 #include <thread>
 
 using namespace Candle;
@@ -73,7 +72,7 @@ CDL_TEST_CASE(Application, RequestQuitFromAnotherThreadStopsRun, Unit)
 
 		const Timer timer;
 		std::jthread quitter([&app] {
-			std::this_thread::sleep_for(std::chrono::milliseconds(20));
+			Platform::SleepCurrentThread(20);
 			app.RequestQuit();
 		});
 

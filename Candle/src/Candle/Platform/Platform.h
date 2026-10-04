@@ -63,6 +63,7 @@ namespace Candle {
 		static void SetCurrentThreadPriority(ThreadPriority priority);
 		static void SetCurrentThreadAffinityMask(uint64_t mask);
 		static void SleepCurrentThread(uint32_t milliseconds);
+		static void YieldCurrentThread();
 		static CPUTopology QueryCPUTopology();
 		static uint32_t GetCurrentThreadProcessor();
 		static uint32_t GetThreadId(std::thread::native_handle_type handle);

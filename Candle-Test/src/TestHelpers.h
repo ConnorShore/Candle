@@ -119,7 +119,7 @@ namespace Candle::Test {
 	// Enough threads to contend on any desktop, without oversubscribing a small CI box too badly.
 	inline int StressThreadCount()
 	{
-		const unsigned hardware = std::thread::hardware_concurrency();
+		const uint32_t hardware = Platform::QueryCPUTopology().NumLogicalCores;
 		return static_cast<int>(std::clamp(hardware, 4u, 16u));
 	}
 
