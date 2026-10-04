@@ -55,11 +55,11 @@ namespace Candle {
 
 	JobHandle JobSystem::KickJobs(uint32_t numJobs, JobSpec spec, std::span<const JobHandle> deps /* ={} */)
 	{
-		CDL_CORE_ASSERT(spec.m_EntryFunc, "JobSpec must have an entry function");
-		CDL_CORE_ASSERT(numJobs > 0, "Cannot kick 0 jobs");
+		// An empty batch runs nothing, so it may omit the entry function and act as a pure join node.
+		CDL_CORE_ASSERT(numJobs == 0 || spec.m_EntryFunc, "JobSpec must have an entry function");
 
 		// About four chunks per worker: few queue operations, but enough slack that one slow chunk doesn't stall the batch.
-		// The max(1u, ...) only matters for numJobs == 0 in Dist, where it avoids a divide by zero.
+		// The max(1u, ...) keeps numJobs == 0 from dividing by zero; it yields chunkCount == 0.
 		const uint32_t maxChunks = static_cast<uint32_t>(m_Workers.size()) * 4;
 		const uint32_t chunkSize = std::max(1u, (numJobs + maxChunks - 1) / maxChunks);
 		const uint32_t chunkCount = (numJobs + chunkSize - 1) / chunkSize;
@@ -134,6 +134,13 @@ namespace Candle {
 		if (slot.m_JobCount.fetch_sub(1) > 1)
 			return;
 
+		FinishSlot(jobRunSlotIndex);
+	}
+
+	void JobSystem::FinishSlot(uint32_t jobRunSlotIndex)
+	{
+		JobRunSlot& slot = m_JobRunSlots[jobRunSlotIndex];
+
 		// Aquire lock and free the slot for reuse
 		m_SlotLock.Acquire();
 		auto successors = std::move(slot.m_Successors);	// Move successors out of the slot to avoid holding the lock while notifying them
@@ -168,6 +175,13 @@ namespace Candle {
 		const JobRunSlot& slot = m_JobRunSlots[slotIndex];
 		const uint32_t chunkCount = slot.m_JobCount.load();
 		const uint32_t chunkSize = slot.m_ChunkSize;
+
+		// An empty batch has no chunk to finish it, so it completes as soon as its dependencies have.
+		if (chunkCount == 0)
+		{
+			FinishSlot(slotIndex);
+			return;
+		}
 
 		m_JobQueues[static_cast<size_t>(slot.m_JobSpec.m_Priority)].PushGenerated(chunkCount, [=](uint32_t chunk) {
 			return JobRunDecl{ .m_FirstIndex = chunk * chunkSize, .m_RunSlotIndex = slotIndex };

@@ -552,6 +552,47 @@ CDL_TEST_CASE(JobSystem, WaitForJobOnInvalidHandleReturns, Unit)
 }
 
 //////////////////////////////////////////////////////////////////////////
+// Empty batches
+//////////////////////////////////////////////////////////////////////////
+
+CDL_TEST_CASE(JobSystem, EmptyBatchCompletesAndReleasesSuccessors, Unit)
+{
+	Counter successor;
+	JobSystemFixture jobs;
+
+	// No entry function: an empty batch runs nothing, so it doesn't need one.
+	const JobHandle empty = jobs->KickJobs(0, JobSpec{});
+	jobs->KickJob(Spec(&CountEntry, &successor), { empty });
+
+	CDL_CHECK(empty.IsValid());
+	jobs->WaitForJob(empty);
+	CDL_CHECK_MSG(WaitUntil([&] { return successor.Get() >= 1; }, 1000), "successor of an empty batch never ran");
+}
+
+CDL_TEST_CASE(JobSystem, EmptyBatchWaitsForItsDependencies, Unit)
+{
+	// Used as a join node, an empty batch must not release its successors before its own dependencies finish.
+	Counter dep{ .WorkMs = 20 };
+	Observer successor{ .Watched = &dep };
+	JobSystemFixture jobs;
+
+	const JobHandle real = jobs->KickJob(Spec(&CountEntry, &dep));
+	const JobHandle join = jobs->KickJobs(0, JobSpec{}, { real });
+	jobs->KickJob(Spec(&ObserveEntry, &successor), { join });
+
+	CDL_CHECK_MSG(WaitUntil([&] { return successor.Runs.load() >= 1; }), "successor never ran");
+	CDL_CHECK_EQ(successor.SeenAtStart.load(), 1u);
+}
+
+CDL_TEST_CASE(JobSystem, EmptyBatchesDoNotLeakSlots, Unit)
+{
+	// Twice the slot table. Fails by asserting "No free job run slots" if an empty batch never frees its slot.
+	JobSystemFixture jobs;
+	for (uint32_t i = 0; i < 2 * 4096; ++i)
+		jobs->WaitForJob(jobs->KickJobs(0, JobSpec{}));
+}
+
+//////////////////////////////////////////////////////////////////////////
 // Stress
 //////////////////////////////////////////////////////////////////////////
 

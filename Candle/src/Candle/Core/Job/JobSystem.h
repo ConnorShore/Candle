@@ -32,7 +32,8 @@ namespace Candle {
 
 	private:
 		void QueueJobSlot(uint32_t slotIndex);
-		void FinishJob(uint32_t jobRunSlotIndex);
+		void FinishJob(uint32_t jobRunSlotIndex);	// One chunk done; the last one calls FinishSlot
+		void FinishSlot(uint32_t jobRunSlotIndex);	// Frees the slot and releases its successors
 
 		std::optional<JobRunDecl> TryPopJob(JobPriority priority);
 

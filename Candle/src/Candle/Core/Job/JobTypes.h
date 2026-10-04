@@ -40,6 +40,7 @@ namespace Candle {
 	{
 		std::atomic<uint32_t> m_JobCount{ 0 };		// Chunks still to finish; the chunk that takes this to 0 finishes the slot
 		uint32_t m_BatchSize{ 0 };					// Indices in the batch; written before the slot is queued, read-only after
+		// TODO: Find a avoid a vector here due to heap allocs in lock; we could use a fixed-size array of 4 or 8, and then allocate a vector only if we exceed that
 		std::vector<uint32_t> m_Successors{ };		// Job Slot indicies depending on this run slot finishing (should be notified once this is done)
 		std::atomic<uint32_t> m_Remaining{ 0 };		// Unfinished dependencies; the slot is queued when this reaches 0
 		std::atomic<uint32_t> m_Generation{ 0 };	// Generation number of this current slot (increments each time this slot is used)
