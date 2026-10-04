@@ -82,4 +82,10 @@ namespace Candle {
 		return glm::uvec2(static_cast<uint32_t>(width), static_cast<uint32_t>(height));
 	}
 
+	uint32_t Window::GetID() const
+	{
+		CDL_CORE_ASSERT(Platform::IsMainThread(), "Windows must be queried for ID on the main thread");
+		return static_cast<uint32_t>(SDL_GetWindowID(ToSDL(m_NativeHandle)));
+	}
+
 }

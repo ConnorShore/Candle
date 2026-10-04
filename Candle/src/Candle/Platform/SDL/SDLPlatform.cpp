@@ -1,9 +1,26 @@
 #include "cdlpch.h"
+#include "SDLPlatform.h"
 #include "Candle/Platform/Platform.h"
 
-#include <SDL3/SDL.h>
 
 namespace Candle {
+
+	namespace {
+
+		SDL::RawEventHook s_RawEventHook = nullptr;     // Main thread only, so plain statics need no ordering
+		void* s_RawEventHookData = nullptr;
+		bool s_Pumping = false;                         // Catches a hook that tries to change the hook
+
+	}
+
+	void SDL::SetRawEventHook(RawEventHook hook, void* userData)
+	{
+		CDL_CORE_ASSERT(Platform::IsMainThread(), "The raw event hook is main thread only");
+		CDL_CORE_ASSERT(!s_Pumping, "The raw event hook cannot change during PumpEvents");
+		CDL_CORE_ASSERT(hook == nullptr || s_RawEventHook == nullptr, "A raw event hook is already set");
+		s_RawEventHook = hook;
+		s_RawEventHookData = userData;
+	}
 
 	void Platform::InitWindowing()
 	{
@@ -35,8 +52,12 @@ namespace Candle {
 		outEvents.clear();
 
 		SDL_Event e;
+		s_Pumping = true;
 		while (SDL_PollEvent(&e))
 		{
+			if (s_RawEventHook)
+				s_RawEventHook(e, s_RawEventHookData);
+
 			switch (e.type)
 			{
 			case SDL_EVENT_QUIT:
@@ -46,18 +67,20 @@ namespace Candle {
 				outEvents.emplace_back(WindowCloseRequested{ .WindowID = static_cast<uint32_t>(e.window.windowID) });
 				break;
 			case SDL_EVENT_WINDOW_PIXEL_SIZE_CHANGED:
-				outEvents.emplace_back(WindowResized{ .Width = static_cast<uint32_t>(e.window.data1), .Height = static_cast<uint32_t>(e.window.data2) });
+				outEvents.emplace_back(WindowResized{ .WindowID = static_cast<uint32_t>(e.window.windowID), .Width = static_cast<uint32_t>(e.window.data1), .Height = static_cast<uint32_t>(e.window.data2) });
 				break;
 			case SDL_EVENT_WINDOW_FOCUS_GAINED:
 			case SDL_EVENT_WINDOW_FOCUS_LOST:
-				outEvents.emplace_back(WindowFocus{ .Focused =e.type == SDL_EVENT_WINDOW_FOCUS_GAINED });
+				outEvents.emplace_back(WindowFocus{ .WindowID = static_cast<uint32_t>(e.window.windowID), .Focused =e.type == SDL_EVENT_WINDOW_FOCUS_GAINED });
 				break;
 			case SDL_EVENT_WINDOW_MINIMIZED:
 			case SDL_EVENT_WINDOW_RESTORED:
-				outEvents.emplace_back(WindowMinimized{ .Minimized = e.type == SDL_EVENT_WINDOW_MINIMIZED });
+				outEvents.emplace_back(WindowMinimized{ .WindowID = static_cast<uint32_t>(e.window.windowID), .Minimized = e.type == SDL_EVENT_WINDOW_MINIMIZED });
 				break;
 			}
 		}
+
+		s_Pumping = false;
 	}
 
 }

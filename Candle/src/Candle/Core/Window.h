@@ -31,6 +31,7 @@ namespace Candle {
 		void Destroy();
 
 		glm::uvec2 GetSize() const;
+		uint32_t GetID() const;
 
 		inline uint32_t GetWidth() const { return GetSize().x; }
 		inline uint32_t GetHeight() const { return GetSize().y; }
