@@ -1,12 +1,19 @@
 #pragma once
 
+#include "PlatformEvents.h"
+
 #include "Candle/Core/Threading/ThreadPriority.h"
+#include "Candle/Core/WindowSpecification.h"
 
 #include <chrono>
 #include <cstdint>
 #include <thread>
+#include <string>
+#include <vector>
 
 namespace Candle {
+
+	using NativeWindowHandle = uintptr_t;
 
 	struct Tick
 	{
@@ -25,6 +32,15 @@ namespace Candle {
 	{
 	public:
 		static void Init();
+		static void Shutdown();
+
+		// Window //
+		static NativeWindowHandle CreateWindow(const WindowSpecification& info);
+		static void DestroyWindow(NativeWindowHandle handle);
+		static void ResizeWindow(NativeWindowHandle handle, uint32_t width, uint32_t height);
+		static void MinimizeWindow(NativeWindowHandle handle);
+		static void MaximizeWindow(NativeWindowHandle handle);
+		static void RestoreWindow(NativeWindowHandle handle);
 
 		// Time //
 		static Tick GetStartTick();
@@ -72,6 +88,10 @@ namespace Candle {
 		static bool EnableConsoleAnsiColors();
 		static bool DisableConsoleAnsiColors();
 
+		// Events //
+		// Pump Events runs on main thread ONLY, and clears the events at the start
+		static void PumpEvents(std::vector<PlatformEvent>& outEvents);
+
 	private:
 		// Defined per platform alongside the tick queries
 		static void InitTime();
@@ -88,6 +108,7 @@ namespace Candle {
 		inline static uint64_t s_TickFrequency = 0;
 		inline static uint64_t s_StartTime = 0;
 		inline static uint64_t s_StartUnixMicroseconds = 0;
+		inline static uint32_t s_MainThreadId = 0;
 	};
 
 }

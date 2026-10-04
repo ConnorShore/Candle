@@ -3,6 +3,7 @@
 #include "Core.h"
 #include "ApplicationSpecification.h"
 #include "Time.h"
+#include "Window.h"
 
 #include <atomic>
 
@@ -34,6 +35,7 @@ namespace Candle {
 
     private:
 		ApplicationSpecification m_Specification;	// TODO: May make this a PlatformSpecification in the future (or pass parts onto a platform specification)
+		ScopedPtr<Window> m_Window;
 
 		std::atomic<bool> m_QuitRequested{ false };
 		FrameStats m_FrameStats;

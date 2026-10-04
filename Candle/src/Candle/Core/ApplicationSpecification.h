@@ -17,6 +17,7 @@ namespace Candle {
 		int CommandLineArgsCount = 0;
 		char** CommandLineArgs = nullptr;
 
+		WindowSpecification WindowSpec;
 		LoggerSpecification LoggerSpec;
 	};
 

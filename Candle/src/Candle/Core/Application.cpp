@@ -11,6 +11,8 @@ namespace Candle {
 		Platform::Init();
 		Logger::Init(m_Specification.LoggerSpec);
 
+		m_Window = ScopedPtr<Window>::Create(appSpecs.WindowSpec);
+
 		CDL_CORE_INFO(LogChannel::Application, "Application created: {}", m_Specification.Name);
 	}
 
@@ -19,6 +21,7 @@ namespace Candle {
 		CDL_CORE_INFO(LogChannel::Application, "Application destroyed: {}", m_Specification.Name);
 
 		Logger::Shutdown();
+		Platform::Shutdown();
 	}
 
 	void Application::Run()
@@ -27,6 +30,17 @@ namespace Candle {
 		Tick startTick = Platform::GetTick();
 		while (!IsQuitRequested())
 		{
+			// Process events
+			std::vector<PlatformEvent> events;
+			Platform::PumpEvents(events);
+			for (auto& evt : events)
+			{
+				if (std::holds_alternative<QuitRequested>(evt))
+				{
+					RequestQuit();
+				}
+			}
+
 			// TODO: Implement game logic
 
 			// Update the frame stats
