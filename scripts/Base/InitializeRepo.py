@@ -2,6 +2,7 @@ from hashlib import sha256
 from io import BytesIO
 from pathlib import Path
 import os
+import re
 import sys
 from tempfile import NamedTemporaryFile
 from urllib.request import urlopen
@@ -17,12 +18,83 @@ PREMAKE_URL = (
 PREMAKE_SHA256 = "e64ce2ed8778e0098f63674cca61fe33941b5f0c8d9a4afd651152bdea3758ab"
 VULKAN_SDK_URL = "https://vulkan.lunarg.com/sdk/home"
 
+# The viewer must be the exact release of the client submodule; bump these together with it.
+TRACY_VERSION = "0.14.1"
+TRACY_URL = (
+    "https://github.com/wolfpld/tracy/releases/download/"
+    f"v{TRACY_VERSION}/windows-{TRACY_VERSION}.zip"
+)
+TRACY_SHA256 = "f7499d74914aa3ba94a2c1ce72f36477d7b61d9d0f7c9790e05274c258c97fb5"
+TRACY_DIR = PROJECT_ROOT / "vendor" / "tracy" / "bin"
+TRACY_STAMP = TRACY_DIR / "VERSION"
+TRACY_TOOLS = ("tracy-profiler.exe", "tracy-capture.exe", "tracy-csvexport.exe")
+TRACY_VERSION_HEADER = (
+    PROJECT_ROOT / "Candle" / "vendor" / "tracy" / "tracy" / "public" / "common" / "TracyVersion.hpp"
+)
+
 
 def main() -> int:
-    premake_result = install_premake()
-    if premake_result != 0:
-        return premake_result
-    return check_vulkan_sdk()
+    for step in (install_premake, install_tracy, check_vulkan_sdk):
+        result = step()
+        if result != 0:
+            return result
+    return 0
+
+
+def submodule_tracy_version() -> str | None:
+    """Reads the client version from the submodule, so a submodule bump is detected rather than assumed."""
+    if not TRACY_VERSION_HEADER.is_file():
+        return None
+    text = TRACY_VERSION_HEADER.read_text()
+    parts = [re.search(rf"{name}\s*=\s*(\d+)", text) for name in ("Major", "Minor", "Patch")]
+    return ".".join(match.group(1) for match in parts) if all(parts) else None
+
+
+def install_tracy() -> int:
+    client_version = submodule_tracy_version()
+    if client_version is None:
+        print(
+            f"ERROR: Cannot read {TRACY_VERSION_HEADER}. Run 'git submodule update --init --recursive'.",
+            file=sys.stderr,
+        )
+        return 1
+    if client_version != TRACY_VERSION:
+        print(
+            f"ERROR: The tracy submodule is {client_version} but InitializeRepo.py pins the viewer at "
+            f"{TRACY_VERSION}. Update TRACY_VERSION and TRACY_SHA256 to match.",
+            file=sys.stderr,
+        )
+        return 1
+
+    installed = TRACY_STAMP.read_text().strip() if TRACY_STAMP.is_file() else None
+    if installed == TRACY_VERSION and all((TRACY_DIR / tool).is_file() for tool in TRACY_TOOLS):
+        print(f"Tracy {TRACY_VERSION} already exists: {TRACY_DIR}")
+        return 0
+
+    try:
+        with urlopen(TRACY_URL, timeout=120) as response:
+            archive_data = response.read()
+    except OSError as error:
+        print(f"ERROR: Could not download Tracy: {error}", file=sys.stderr)
+        return 1
+
+    actual_hash = sha256(archive_data).hexdigest()
+    if actual_hash != TRACY_SHA256:
+        print(f"ERROR: Tracy archive checksum mismatch: {actual_hash}", file=sys.stderr)
+        return 1
+
+    try:
+        TRACY_DIR.mkdir(parents=True, exist_ok=True)
+        with ZipFile(BytesIO(archive_data)) as archive:
+            for tool in TRACY_TOOLS:
+                (TRACY_DIR / tool).write_bytes(archive.read(tool))
+        TRACY_STAMP.write_text(TRACY_VERSION)
+    except (BadZipFile, OSError, KeyError) as error:
+        print(f"ERROR: Could not install Tracy: {error}", file=sys.stderr)
+        return 1
+
+    print(f"Installed verified Tracy {TRACY_VERSION} at {TRACY_DIR}")
+    return 0
 
 
 def check_vulkan_sdk() -> int:

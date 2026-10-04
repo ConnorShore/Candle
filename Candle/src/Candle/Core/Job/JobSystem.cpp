@@ -58,6 +58,10 @@ namespace Candle {
 		// An empty batch runs nothing, so it may omit the entry function and act as a pure join node.
 		CDL_CORE_ASSERT(numJobs == 0 || spec.m_EntryFunc, "JobSpec must have an entry function");
 
+		CDL_PROFILE_SCOPE("KickJobs");
+		CDL_PROFILE_SCOPE_TEXT(spec.m_Name);
+		CDL_PROFILE_SCOPE_METADATA(numJobs);
+
 		// About four chunks per worker: few queue operations, but enough slack that one slow chunk doesn't stall the batch.
 		// The max(1u, ...) keeps numJobs == 0 from dividing by zero; it yields chunkCount == 0.
 		const uint32_t maxChunks = static_cast<uint32_t>(m_Workers.size()) * 4;
@@ -120,6 +124,9 @@ namespace Candle {
 			return;
 		CDL_CORE_ASSERT(job.m_Index < k_MaxJobRunSlots, "JobHandle index out of range");
 
+		// The time a non-worker thread spends blocked on the pool: on the game thread, this is the frame's critical path.
+		CDL_PROFILE_SCOPE("WaitForJob");
+
 		JobRunSlot& slot = m_JobRunSlots[job.m_Index];
 		uint32_t gen;
 		while ((gen = slot.m_Generation.load(std::memory_order_acquire)) <= job.m_Generation)
@@ -140,6 +147,10 @@ namespace Candle {
 	void JobSystem::FinishSlot(uint32_t jobRunSlotIndex)
 	{
 		JobRunSlot& slot = m_JobRunSlots[jobRunSlotIndex];
+
+		// The gap between a batch's last chunk and its successors starting; includes the slot lock and requeueing.
+		CDL_PROFILE_SCOPE("FinishSlot");
+		CDL_PROFILE_SCOPE_TEXT(slot.m_JobSpec.m_Name);
 
 		// Aquire lock and free the slot for reuse
 		m_SlotLock.Acquire();

@@ -7,3 +7,6 @@
 [submodule "Candle/vendor/glm"]
 	path = Candle/vendor/glm
 	url = https://github.com/g-truc/glm.git
+[submodule "Candle/vendor/tracy/tracy"]
+	path = Candle/vendor/tracy/tracy
+	url = https://github.com/wolfpld/tracy.git

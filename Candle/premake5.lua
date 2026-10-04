@@ -18,6 +18,7 @@
       "vendor/glm",
       "vendor/imgui/imgui",
       "vendor/imgui/imgui/backends",
+      "vendor/tracy/tracy/public",
    }
 
    files 
@@ -31,6 +32,7 @@
    {
       "SDL3",
       "imgui",
+      "tracy",
    }
 
    defines

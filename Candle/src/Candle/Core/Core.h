@@ -23,3 +23,5 @@
 
 #include "Candle/Core/Memory/ScopedPtr.h"
 #include "Candle/Core/Memory/SharedPtr.h"
+
+#include "Candle/Core/Profiler.h"

@@ -30,6 +30,7 @@
 #include <type_traits>
 #include <filesystem>
 #include <limits>
+#include <atomic>
 
 #ifdef CDL_PLATFORM_WINDOWS
 	#include <Windows.h>

@@ -23,6 +23,7 @@ project "Candle-Test"
       "%{wks.location}/Candle/vendor/SDL3/SDL3/include",
       "%{wks.location}/Candle/vendor/imgui/imgui",
       "%{wks.location}/Candle/vendor/imgui/imgui/backends",
+      "%{wks.location}/Candle/vendor/tracy/tracy/public",
    }
 
    links
