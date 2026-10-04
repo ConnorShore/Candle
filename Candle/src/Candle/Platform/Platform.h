@@ -3,7 +3,6 @@
 #include "PlatformEvents.h"
 
 #include "Candle/Core/Threading/ThreadPriority.h"
-#include "Candle/Core/WindowSpecification.h"
 
 #include <chrono>
 #include <cstdint>
@@ -12,8 +11,6 @@
 #include <vector>
 
 namespace Candle {
-
-	using NativeWindowHandle = uintptr_t;
 
 	struct Tick
 	{
@@ -31,16 +28,13 @@ namespace Candle {
 	class Platform
 	{
 	public:
+		// OS services only (main-thread id, clocks, etc)
 		static void Init();
 		static void Shutdown();
 
 		// Window //
-		static NativeWindowHandle CreateWindow(const WindowSpecification& info);
-		static void DestroyWindow(NativeWindowHandle handle);
-		static void ResizeWindow(NativeWindowHandle handle, uint32_t width, uint32_t height);
-		static void MinimizeWindow(NativeWindowHandle handle);
-		static void MaximizeWindow(NativeWindowHandle handle);
-		static void RestoreWindow(NativeWindowHandle handle);
+		static void InitWindowing();
+		static void ShutdownWindowing();
 
 		// Time //
 		static Tick GetStartTick();
@@ -75,6 +69,7 @@ namespace Candle {
 
 		// Threads //
 		static uint32_t GetCurrentThreadId();
+		inline static bool IsMainThread() { return GetCurrentThreadId() == s_MainThreadId; }
 		static void SetCurrentThreadName(const char* name);
 		static void SetCurrentThreadPriority(ThreadPriority priority);
 		static void SetCurrentThreadAffinityMask(uint64_t mask);
@@ -89,7 +84,7 @@ namespace Candle {
 		static bool DisableConsoleAnsiColors();
 
 		// Events //
-		// Pump Events runs on main thread ONLY, and clears the events at the start
+		// Clears outEvents, then appends this frame's events in arrival order. Main thread only, after InitWindowing.
 		static void PumpEvents(std::vector<PlatformEvent>& outEvents);
 
 	private:

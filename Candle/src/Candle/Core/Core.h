@@ -25,3 +25,12 @@
 #include "Candle/Core/Memory/SharedPtr.h"
 
 #include "Candle/Core/Profiler.h"
+
+
+namespace Candle {
+
+	// Helper for std::visit with multiple lambdas
+	template<typename... T>
+	struct Overloaded : T... { using T::operator()...; };
+
+}

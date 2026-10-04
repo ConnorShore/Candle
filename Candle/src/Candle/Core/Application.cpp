@@ -5,23 +5,27 @@
 
 namespace Candle {
 
+	Application::PlatformScope::PlatformScope() { Platform::Init(); }
+	Application::PlatformScope::~PlatformScope() { Platform::Shutdown(); }
+
+	Application::LoggerScope::LoggerScope(const LoggerSpecification& spec) { Logger::Init(spec); }
+	Application::LoggerScope::~LoggerScope() { Logger::Shutdown(); }
+
+	Application::WindowingScope::WindowingScope(bool enabled) : m_Enabled(enabled) { if (m_Enabled) Platform::InitWindowing(); }
+	Application::WindowingScope::~WindowingScope() { if (m_Enabled) Platform::ShutdownWindowing(); }
+
 	Application::Application(const ApplicationSpecification& appSpecs)
 		: m_Specification(appSpecs)
+		, m_LoggerScope(m_Specification.LoggerSpec)
+		, m_WindowingScope(!m_Specification.Headless)
+		, m_Window(m_Specification.Headless ? ScopedPtr<Window>() : ScopedPtr<Window>::Create(m_Specification.WindowSpec))
 	{
-		Platform::Init();
-		Logger::Init(m_Specification.LoggerSpec);
-
-		m_Window = ScopedPtr<Window>::Create(appSpecs.WindowSpec);
-
 		CDL_CORE_INFO(LogChannel::Application, "Application created: {}", m_Specification.Name);
 	}
 
 	Application::~Application()
 	{
 		CDL_CORE_INFO(LogChannel::Application, "Application destroyed: {}", m_Specification.Name);
-
-		Logger::Shutdown();
-		Platform::Shutdown();
 	}
 
 	void Application::Run()
@@ -31,15 +35,7 @@ namespace Candle {
 		while (!IsQuitRequested())
 		{
 			// Process events
-			std::vector<PlatformEvent> events;
-			Platform::PumpEvents(events);
-			for (auto& evt : events)
-			{
-				if (std::holds_alternative<QuitRequested>(evt))
-				{
-					RequestQuit();
-				}
-			}
+			HandlePlatformEvents();
 
 			// TODO: Implement game logic
 
@@ -57,6 +53,25 @@ namespace Candle {
 				CDL_CORE_INFO(LogChannel::Application, "Application running: {}; Frame FPS: {}", m_Specification.Name, (1.0f / m_FrameStats.DeltaTime));
 				timeSinceLastLog = 0.0f;
 			}
+		}
+	}
+
+	void Application::HandlePlatformEvents()
+	{
+		// If headless, we don't have a window to receive events from, so we skip event handling
+		if (m_Specification.Headless)
+			return;
+
+		Platform::PumpEvents(m_FrameEvents);
+		for (auto& evt : m_FrameEvents)
+		{
+			std::visit(Overloaded{
+				[&](const QuitRequested&) { RequestQuit(); },
+				[](const WindowCloseRequested& e) { },
+				[](const WindowResized& e) { },
+				[](const WindowFocus& e) { },
+				[](const WindowMinimized& e) { }
+				}, evt);
 		}
 	}
 

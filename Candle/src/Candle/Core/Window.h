@@ -1,24 +1,26 @@
 #pragma once
 
-#include "Candle/Platform/Platform.h"
+#include "WindowSpecification.h"
 
 #include <string>
 #include <cstdint>
 
+#include <glm/glm.hpp>
+
 namespace Candle {
 
+	using NativeWindowHandle = uintptr_t;
+
+	// Threading: main thread only. Other threads learn of size/minimize changes from PlatformEvents.
 	class Window
 	{
 	public:
-		Window(const WindowSpecification& info);
+		explicit Window(const WindowSpecification& info);
 		~Window();
 
-		Window(Window&& other) noexcept = default;
-		Window& operator=(Window&& other) noexcept = default;
-
-		// Delete copy and assignments
-		Window(Window&) = delete;
-		Window& operator=(Window&) = delete;
+		// Neither copyable nor movable
+		Window(const Window&) = delete;
+		Window& operator=(const Window&) = delete;
 
 		void Resize(uint32_t width, uint32_t height);
 
@@ -26,12 +28,14 @@ namespace Candle {
 		void Maximize();
 		void Restore();
 
-		void Close();
+		void Destroy();
+
+		glm::uvec2 GetSize() const;
+
+		inline uint32_t GetWidth() const { return GetSize().x; }
+		inline uint32_t GetHeight() const { return GetSize().y; }
 
 	private:
-		std::string m_Title;
-		uint32_t m_Width, m_Height;
-
 		NativeWindowHandle m_NativeHandle;
 	};
 

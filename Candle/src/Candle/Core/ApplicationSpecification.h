@@ -4,6 +4,7 @@
 #include <filesystem>
 
 #include "Candle/Core/Logger.h"
+#include "Candle/Core/WindowSpecification.h"
 
 namespace Candle {
 
@@ -17,6 +18,7 @@ namespace Candle {
 		int CommandLineArgsCount = 0;
 		char** CommandLineArgs = nullptr;
 
+		bool Headless = false;			// No window, windowing backend or event pump; WindowSpec is ignored
 		WindowSpecification WindowSpec;
 		LoggerSpecification LoggerSpec;
 	};

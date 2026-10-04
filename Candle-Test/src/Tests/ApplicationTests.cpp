@@ -25,6 +25,7 @@ namespace {
 	{
 		ApplicationSpecification spec;
 		spec.Name = "ApplicationTests";
+		spec.Headless = true;	// These tests exercise the quit path, not windowing; keep the suite free of SDL
 		spec.LoggerSpec.Level = LogLevel::Warn;
 		spec.LoggerSpec.LogToConsole = false;
 		spec.LoggerSpec.LogToFile = false;
