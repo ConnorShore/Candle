@@ -35,6 +35,7 @@ namespace Candle {
 		// Window //
 		static void InitWindowing();
 		static void ShutdownWindowing();
+		static bool IsWindowingInitialized();
 
 		// Time //
 		static Tick GetStartTick();

@@ -19,6 +19,7 @@ namespace Candle {
 	Window::Window(const WindowSpecification& info)
 	{
 		CDL_CORE_ASSERT(Platform::IsMainThread(), "Windows must be created on the main thread");
+		CDL_CORE_ASSERT(Platform::IsWindowingInitialized(), "InitWindowing must run before a window is created");
 
 		uint64_t flags = SDL_WINDOW_RESIZABLE | SDL_WINDOW_VULKAN;
 		if (info.Mode == WindowMode::BorderlessFullscreen)

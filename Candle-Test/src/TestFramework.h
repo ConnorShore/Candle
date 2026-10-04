@@ -26,10 +26,11 @@
 
 namespace Candle::Test {
 
-	// Run-time filterable, so the slow multi-threaded hammering can be skipped with --filter=unit.
+	// Run-time filterable, so --filter=unit skips both the slow multi-threaded hammering and anything needing a display.
 	namespace Type {
-		inline constexpr const char* Unit = "unit";     // single-threaded logic, fast
-		inline constexpr const char* Stress = "stress"; // many threads or many iterations, hunting races
+		inline constexpr const char* Unit = "unit";       // single-threaded logic, fast, headless
+		inline constexpr const char* Stress = "stress";   // many threads or many iterations, hunting races
+		inline constexpr const char* Display = "display"; // opens real OS windows; skips itself where SDL video can't start
 	}
 
 	// Thrown by CDL_CHECK* to abort the current test.

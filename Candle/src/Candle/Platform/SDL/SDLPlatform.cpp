@@ -22,9 +22,15 @@ namespace Candle {
 		SDL_Quit();
 	}
 
+	bool Platform::IsWindowingInitialized()
+	{
+		return SDL_WasInit(SDL_INIT_VIDEO) != 0;
+	}
+
 	void Platform::PumpEvents(std::vector<PlatformEvent>& outEvents)
 	{
 		CDL_CORE_ASSERT(IsMainThread(), "Pumping events must occur on the main thread");
+		CDL_CORE_ASSERT(SDL_WasInit(SDL_INIT_EVENTS) != 0, "Without SDL's event queue, polling silently returns nothing; call InitWindowing first");
 
 		outEvents.clear();
 
