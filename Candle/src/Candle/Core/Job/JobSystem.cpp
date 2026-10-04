@@ -15,8 +15,8 @@ namespace Candle {
 		m_JobRunSlots[k_MaxJobRunSlots - 1].m_NextFree = k_InvalidJobRunSlotIndex;
 
 		// Create workers based on number of processors - 2 (main + render threads)
-		auto cpuTypology = Platform::QueryCPUTopology();
-		auto numWorkers = std::max(1u, cpuTypology.NumLogicalCores - 2);
+		auto cpuTopology = Platform::QueryCPUTopology();
+		const uint32_t numWorkers = cpuTopology.NumLogicalCores > 2 ? cpuTopology.NumLogicalCores - 2 : 1;
 
 		m_Workers.reserve(numWorkers);
 		for (uint32_t i = 0; i < numWorkers; ++i)

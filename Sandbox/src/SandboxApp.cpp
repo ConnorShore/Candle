@@ -79,8 +79,8 @@ namespace Candle {
 		}
 
 	private:
-		std::jthread m_Thread;
 		JobSystem m_JobSystem;
+		std::jthread m_Thread;
 	};
 
 	ScopedPtr<Application> CreateApplication(int argc, char** argv)
