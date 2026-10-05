@@ -1,10 +1,14 @@
 #pragma once
 
+#include "PlatformEvents.h"
+
 #include "Candle/Core/Threading/ThreadPriority.h"
 
 #include <chrono>
 #include <cstdint>
 #include <thread>
+#include <string>
+#include <vector>
 
 namespace Candle {
 
@@ -24,7 +28,14 @@ namespace Candle {
 	class Platform
 	{
 	public:
+		// OS services only (main-thread id, clocks, etc)
 		static void Init();
+		static void Shutdown();
+
+		// Window //
+		static void InitWindowing();
+		static void ShutdownWindowing();
+		static bool IsWindowingInitialized();
 
 		// Time //
 		static Tick GetStartTick();
@@ -59,6 +70,7 @@ namespace Candle {
 
 		// Threads //
 		static uint32_t GetCurrentThreadId();
+		inline static bool IsMainThread() { return GetCurrentThreadId() == s_MainThreadId; }
 		static void SetCurrentThreadName(const char* name);
 		static void SetCurrentThreadPriority(ThreadPriority priority);
 		static void SetCurrentThreadAffinityMask(uint64_t mask);
@@ -71,6 +83,10 @@ namespace Candle {
 		// Console //
 		static bool EnableConsoleAnsiColors();
 		static bool DisableConsoleAnsiColors();
+
+		// Events //
+		// Clears outEvents, then appends this frame's events in arrival order. Main thread only, after InitWindowing.
+		static void PumpEvents(std::vector<PlatformEvent>& outEvents);
 
 	private:
 		// Defined per platform alongside the tick queries
@@ -88,6 +104,7 @@ namespace Candle {
 		inline static uint64_t s_TickFrequency = 0;
 		inline static uint64_t s_StartTime = 0;
 		inline static uint64_t s_StartUnixMicroseconds = 0;
+		inline static uint32_t s_MainThreadId = 0;
 	};
 
 }

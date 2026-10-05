@@ -11,8 +11,14 @@ namespace Candle {
 
 	void Platform::Init()
 	{
+		s_MainThreadId = Platform::GetCurrentThreadId();
+
 		// Time first, so anything initialised after this point can timestamp its own startup.
 		InitTime();
+	}
+
+	void Platform::Shutdown()
+	{
 	}
 
 }

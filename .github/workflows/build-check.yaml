@@ -22,5 +22,7 @@ jobs:
         run: python scripts/Base/Build.py generate
       - name: Build Candle
         run: python scripts/Base/Build.py build
-      - name: Test Candle
-        run: python scripts/Base/Build.py test
+      - name: Candle Unit tests
+        run: python scripts/Base/Build.py test --filter=unit
+      - name: Candle Stress tests
+        run: python scripts/Base/Build.py test --filter=stress

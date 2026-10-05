@@ -3,10 +3,13 @@
 // Engine-aware helpers shared by the tests. TestFramework.h stays engine-free; anything that needs
 // Candle types lives here.
 
+#include "TestFramework.h"
+
 #include <Candle.h>
 #include <Candle/Core/LogSink.h>
 
 #include <latch>
+#include <optional>
 #include <thread>
 #include <vector>
 
@@ -122,5 +125,72 @@ namespace Candle::Test {
 		const uint32_t hardware = Platform::QueryCPUTopology().NumLogicalCores;
 		return static_cast<int>(std::clamp(hardware, 4u, 16u));
 	}
+
+	// An Application with no-op hooks, for tests that drive Run() directly.
+	class TestApplication : public Application
+	{
+	public:
+		using Application::Application;
+		void OnInit() override {}
+		void OnShutdown() override {}
+	};
+
+	// Application owns a Logger Init/Shutdown cycle; keep it silent and off disk. Headless unless a
+	// test opts in, so the unit suite never needs a display.
+	inline ApplicationSpecification QuietSpec()
+	{
+		ApplicationSpecification spec;
+		spec.Name = "Candle-Test";
+		spec.Headless = true;
+		spec.LoggerSpec.Level = LogLevel::Warn;
+		spec.LoggerSpec.LogToConsole = false;
+		spec.LoggerSpec.LogToFile = false;
+		return spec;
+	}
+
+	// Level and mask are process-wide statics that Application sets and never restores.
+	inline void RestoreLoggerDefaults()
+	{
+		Logger::SetLevel(LogLevel::Info);
+		Logger::SetChannelMask(0xFFFF);
+	}
+
+	inline WindowSpecification TestWindowSpec(uint32_t width = 640, uint32_t height = 480)
+	{
+		WindowSpecification spec;
+		spec.Title = "Candle-Test";
+		spec.Width = width;
+		spec.Height = height;
+		return spec;
+	}
+
+	// A windowed app needs the windowing backend, which can't start without a desktop session; skip there rather than fail.
+	inline void EmplaceWindowedApp(std::optional<TestApplication>& app)
+	{
+		ApplicationSpecification spec = QuietSpec();
+		spec.Headless = false;
+		spec.WindowSpec = TestWindowSpec();
+
+		try { app.emplace(spec); }
+		catch (const std::exception& e)
+		{
+			RestoreLoggerDefaults();
+			CDL_SKIP(std::format("windowing unavailable: {}", e.what()));
+		}
+	}
+
+	// Runs the windowing backend for one test, skipping rather than failing where there is no display.
+	struct WindowingBackend
+	{
+		WindowingBackend()
+		{
+			try { Platform::InitWindowing(); }
+			catch (const std::exception& e) { CDL_SKIP(std::format("windowing unavailable: {}", e.what())); }
+		}
+		~WindowingBackend() { Platform::ShutdownWindowing(); }
+
+		WindowingBackend(const WindowingBackend&) = delete;
+		WindowingBackend& operator=(const WindowingBackend&) = delete;
+	};
 
 }

@@ -39,6 +39,7 @@ namespace Candle {
 		Thread			= 1 << 8,
 		Math			= 1 << 9,
 		Job				= 1 << 10,
+		Window			= 1 << 11,
 	};
 
 	// Bitwise OR/AND operators for LogChannel to allow combining channels
