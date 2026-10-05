@@ -1,9 +1,11 @@
 #pragma once
 
 #include "InputCodes.h"
+#include "Candle/Core/Asserts.h"
 #include "Candle/Platform/PlatformEvents.h"
 
 #include <bitset>
+#include <type_traits>
 #include <utility>
 
 #include <glm/glm.hpp>
