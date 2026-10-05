@@ -2,6 +2,8 @@
 #include "SDLPlatform.h"
 #include "Candle/Platform/Platform.h"
 
+#include <SDL3/SDL_vulkan.h>
+
 namespace Candle {
 
 	namespace {
@@ -115,6 +117,11 @@ namespace Candle {
 		}
 
 		s_Pumping = false;
+	}
+
+	const char* const* Platform::GetVulkanRequiredInstanceExtensions(uint32_t& outCount)
+	{
+		return SDL_Vulkan_GetInstanceExtensions(&outCount);
 	}
 
 }

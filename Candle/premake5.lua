@@ -19,6 +19,7 @@
       "vendor/imgui/imgui",
       "vendor/imgui/imgui/backends",
       "vendor/tracy/tracy/public",
+      "$(VULKAN_SDK)/Include",
    }
 
    files 
@@ -38,6 +39,7 @@
    defines
    {
       "CDL_ENGINE",
+      "VULKAN_HPP_NO_STRUCT_CONSTRUCTORS"
    }
 
    filter "system:windows"

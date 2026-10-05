@@ -29,7 +29,8 @@ namespace Candle {
 	ScopedPtr<Application> CreateApplication(int argc, char** argv)
 	{
 		ApplicationSpecification spec;
-		spec.Name = "Candle Sandbox";
+		spec.AppInfo.Name = "Candle Sandbox";
+		spec.AppInfo.Version = { 1, 0, 0 };
 
 		std::string engineAssetDir = "CandleCore";
 		if (argc >= 3) {
