@@ -19,6 +19,8 @@ namespace Candle {
 		, m_LoggerScope(m_Specification.LoggerSpec)
 		, m_WindowingScope(!m_Specification.Headless)
 		, m_Window(m_Specification.Headless ? ScopedPtr<Window>() : ScopedPtr<Window>::Create(m_Specification.WindowSpec))
+		, m_InputSystem(m_Specification.Headless ? ScopedPtr<InputSystem>() : ScopedPtr<InputSystem>::Create())
+		, m_InputSnapshot(m_InputSystem ? m_InputSystem->CaptureSnapshot() : InputSnapshot{})
 	{
 		CDL_CORE_INFO(LogChannel::Application, "Application created: {}", m_Specification.Name);
 	}
@@ -37,6 +39,8 @@ namespace Candle {
 			// Process events
 			HandlePlatformEvents();
 
+			m_InputSnapshot = m_InputSystem ? m_InputSystem->CaptureSnapshot() : InputSnapshot{};
+
 			// TODO: Implement game logic
 
 			// Update the frame stats
@@ -50,7 +54,11 @@ namespace Candle {
 			timeSinceLastLog += m_FrameStats.DeltaTime;
 			if (timeSinceLastLog >= 0.5f)
 			{
-				CDL_CORE_INFO(LogChannel::Application, "Application running: {}; Frame FPS: {}", m_Specification.Name, (1.0f / m_FrameStats.DeltaTime));
+				CDL_CORE_INFO(LogChannel::Application, "Application running: {}; Frame FPS: {}", 
+					m_Specification.Name, (1.0f / m_FrameStats.DeltaTime));
+				CDL_CORE_INFO(LogChannel::Input, "Space bar Pressed: {}; Left mouse button pressed: {}", 
+					m_InputSnapshot.IsKeyDown(KeyCode::Space), m_InputSnapshot.IsMouseDown(MouseButton::Left));
+
 				timeSinceLastLog = 0.0f;
 			}
 		}
@@ -67,10 +75,16 @@ namespace Candle {
 		{
 			std::visit(Overloaded{
 				[&](const QuitRequested&) { RequestQuit(); },
-				[this](const WindowCloseRequested& e) { if (e.WindowID == m_Window->GetID()) RequestQuit(); },
-				[](const WindowResized& e) { },
-				[](const WindowFocus& e) { },
-				[](const WindowMinimized& e) { }
+				[&](const WindowCloseRequested& e) { if (e.WindowID == m_Window->GetID()) RequestQuit(); },
+				[&](const WindowResized& e) {},
+				[&](const WindowFocus& e) {},
+				[&](const WindowMinimized& e) {},
+				[&](const KeyPressedEvent& e) { m_InputSystem->ConsumeEvent(e); },
+				[&](const KeyReleasedEvent& e) { m_InputSystem->ConsumeEvent(e); },
+				[&](const MouseButtonPressedEvent& e) { m_InputSystem->ConsumeEvent(e); },
+				[&](const MouseButtonReleasedEvent& e) { m_InputSystem->ConsumeEvent(e); },
+				[&](const MouseMoveEvent& e) { m_InputSystem->ConsumeEvent(e); },
+				[&](const MouseWheelEvent& e) { m_InputSystem->ConsumeEvent(e); }
 				}, evt);
 		}
 	}

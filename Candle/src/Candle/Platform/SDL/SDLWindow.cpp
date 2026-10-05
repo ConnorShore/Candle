@@ -3,6 +3,7 @@
 #include "Candle/Platform/Platform.h"
 
 #include <SDL3/SDL.h>
+#include <SDL3/SDL_vulkan.h>
 
 namespace Candle {
 
@@ -20,6 +21,14 @@ namespace Candle {
 	{
 		CDL_CORE_ASSERT(Platform::IsMainThread(), "Windows must be created on the main thread");
 		CDL_CORE_ASSERT(Platform::IsWindowingInitialized(), "InitWindowing must run before a window is created");
+
+		// Ensure SDL's Vulkan loader is initialized before creating a Vulkan window
+		if (!SDL_Vulkan_LoadLibrary(nullptr))
+		{
+			const std::string error = std::format("SDL_Vulkan_LoadLibrary failed: {}", SDL_GetError());
+			CDL_CORE_ERROR(LogChannel::Window, "{}", error);
+			throw std::runtime_error(error);
+		}
 
 		uint64_t flags = SDL_WINDOW_RESIZABLE | SDL_WINDOW_VULKAN;
 		if (info.Mode == WindowMode::BorderlessFullscreen)

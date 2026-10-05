@@ -2,7 +2,6 @@
 #include "SDLPlatform.h"
 #include "Candle/Platform/Platform.h"
 
-
 namespace Candle {
 
 	namespace {
@@ -10,6 +9,20 @@ namespace Candle {
 		SDL::RawEventHook s_RawEventHook = nullptr;     // Main thread only, so plain statics need no ordering
 		void* s_RawEventHookData = nullptr;
 		bool s_Pumping = false;                         // Catches a hook that tries to change the hook
+
+		KeyCode ToKeyCode(SDL_Scancode scancode)
+		{
+			if (scancode < 0 || scancode >= std::to_underlying(KeyCode::Count))
+				return KeyCode::Unknown;
+			return static_cast<KeyCode>(scancode);
+		}
+
+		MouseButton ToMouseButton(uint8_t sdlButton)
+		{
+			if (sdlButton < 1 || sdlButton >= std::to_underlying(MouseButton::Count))
+				return MouseButton::Unknown;
+			return static_cast<MouseButton>(sdlButton);
+		}
 
 	}
 
@@ -76,6 +89,25 @@ namespace Candle {
 			case SDL_EVENT_WINDOW_MINIMIZED:
 			case SDL_EVENT_WINDOW_RESTORED:
 				outEvents.emplace_back(WindowMinimized{ .WindowID = static_cast<uint32_t>(e.window.windowID), .Minimized = e.type == SDL_EVENT_WINDOW_MINIMIZED });
+				break;
+			case SDL_EVENT_KEY_DOWN:
+				if (!e.key.repeat)	// Auto-repeat is for text entry and UI, not a fresh gameplay press
+					outEvents.emplace_back(KeyPressedEvent{ .Key = ToKeyCode(e.key.scancode) });
+				break;
+			case SDL_EVENT_KEY_UP:
+				outEvents.emplace_back(KeyReleasedEvent{ .Key = ToKeyCode(e.key.scancode) });
+				break;
+			case SDL_EVENT_MOUSE_BUTTON_DOWN:
+				outEvents.emplace_back(MouseButtonPressedEvent{ .Button = ToMouseButton(e.button.button) });
+				break;
+			case SDL_EVENT_MOUSE_BUTTON_UP:
+				outEvents.emplace_back(MouseButtonReleasedEvent{ .Button = ToMouseButton(e.button.button) });
+				break;
+			case SDL_EVENT_MOUSE_MOTION:
+				outEvents.emplace_back(MouseMoveEvent{ .Position = glm::vec2(e.motion.x, e.motion.y), .Delta = glm::vec2(e.motion.xrel, e.motion.yrel) });
+				break;
+			case SDL_EVENT_MOUSE_WHEEL:
+				outEvents.emplace_back(MouseWheelEvent{ .Delta = glm::vec2(e.wheel.x, e.wheel.y), .Ticks = glm::ivec2(e.wheel.integer_x, e.wheel.integer_y) });
 				break;
 			}
 		}
