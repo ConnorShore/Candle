@@ -37,6 +37,9 @@ namespace Candle {
 			// Process events
 			HandlePlatformEvents();
 
+			// Moves inside the fixed-step tick loop once there is one, so each tick consumes the edges exactly once
+			InputSnapshot inputSnapshot = m_InputSystem.CaptureSnapshot();
+
 			// TODO: Implement game logic
 
 			// Update the frame stats
@@ -50,7 +53,11 @@ namespace Candle {
 			timeSinceLastLog += m_FrameStats.DeltaTime;
 			if (timeSinceLastLog >= 0.5f)
 			{
-				CDL_CORE_INFO(LogChannel::Application, "Application running: {}; Frame FPS: {}", m_Specification.Name, (1.0f / m_FrameStats.DeltaTime));
+				CDL_CORE_INFO(LogChannel::Application, "Application running: {}; Frame FPS: {}", 
+					m_Specification.Name, (1.0f / m_FrameStats.DeltaTime));
+				CDL_CORE_INFO(LogChannel::Input, "Space bar Pressed: {}; Left mouse button pressed: {}", 
+					inputSnapshot.IsKeyDown(KeyCode::Space), inputSnapshot.IsMouseDown(MouseButton::Left));
+
 				timeSinceLastLog = 0.0f;
 			}
 		}
@@ -67,10 +74,11 @@ namespace Candle {
 		{
 			std::visit(Overloaded{
 				[&](const QuitRequested&) { RequestQuit(); },
-				[this](const WindowCloseRequested& e) { if (e.WindowID == m_Window->GetID()) RequestQuit(); },
-				[](const WindowResized& e) { },
-				[](const WindowFocus& e) { },
-				[](const WindowMinimized& e) { }
+				[&](const WindowCloseRequested& e) { if (e.WindowID == m_Window->GetID()) RequestQuit(); },
+				[&](const WindowResized& e) {},
+				[&](const WindowFocus& e) {},
+				[&](const WindowMinimized& e) {},
+				[&](const InputEvent& e) { m_InputSystem.ConsumeEvent(e); }
 				}, evt);
 		}
 	}
