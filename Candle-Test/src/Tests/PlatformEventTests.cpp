@@ -13,7 +13,7 @@ using Candle::Test::Type::Unit;
 // The dispatch Application uses: an exact-type handler wins over the generic catch-all.
 CDL_TEST_CASE(PlatformEvents, OverloadedVisitDispatchesByType, Unit)
 {
-	const std::vector<PlatformEvent> events = { WindowResized{ 3, 4 }, QuitRequested{}, WindowMinimized{ true } };
+	const std::vector<PlatformEvent> events = { WindowResized{ .WindowID = 1, .Width = 3, .Height = 4 }, QuitRequested{}, WindowMinimized{ .WindowID = 1, .Minimized = true } };
 
 	int quits = 0, resizes = 0, others = 0;
 	uint32_t area = 0;

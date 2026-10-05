@@ -22,7 +22,7 @@ namespace Candle {
 
 		void OnShutdown() override
 		{
-			CDL_INFO(LogChannel::Application, "SandboxApp shudown!");
+			CDL_INFO(LogChannel::Application, "SandboxApp shutdown!");
 		}
 	};
 

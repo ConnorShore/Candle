@@ -67,7 +67,7 @@ namespace Candle {
 		{
 			std::visit(Overloaded{
 				[&](const QuitRequested&) { RequestQuit(); },
-				[](const WindowCloseRequested& e) { },
+				[this](const WindowCloseRequested& e) { if (e.WindowID == m_Window->GetID()) RequestQuit(); },
 				[](const WindowResized& e) { },
 				[](const WindowFocus& e) { },
 				[](const WindowMinimized& e) { }
