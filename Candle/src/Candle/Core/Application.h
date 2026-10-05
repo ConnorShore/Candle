@@ -48,11 +48,10 @@ namespace Candle {
 		LoggerScope m_LoggerScope;
 		WindowingScope m_WindowingScope;		// After the logger, so a backend failure can be logged
 		ScopedPtr<Window> m_Window;				// Empty when headless
-		ScopedPtr<InputSystem> m_InputSystem;	// Empty when headless
+		InputSystem m_InputSystem;				// Never fed when headless, since nothing is pumped
 
 		std::atomic<bool> m_QuitRequested{ false };
 		FrameStats m_FrameStats;
-		InputSnapshot m_InputSnapshot;	// Will eventually go into a FramePacket that is passed to the game logic
 
 		std::vector<PlatformEvent> m_FrameEvents;
 	};

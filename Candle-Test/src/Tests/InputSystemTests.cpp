@@ -1,4 +1,4 @@
-// InputSystem fed PlatformEvents directly, with no backend and no window, so every test runs headless.
+// InputSystem fed InputEvents directly, with no backend and no window, so every test runs headless.
 // How SDL events become PlatformEvents is tested in Tests/Platform/SDL/SDLEventTests.cpp.
 
 #include "TestFramework.h"
@@ -13,9 +13,9 @@ using Candle::Test::Type::Unit;
 namespace {
 
 	// One frame: consume its events, then capture. Returns by value, as Application does.
-	InputSnapshot Frame(InputSystem& input, std::initializer_list<PlatformEvent> events = {})
+	InputSnapshot Frame(InputSystem& input, std::initializer_list<InputEvent> events = {})
 	{
-		for (const PlatformEvent& event : events)
+		for (const InputEvent& event : events)
 			input.ConsumeEvent(event);
 		return input.CaptureSnapshot();
 	}
@@ -245,27 +245,12 @@ CDL_TEST_CASE(InputSystem, WheelResetsEachFrame, Unit)
 // Event routing and publishing
 //////////////////////////////////////////////////////////////////////////
 
-// Focus is left out on purpose: clearing held state on focus loss would be a legitimate reaction to it.
-CDL_TEST_CASE(InputSystem, WindowEventsDoNotTouchInputState, Unit)
-{
-	InputSystem input;
-	const InputSnapshot snapshot = Frame(input, {
-		QuitRequested{}, WindowCloseRequested{ .WindowID = 1 }, WindowResized{ .WindowID = 1, .Width = 800, .Height = 600 },
-		WindowMinimized{ .WindowID = 1, .Minimized = true } });
-
-	CDL_EXPECT(snapshot.KeysDown.none());
-	CDL_EXPECT(snapshot.KeysPressed.none());
-	CDL_EXPECT_EQ(snapshot.MouseDown, 0);
-	CDL_EXPECT(snapshot.MouseDelta == glm::vec2(0.0f));
-	CDL_EXPECT(snapshot.WheelDelta == glm::vec2(0.0f));
-}
-
 // The simulation reads frame N's snapshot while the main thread is already consuming frame N+1's events.
 CDL_TEST_CASE(InputSystem, EventsAfterCaptureLeaveThePublishedSnapshotAlone, Unit)
 {
 	InputSystem input;
 	input.ConsumeEvent(KeyPressedEvent{ KeyCode::A });
-	const InputSnapshot& published = input.CaptureSnapshot();
+	const InputSnapshot published = input.CaptureSnapshot();
 
 	input.ConsumeEvent(KeyPressedEvent{ KeyCode::W });
 	input.ConsumeEvent(MouseMoveEvent{ .Position = { 1.0f, 1.0f }, .Delta = { 1.0f, 1.0f } });

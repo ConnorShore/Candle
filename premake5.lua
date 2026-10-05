@@ -17,7 +17,7 @@ workspace "Candle"
 
 outputdir = "%{cfg.buildcfg}-%{cfg.system}-%{cfg.architecture}"
 
-group "Dependencies"
+group "Vendors"
    include "Candle/vendor/SDL3"
    include "Candle/vendor/imgui"
    include "Candle/vendor/tracy"

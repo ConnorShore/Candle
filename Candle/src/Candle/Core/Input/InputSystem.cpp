@@ -1,12 +1,12 @@
 #include "cdlpch.h"
 #include "InputSystem.h"
 
-#include "Candle/Platform/PlatformEvents.h"
-
 namespace Candle {
 
-	void InputSystem::ConsumeEvent(const PlatformEvent& event)
+	void InputSystem::ConsumeEvent(const InputEvent& event)
 	{
+		CDL_CORE_ASSERT(Platform::IsMainThread(), "InputSystem::ConsumeEvent() must be called from the main thread.");
+
 		std::visit(Overloaded{
 			[this](const KeyPressedEvent& e) {
 				if (e.Key == KeyCode::Unknown)
@@ -35,19 +35,21 @@ namespace Candle {
 			[this](const MouseWheelEvent& e) {
 				m_Building.WheelDelta += e.Delta;
 				m_Building.WheelTicks += e.Ticks;
-			},
-			[](const auto&) {}	// Window events aren't input
+			}
 			}, event);
 	}
 
-	const InputSnapshot& InputSystem::CaptureSnapshot()
+	InputSnapshot InputSystem::CaptureSnapshot()
 	{
-		m_Published = std::move(m_Building);
-		
-		// Reset the building snapshot for the next frame
+		CDL_CORE_ASSERT(Platform::IsMainThread(), "InputSystem::CaptureSnapshot() must be called from the main thread.");
+
+		// Copy, not move: held state must survive into the next capture
+		InputSnapshot snapshot = m_Building;
+
+		// Clear the edges and deltas for the next capture
 		m_Building.Reset();
 
-		return m_Published;
+		return snapshot;
 	}
 
 }

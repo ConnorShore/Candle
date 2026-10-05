@@ -24,7 +24,9 @@ namespace Candle {
 	struct MouseMoveEvent { glm::vec2 Position; glm::vec2 Delta; };
 	struct MouseWheelEvent { glm::vec2 Delta; glm::ivec2 Ticks; };
 
-	using PlatformEvent = std::variant<QuitRequested, WindowCloseRequested, WindowResized, WindowFocus, WindowMinimized,
-							KeyPressedEvent, KeyReleasedEvent, MouseButtonPressedEvent, MouseButtonReleasedEvent, MouseMoveEvent, MouseWheelEvent>;
+	// Nested so Application forwards all input in one handler while InputSystem's visit stays exhaustive over it.
+	using InputEvent = std::variant<KeyPressedEvent, KeyReleasedEvent, MouseButtonPressedEvent, MouseButtonReleasedEvent, MouseMoveEvent, MouseWheelEvent>;
+
+	using PlatformEvent = std::variant<QuitRequested, WindowCloseRequested, WindowResized, WindowFocus, WindowMinimized, InputEvent>;
 
 }

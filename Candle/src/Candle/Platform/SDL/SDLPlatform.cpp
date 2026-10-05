@@ -31,6 +31,7 @@ namespace Candle {
 		CDL_CORE_ASSERT(Platform::IsMainThread(), "The raw event hook is main thread only");
 		CDL_CORE_ASSERT(!s_Pumping, "The raw event hook cannot change during PumpEvents");
 		CDL_CORE_ASSERT(hook == nullptr || s_RawEventHook == nullptr, "A raw event hook is already set");
+
 		s_RawEventHook = hook;
 		s_RawEventHookData = userData;
 	}
@@ -54,6 +55,7 @@ namespace Candle {
 
 	bool Platform::IsWindowingInitialized()
 	{
+		CDL_CORE_ASSERT(IsMainThread(), "SDL video must be queried on the main thread");
 		return SDL_WasInit(SDL_INIT_VIDEO) != 0;
 	}
 

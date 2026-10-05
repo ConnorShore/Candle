@@ -10,7 +10,7 @@
 
 namespace Candle {
 
-	// Captures the state of all input devices at a single point in time. Updated once per frame by InputSystem.
+	// The state of all input devices at one capture; edges and deltas cover everything since the previous capture.
 	struct InputSnapshot
 	{
 		using KeyBits = std::bitset<std::to_underlying(KeyCode::Count)>;    // One cache line (64 bytes)
@@ -53,6 +53,9 @@ namespace Candle {
 		}
 	};
 
+	// A finished snapshot crosses threads by value (frame packet, MPSCRingBuffer); copying one mid-ConsumeEvent is still a race.
+	CDL_STATIC_ASSERT(std::is_trivially_copyable_v<InputSnapshot>, "InputSnapshot must be trivially copyable to be handed to another thread by value");
+
 	// Threading: Main thread only
 	class InputSystem
 	{
@@ -66,13 +69,13 @@ namespace Candle {
 		InputSystem& operator=(InputSystem&) = delete;
 		InputSystem& operator=(InputSystem&&) = delete;
 
-		void ConsumeEvent(const PlatformEvent& event);
+		void ConsumeEvent(const InputEvent& event);
 
-		// Snapshot is updated once per frame; the returned reference is valid until the next call to CaptureSnapshot().
-		const InputSnapshot& CaptureSnapshot();		// Overwritten by the next capture; copy it to keep it or to hand it to another thread
+		// Call once per consumer step (a sim tick, not a render frame): each edge is reported by exactly one capture.
+		InputSnapshot CaptureSnapshot();
 
 	private:
-		InputSnapshot m_Building, m_Published;
+		InputSnapshot m_Building;
 	};
 
 }

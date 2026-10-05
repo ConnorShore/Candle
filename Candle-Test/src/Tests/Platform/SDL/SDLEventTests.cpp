@@ -90,11 +90,22 @@ namespace {
 		return events;
 	}
 
-	// Pump, then feed everything to InputSystem the way Application does; it ignores the non-input events itself.
+	// Input events sit one level down, inside PlatformEvent's InputEvent alternative.
+	template<typename T>
+	const T* GetInput(const PlatformEvent& event)
+	{
+		const InputEvent* input = std::get_if<InputEvent>(&event);
+		return input ? std::get_if<T>(input) : nullptr;
+	}
+
+	// Pump, then feed the input events to InputSystem the way Application does.
 	InputSnapshot PumpInto(InputSystem& input)
 	{
 		for (const PlatformEvent& event : Pump())
-			input.ConsumeEvent(event);
+		{
+			if (const InputEvent* inputEvent = std::get_if<InputEvent>(&event))
+				input.ConsumeEvent(*inputEvent);
+		}
 		return input.CaptureSnapshot();
 	}
 
@@ -236,8 +247,8 @@ CDL_TEST_CASE(SDLEvents, KeyEventsCarryTheScancodeNotTheKeycode, Unit)
 
 	const std::vector<PlatformEvent> events = Pump();
 	CDL_CHECK_EQ(events.size(), 2u);
-	const auto* down = std::get_if<KeyPressedEvent>(&events[0]);
-	const auto* up = std::get_if<KeyReleasedEvent>(&events[1]);
+	const auto* down = GetInput<KeyPressedEvent>(events[0]);
+	const auto* up = GetInput<KeyReleasedEvent>(events[1]);
 	CDL_CHECK(down != nullptr && up != nullptr);
 	CDL_EXPECT_EQ(down->Key, KeyCode::W);
 	CDL_EXPECT_EQ(up->Key, KeyCode::W);
@@ -266,8 +277,8 @@ CDL_TEST_CASE(SDLEvents, MouseButtonsTranslateToTheMatchingButton, Unit)
 
 	const std::vector<PlatformEvent> events = Pump();
 	CDL_CHECK_EQ(events.size(), 2u);
-	const auto* down = std::get_if<MouseButtonPressedEvent>(&events[0]);
-	const auto* up = std::get_if<MouseButtonReleasedEvent>(&events[1]);
+	const auto* down = GetInput<MouseButtonPressedEvent>(events[0]);
+	const auto* up = GetInput<MouseButtonReleasedEvent>(events[1]);
 	CDL_CHECK(down != nullptr && up != nullptr);
 	CDL_EXPECT_EQ(down->Button, MouseButton::Right);
 	CDL_EXPECT_EQ(up->Button, MouseButton::X2);
@@ -282,9 +293,11 @@ CDL_TEST_CASE(SDLEvents, OutOfRangeMouseButtonsBecomeUnknown, Unit)
 
 	const std::vector<PlatformEvent> events = Pump();
 	CDL_CHECK_EQ(events.size(), 2u);
-	CDL_CHECK(std::holds_alternative<MouseButtonPressedEvent>(events[0]) && std::holds_alternative<MouseButtonPressedEvent>(events[1]));
-	CDL_EXPECT_EQ(std::get<MouseButtonPressedEvent>(events[0]).Button, MouseButton::Unknown);
-	CDL_EXPECT_EQ(std::get<MouseButtonPressedEvent>(events[1]).Button, MouseButton::Unknown);
+	const auto* zero = GetInput<MouseButtonPressedEvent>(events[0]);
+	const auto* six = GetInput<MouseButtonPressedEvent>(events[1]);
+	CDL_CHECK(zero != nullptr && six != nullptr);
+	CDL_EXPECT_EQ(zero->Button, MouseButton::Unknown);
+	CDL_EXPECT_EQ(six->Button, MouseButton::Unknown);
 }
 
 CDL_TEST_CASE(SDLEvents, MouseMotionCarriesPositionAndRelativeDelta, Unit)
@@ -294,7 +307,7 @@ CDL_TEST_CASE(SDLEvents, MouseMotionCarriesPositionAndRelativeDelta, Unit)
 
 	const std::vector<PlatformEvent> events = Pump();
 	CDL_CHECK_EQ(events.size(), 1u);
-	const auto* move = std::get_if<MouseMoveEvent>(&events[0]);
+	const auto* move = GetInput<MouseMoveEvent>(events[0]);
 	CDL_CHECK(move != nullptr);
 	CDL_EXPECT_EQ(move->Position.x, 100.5f);
 	CDL_EXPECT_EQ(move->Position.y, 200.25f);
@@ -310,7 +323,7 @@ CDL_TEST_CASE(SDLEvents, WheelTicksComeFromSDLsAccumulatedNotches, Unit)
 
 	const std::vector<PlatformEvent> events = Pump();
 	CDL_CHECK_EQ(events.size(), 1u);
-	const auto* wheel = std::get_if<MouseWheelEvent>(&events[0]);
+	const auto* wheel = GetInput<MouseWheelEvent>(events[0]);
 	CDL_CHECK(wheel != nullptr);
 	CDL_EXPECT_EQ(wheel->Delta.x, -0.25f);
 	CDL_EXPECT_EQ(wheel->Delta.y, 0.6f);
