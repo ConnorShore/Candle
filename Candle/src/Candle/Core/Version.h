@@ -6,9 +6,9 @@ namespace Candle {
 
 	struct VersionInfo
 	{
-		uint8_t Major = 1;
-		uint8_t Minor = 0;
-		uint8_t Patch = 0;
+		int Major = 1;
+		int Minor = 0;
+		int Patch = 0;
 
 		std::string ToString() const
 		{
