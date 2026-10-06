@@ -1,11 +1,26 @@
 #pragma once
 
 #include <cstdint>
+#include <string>
 
 namespace Candle {
 
-	constexpr uint8_t CANDLE_VERSION_MAJOR = 0;
-	constexpr uint8_t CANDLE_VERSION_MINOR = 1;
-	constexpr uint8_t CANDLE_VERSION_PATCH = 0;
-	constexpr uint32_t CANDLE_VERSION = (CANDLE_VERSION_MAJOR << 16) | (CANDLE_VERSION_MINOR << 8) | CANDLE_VERSION_PATCH;
+	struct VersionInfo
+	{
+		int Major = 1;
+		int Minor = 0;
+		int Patch = 0;
+
+		std::string ToString() const
+		{
+			return std::to_string(Major) + "." + std::to_string(Minor) + "." + std::to_string(Patch);
+		}
+
+		operator uint32_t() const
+		{
+			return (Major << 22) | (Minor << 12) | Patch;
+		}
+	};
+
+	constexpr VersionInfo kCandleVersion{ 1, 0, 0 };
 }

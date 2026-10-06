@@ -1,8 +1,11 @@
 #pragma once
 
 #include "RenderSpecification.h"
+#include "Candle/Core/Version.h"
 
 #include <vulkan/vulkan_raii.hpp>
+
+#include <string_view>
 
 namespace Candle {
 
@@ -11,9 +14,8 @@ namespace Candle {
 		bool EnableValidation = true;
 		VulkanAPIVersion VulkanVersion = VulkanAPIVersion::API_1_4;
 
-		const char* ApplicationName = "Candle App";
-
-		uint32_t ApplicationVersion = 0;
+		std::string_view ApplicationName = "Candle App";
+		VersionInfo ApplicationVersion = { 1, 0, 0 };
 	};
 
 	// Holds the vulkan instance, context and debug messenger

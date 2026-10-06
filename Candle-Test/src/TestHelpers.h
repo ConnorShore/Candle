@@ -140,7 +140,7 @@ namespace Candle::Test {
 	inline ApplicationSpecification QuietSpec()
 	{
 		ApplicationSpecification spec;
-		spec.Name = "Candle-Test";
+		spec.AppInfo.Name = "Candle-Test";
 		spec.Headless = true;
 		spec.LoggerSpec.Level = LogLevel::Warn;
 		spec.LoggerSpec.LogToConsole = false;

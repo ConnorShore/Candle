@@ -22,15 +22,10 @@ namespace Candle {
 		//RenderDevice& GetDevice();                         // Startup wiring only, e.g. the asset system
 
 	private:
-		void CreateRenderInstance(const ApplicationInfo& appInfo);
-		void DestroyRenderInstance();
-
-	private:
+		RenderSpecification m_Specification;
 		Window& m_Window;
 		RenderInstance m_RenderInstance;
 		ApplicationInfo m_AppInfo;
-
-		RenderSpecification m_Specification;
 	};
 
 }

@@ -26,11 +26,12 @@ namespace Candle {
 
 	void RenderInstance::CreateInstance()
 	{
-		vk::ApplicationInfo appInfo{ .pApplicationName = m_Specification.ApplicationName,
+		uint32_t vulkanVersion = m_Specification.VulkanVersion == VulkanAPIVersion::API_1_3 ? VK_API_VERSION_1_3 : VK_API_VERSION_1_4;
+		vk::ApplicationInfo appInfo{ .pApplicationName = m_Specification.ApplicationName.data(),
 											.applicationVersion = m_Specification.ApplicationVersion,
 											.pEngineName = "Candle Engine",
-											.engineVersion = VK_MAKE_VERSION(CANDLE_VERSION_MAJOR, CANDLE_VERSION_MINOR, CANDLE_VERSION_PATCH),
-											.apiVersion = vk::ApiVersion14 };
+											.engineVersion = kCandleVersion,
+											.apiVersion = vulkanVersion };
 
 
 		// Get the required validation layers
@@ -57,7 +58,8 @@ namespace Candle {
 
 		// Debug logging for now
 		for (const auto& extension : extensionProperties) {
-			CDL_CORE_TRACE(LogChannel::Render, "Available Vulkan Extension: {}", extension.extensionName);
+			std::string extensionName = extension.extensionName;
+			CDL_CORE_TRACE(LogChannel::Render, "Available Vulkan Extension: {}", extensionName);
 		}
 
 		bool allExtensionsSupported = true;

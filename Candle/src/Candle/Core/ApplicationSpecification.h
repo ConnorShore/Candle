@@ -3,23 +3,12 @@
 #include <string>
 #include <filesystem>
 
+#include "Candle/Core/Version.h"
 #include "Candle/Core/Logger.h"
 #include "Candle/Core/WindowSpecification.h"
 #include "Candle/Render/RenderSpecification.h"
 
 namespace Candle {
-
-	struct VersionInfo
-	{
-		int Major = 1;
-		int Minor = 0;
-		int Patch = 0;
-
-		std::string ToString() const
-		{
-			return std::to_string(Major) + "." + std::to_string(Minor) + "." + std::to_string(Patch);
-		}
-	};
 
 	struct ApplicationInfo
 	{

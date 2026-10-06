@@ -26,6 +26,7 @@
       "%{wks.location}/Candle/vendor/imgui/imgui",
       "%{wks.location}/Candle/vendor/imgui/imgui/backends",
       "%{wks.location}/Candle/vendor/tracy/tracy/public",
+      "$(VULKAN_SDK)/Include",
    }
 
    links 
