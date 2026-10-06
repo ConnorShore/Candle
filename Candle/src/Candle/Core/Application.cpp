@@ -47,7 +47,7 @@ namespace Candle {
 
 			// Update the frame stats
 			Tick endTick = Platform::GetTick();
-			m_FrameStats.DeltaTime = TimeStep(Platform::ToSeconds(startTick, endTick));
+			m_FrameStats.DeltaTime = TimeStep(static_cast<float>(Platform::ToSeconds(startTick, endTick)));
 			m_FrameStats.TotalTime += m_FrameStats.DeltaTime;
 			m_FrameStats.FrameCount++;
 			startTick = endTick;

@@ -1,5 +1,7 @@
 #include "cdlpch.h"
 #include "RenderManager.h"
+#include "ShaderLoader.h"
+#include "Shader.h"
 
 #include "Candle/Core/Window.h"
 
@@ -25,6 +27,9 @@ namespace Candle {
 		, m_RenderInstance(CreateRenderInstanceSpec(renderSpec, appInfo))
 		, m_RenderDevice(m_RenderInstance, m_Specification)
 	{
+		// Load a test shader
+		auto shader = ShaderLoader::LoadShader("Tester", "C:\\Development\\Projects\\Candle\\Candle\\res\\shaders\\bin\\Test.spv", m_RenderDevice);
+		CDL_CORE_INFO(LogChannel::Render, "Shader loaded: {}", shader.GetName());
 	}
 
 	RenderManager::~RenderManager()
