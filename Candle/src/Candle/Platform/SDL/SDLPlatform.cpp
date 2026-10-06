@@ -121,6 +121,8 @@ namespace Candle {
 
 	const char* const* Platform::GetVulkanRequiredInstanceExtensions(uint32_t& outCount)
 	{
+		// SDL dereferences its video device without a null check, so calling this headless would crash.
+		CDL_CORE_ASSERT(IsWindowingInitialized(), "Vulkan instance extensions need the windowing backend initialized");
 		return SDL_Vulkan_GetInstanceExtensions(&outCount);
 	}
 

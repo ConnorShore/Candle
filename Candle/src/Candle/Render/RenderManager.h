@@ -2,6 +2,7 @@
 
 #include "RenderSpecification.h"
 #include "RenderInstance.h"
+#include "RenderDevice.h"
 
 #include "Candle/Core/ApplicationSpecification.h"
 
@@ -19,13 +20,13 @@ namespace Candle {
 		//void OnPlatformEvent(const PlatformEvent& event);  // Resize/minimize: marks the swapchain stale
 		//void SubmitFrame(/* FramePacket&& */);             // Simulation never touches the packet again
 
-		//RenderDevice& GetDevice();                         // Startup wiring only, e.g. the asset system
+		inline RenderDevice& GetRenderDevice() { return m_RenderDevice; }
 
 	private:
 		RenderSpecification m_Specification;
 		Window& m_Window;
 		RenderInstance m_RenderInstance;
-		ApplicationInfo m_AppInfo;
+		RenderDevice m_RenderDevice;
 	};
 
 }

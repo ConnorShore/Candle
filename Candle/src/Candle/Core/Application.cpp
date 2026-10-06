@@ -1,6 +1,8 @@
 #include "cdlpch.h"
 #include "Application.h"
 
+#include "Candle/Render/RenderManager.h"
+
 #include "Candle/Platform/Platform.h"
 
 namespace Candle {

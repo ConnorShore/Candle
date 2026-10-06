@@ -31,6 +31,7 @@ namespace Candle::Test {
 		inline constexpr const char* Unit = "unit";       // single-threaded logic, fast, headless
 		inline constexpr const char* Stress = "stress";   // many threads or many iterations, hunting races
 		inline constexpr const char* Display = "display"; // opens real OS windows; skips itself where SDL video can't start
+		inline constexpr const char* Gpu = "gpu";         // creates real Vulkan objects; needs a driver, the SDK's validation layers and SDL video
 	}
 
 	// Thrown by CDL_CHECK* to abort the current test.

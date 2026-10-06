@@ -4,7 +4,8 @@ workspace "Candle"
    cppdialect "C++23"
    startproject "Sandbox"
 
-   defines { "GLM_FORCE_CTOR_INIT" }
+   -- Workspace-wide: both change type definitions, so every TU including glm or vulkan.hpp must agree.
+   defines { "GLM_FORCE_CTOR_INIT", "VULKAN_HPP_NO_STRUCT_CONSTRUCTORS" }
 
    filter "configurations:not Dist"
       defines { "CDL_ENABLE_ASSERTS" }

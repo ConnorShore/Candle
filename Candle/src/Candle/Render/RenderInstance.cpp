@@ -1,5 +1,6 @@
 #include "cdlpch.h"
 #include "RenderInstance.h"
+#include "VulkanUtils.h"
 
 #include "Candle/Core/Version.h"
 #include "Candle/Platform/Platform.h"
@@ -14,17 +15,18 @@ namespace Candle {
 			"VK_LAYER_KHRONOS_validation"
 		};
 
-		vk::DebugUtilsMessageSeverityFlagsEXT MapValidationSeverity(ValidationSpecification::ValidationSeverity severity)
+		vk::DebugUtilsMessageSeverityFlagsEXT MapValidationSeverity(ValidationSpecification::ValidationSeverity minimum)
 		{
+			using Severity = ValidationSpecification::ValidationSeverity;
+
 			vk::DebugUtilsMessageSeverityFlagsEXT flags = {};
-			if (static_cast<uint8_t>(severity) & static_cast<uint8_t>(ValidationSpecification::ValidationSeverity::Verbose))
+			if (minimum <= Severity::Verbose)
 				flags |= vk::DebugUtilsMessageSeverityFlagBitsEXT::eVerbose;
-			if (static_cast<uint8_t>(severity) & static_cast<uint8_t>(ValidationSpecification::ValidationSeverity::Info))
+			if (minimum <= Severity::Info)
 				flags |= vk::DebugUtilsMessageSeverityFlagBitsEXT::eInfo;
-			if (static_cast<uint8_t>(severity) & static_cast<uint8_t>(ValidationSpecification::ValidationSeverity::Warning))
+			if (minimum <= Severity::Warning)
 				flags |= vk::DebugUtilsMessageSeverityFlagBitsEXT::eWarning;
-			if (static_cast<uint8_t>(severity) & static_cast<uint8_t>(ValidationSpecification::ValidationSeverity::Error))
-				flags |= vk::DebugUtilsMessageSeverityFlagBitsEXT::eError;
+			flags |= vk::DebugUtilsMessageSeverityFlagBitsEXT::eError;
 			return flags;
 		}
 
@@ -73,20 +75,17 @@ namespace Candle {
 	{
 		CDL_CORE_ASSERT(Platform::IsMainThread(), "RenderInstance must be created on the main thread!");
 		CreateInstance();
-
-		if (spec.ValidationSpec.EnableValidation)
-			SetupDebugMessenger();
+		SetupDebugMessenger();
 	}
 
 
 	void RenderInstance::CreateInstance()
 	{
-		uint32_t vulkanVersion = m_Specification.VulkanVersion == VulkanAPIVersion::API_1_3 ? VK_API_VERSION_1_3 : VK_API_VERSION_1_4;
 		vk::ApplicationInfo appInfo{ .pApplicationName = m_Specification.ApplicationName.data(),
 											.applicationVersion = m_Specification.ApplicationVersion,
 											.pEngineName = "Candle Engine",
 											.engineVersion = kCandleVersion,
-											.apiVersion = vulkanVersion };
+											.apiVersion = ToVulkanApiVersion(m_Specification.VulkanVersion) };
 
 		// Get the required validation layers
 		int layerCount = m_Specification.ValidationSpec.EnableValidation ? static_cast<int>(validationLayers.size()) : 0;
@@ -123,15 +122,15 @@ namespace Candle {
 			CDL_CORE_TRACE(LogChannel::Render, "Available Vulkan Extension: {}", extensionName);
 		}
 
-		bool allExtensionsSupported = true;
-		for (size_t i = 0; i < extensionCount; ++i)
+		// Every required extension, including debug utils, not just the platform's
+		for (const char* requiredExtension : requiredExtensions)
 		{
 			bool extensionSupported = std::ranges::any_of(extensionProperties,
-				[requiredExtension = requiredExtensions[i]](auto const& extensionProperty) {
+				[requiredExtension](auto const& extensionProperty) {
 					return strcmp(extensionProperty.extensionName, requiredExtension) == 0;
 				});
 			if (!extensionSupported)
-				throw std::runtime_error("Required extension not supported: " + *requiredExtensions[i]);
+				throw std::runtime_error("Required extension not supported: " + std::string(requiredExtension));
 		}
 
 		// This struct tells the Vulkan driver which global extensions and validation layers we want to use
@@ -149,6 +148,9 @@ namespace Candle {
 
 	void RenderInstance::SetupDebugMessenger()
 	{
+		if (!m_Specification.ValidationSpec.EnableValidation)
+			return;
+
 		vk::DebugUtilsMessengerCreateInfoEXT createInfo{
 			.messageSeverity = MapValidationSeverity(m_Specification.ValidationSpec.Severity),
 			.messageType = MapValidationType(m_Specification.ValidationSpec.Type),

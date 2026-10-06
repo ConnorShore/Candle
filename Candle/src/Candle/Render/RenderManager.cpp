@@ -22,7 +22,8 @@ namespace Candle {
 	RenderManager::RenderManager(const RenderSpecification& renderSpec, const ApplicationInfo& appInfo, Window& window) :
 		m_Specification(renderSpec),
 		m_Window(window),
-		m_RenderInstance(CreateRenderInstanceSpec(renderSpec, appInfo))
+		m_RenderInstance(CreateRenderInstanceSpec(renderSpec, appInfo)),
+		m_RenderDevice(m_RenderInstance, m_Specification)
 	{
 	}
 

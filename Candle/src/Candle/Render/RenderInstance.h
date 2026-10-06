@@ -30,6 +30,8 @@ namespace Candle {
 		RenderInstance(const RenderInstance&) = delete;
 		RenderInstance& operator=(const RenderInstance&) = delete;
 
+		vk::raii::Instance& GetVulkanInstance() { return m_Instance; }
+
 	private:
 		void CreateInstance();
 		void SetupDebugMessenger();

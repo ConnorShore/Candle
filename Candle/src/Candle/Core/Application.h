@@ -5,12 +5,13 @@
 #include "Time.h"
 #include "Window.h"
 
-#include "Candle/Render/RenderManager.h"
 #include "Candle/Core/Input/InputSystem.h"
 
 #include <atomic>
 
 namespace Candle {
+
+	class RenderManager;
 
     class Application
     {
