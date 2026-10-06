@@ -10,8 +10,8 @@ namespace Candle {
 		RenderInstanceSpecification CreateRenderInstanceSpec(const RenderSpecification& renderSpec, const ApplicationInfo& appInfo)
 		{
 			return {
-				.EnableValidation = renderSpec.EnableValidation,
 				.VulkanVersion = renderSpec.VulkanVersion,
+				.ValidationSpec = renderSpec.ValidationSpec,
 				.ApplicationName = appInfo.Name,
 				.ApplicationVersion = appInfo.Version
 			};

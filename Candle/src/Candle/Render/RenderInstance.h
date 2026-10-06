@@ -11,8 +11,8 @@ namespace Candle {
 
 	struct RenderInstanceSpecification
 	{
-		bool EnableValidation = true;
 		VulkanAPIVersion VulkanVersion = VulkanAPIVersion::API_1_4;
+		ValidationSpecification ValidationSpec = { };
 
 		std::string_view ApplicationName = "Candle App";
 		VersionInfo ApplicationVersion = { 1, 0, 0 };
@@ -32,12 +32,14 @@ namespace Candle {
 
 	private:
 		void CreateInstance();
+		void SetupDebugMessenger();
 
 	private:
 		RenderInstanceSpecification m_Specification;
 
 		vk::raii::Context m_Context{ };
 		vk::raii::Instance m_Instance{ nullptr };
+		vk::raii::DebugUtilsMessengerEXT m_DebugMessenger{ nullptr };
 	};
 
 }

@@ -14,6 +14,58 @@ namespace Candle {
 			"VK_LAYER_KHRONOS_validation"
 		};
 
+		vk::DebugUtilsMessageSeverityFlagsEXT MapValidationSeverity(ValidationSpecification::ValidationSeverity severity)
+		{
+			vk::DebugUtilsMessageSeverityFlagsEXT flags = {};
+			if (static_cast<uint8_t>(severity) & static_cast<uint8_t>(ValidationSpecification::ValidationSeverity::Verbose))
+				flags |= vk::DebugUtilsMessageSeverityFlagBitsEXT::eVerbose;
+			if (static_cast<uint8_t>(severity) & static_cast<uint8_t>(ValidationSpecification::ValidationSeverity::Info))
+				flags |= vk::DebugUtilsMessageSeverityFlagBitsEXT::eInfo;
+			if (static_cast<uint8_t>(severity) & static_cast<uint8_t>(ValidationSpecification::ValidationSeverity::Warning))
+				flags |= vk::DebugUtilsMessageSeverityFlagBitsEXT::eWarning;
+			if (static_cast<uint8_t>(severity) & static_cast<uint8_t>(ValidationSpecification::ValidationSeverity::Error))
+				flags |= vk::DebugUtilsMessageSeverityFlagBitsEXT::eError;
+			return flags;
+		}
+
+		vk::DebugUtilsMessageTypeFlagsEXT MapValidationType(ValidationSpecification::ValidationType type)
+		{
+			vk::DebugUtilsMessageTypeFlagsEXT flags = {};
+			if (static_cast<uint8_t>(type) & static_cast<uint8_t>(ValidationSpecification::ValidationType::General))
+				flags |= vk::DebugUtilsMessageTypeFlagBitsEXT::eGeneral;
+			if (static_cast<uint8_t>(type) & static_cast<uint8_t>(ValidationSpecification::ValidationType::Validation))
+				flags |= vk::DebugUtilsMessageTypeFlagBitsEXT::eValidation;
+			if (static_cast<uint8_t>(type) & static_cast<uint8_t>(ValidationSpecification::ValidationType::Performance))
+				flags |= vk::DebugUtilsMessageTypeFlagBitsEXT::ePerformance;
+			return flags;
+		}
+
+		VKAPI_ATTR vk::Bool32 VKAPI_CALL VulkanDebugCallback(vk::DebugUtilsMessageSeverityFlagBitsEXT messageSeverity,
+																vk::DebugUtilsMessageTypeFlagsEXT messageType,
+																const vk::DebugUtilsMessengerCallbackDataEXT* pCallbackData,
+																void* pUserData)
+		{
+			std::string severity;
+			if (messageSeverity & vk::DebugUtilsMessageSeverityFlagBitsEXT::eVerbose)
+				severity = "Verbose";
+			else if (messageSeverity & vk::DebugUtilsMessageSeverityFlagBitsEXT::eInfo)
+				severity = "Info";
+			else if (messageSeverity & vk::DebugUtilsMessageSeverityFlagBitsEXT::eWarning)
+				severity = "Warning";
+			else if (messageSeverity & vk::DebugUtilsMessageSeverityFlagBitsEXT::eError)
+				severity = "Error";
+
+			std::string type;
+			if (messageType & vk::DebugUtilsMessageTypeFlagBitsEXT::eGeneral)
+				type = "General";
+			else if (messageType & vk::DebugUtilsMessageTypeFlagBitsEXT::eValidation)
+				type = "Validation";
+			else if (messageType & vk::DebugUtilsMessageTypeFlagBitsEXT::ePerformance)
+				type = "Performance";
+
+			CDL_CORE_ERROR(LogChannel::Render, "[Vulkan Debug] Severity: {}, Type: {}, Message: {}", severity, type, pCallbackData->pMessage);
+			return VK_FALSE;
+		}
 	}
 
 	RenderInstance::RenderInstance(RenderInstanceSpecification spec)
@@ -21,6 +73,9 @@ namespace Candle {
 	{
 		CDL_CORE_ASSERT(Platform::IsMainThread(), "RenderInstance must be created on the main thread!");
 		CreateInstance();
+
+		if (spec.ValidationSpec.EnableValidation)
+			SetupDebugMessenger();
 	}
 
 
@@ -33,12 +88,12 @@ namespace Candle {
 											.engineVersion = kCandleVersion,
 											.apiVersion = vulkanVersion };
 
-
 		// Get the required validation layers
-		int layerCount = m_Specification.EnableValidation ? static_cast<int>(validationLayers.size()) : 0;
+		int layerCount = m_Specification.ValidationSpec.EnableValidation ? static_cast<int>(validationLayers.size()) : 0;
 		std::vector<char const*> requiredLayers;
 		requiredLayers.reserve(layerCount);
-		if (m_Specification.EnableValidation)
+
+		if (m_Specification.ValidationSpec.EnableValidation)
 			requiredLayers.assign(validationLayers.begin(), validationLayers.end());
 
 		// Check if the required layers are supported by the Vulkan implementation.
@@ -53,11 +108,17 @@ namespace Candle {
 
 		// Get the required instance extensions
 		uint32_t extensionCount = 0;
-		auto requiredExtensions = Platform::GetVulkanRequiredInstanceExtensions(extensionCount);
+		auto platformRequiredExtensions = Platform::GetVulkanRequiredInstanceExtensions(extensionCount);
+		std::vector<char const*> requiredExtensions(platformRequiredExtensions, platformRequiredExtensions + extensionCount);
+
+		if (m_Specification.ValidationSpec.EnableValidation)
+			requiredExtensions.push_back(vk::EXTDebugUtilsExtensionName);
+
 		auto extensionProperties = m_Context.enumerateInstanceExtensionProperties();
 
 		// Debug logging for now
-		for (const auto& extension : extensionProperties) {
+		for (const auto& extension : extensionProperties) 
+		{
 			std::string extensionName = extension.extensionName;
 			CDL_CORE_TRACE(LogChannel::Render, "Available Vulkan Extension: {}", extensionName);
 		}
@@ -78,12 +139,22 @@ namespace Candle {
 			.pApplicationInfo = &appInfo,
 			.enabledLayerCount = static_cast<uint32_t>(requiredLayers.size()),
 			.ppEnabledLayerNames = requiredLayers.data(),
-			.enabledExtensionCount = extensionCount,
-			.ppEnabledExtensionNames = requiredExtensions
+			.enabledExtensionCount = static_cast<uint32_t>(requiredExtensions.size()),
+			.ppEnabledExtensionNames = requiredExtensions.data()
 		};
 
 		// Create the Vulkan instance using the RAII wrapper. The instance will be automatically destroyed when it goes out of scope.
 		m_Instance = vk::raii::Instance(m_Context, createInfo);
+	}
+
+	void RenderInstance::SetupDebugMessenger()
+	{
+		vk::DebugUtilsMessengerCreateInfoEXT createInfo{
+			.messageSeverity = MapValidationSeverity(m_Specification.ValidationSpec.Severity),
+			.messageType = MapValidationType(m_Specification.ValidationSpec.Type),
+			.pfnUserCallback = &VulkanDebugCallback
+		};
+		m_DebugMessenger = vk::raii::DebugUtilsMessengerEXT(m_Instance, createInfo);
 	}
 
 }
