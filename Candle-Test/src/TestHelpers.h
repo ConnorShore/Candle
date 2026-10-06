@@ -140,7 +140,7 @@ namespace Candle::Test {
 	inline ApplicationSpecification QuietSpec()
 	{
 		ApplicationSpecification spec;
-		spec.Name = "Candle-Test";
+		spec.AppInfo.Name = "Candle-Test";
 		spec.Headless = true;
 		spec.LoggerSpec.Level = LogLevel::Warn;
 		spec.LoggerSpec.LogToConsole = false;
@@ -165,17 +165,25 @@ namespace Candle::Test {
 	}
 
 	// A windowed app needs the windowing backend, which can't start without a desktop session; skip there rather than fail.
+	// The backend is probed on its own, because the app also creates a render device, and its failures must fail the test.
 	inline void EmplaceWindowedApp(std::optional<TestApplication>& app)
 	{
+		try
+		{
+			Platform::InitWindowing();
+			Platform::ShutdownWindowing();
+		}
+		catch (const std::exception& e) { CDL_SKIP(std::format("windowing unavailable: {}", e.what())); }
+
 		ApplicationSpecification spec = QuietSpec();
 		spec.Headless = false;
 		spec.WindowSpec = TestWindowSpec();
 
 		try { app.emplace(spec); }
-		catch (const std::exception& e)
+		catch (...)
 		{
 			RestoreLoggerDefaults();
-			CDL_SKIP(std::format("windowing unavailable: {}", e.what()));
+			throw;
 		}
 	}
 

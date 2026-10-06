@@ -19,6 +19,7 @@
       "vendor/imgui/imgui",
       "vendor/imgui/imgui/backends",
       "vendor/tracy/tracy/public",
+      "$(VULKAN_SDK)/Include",
    }
 
    files 

@@ -33,9 +33,12 @@ namespace Candle {
 		static void Shutdown();
 
 		// Window //
-		static void InitWindowing();
+		static void InitWindowing();		// Also loads the Vulkan loader, so a machine without one fails here
 		static void ShutdownWindowing();
 		static bool IsWindowingInitialized();
+
+		// Rendering //
+		static const char* const* GetVulkanRequiredInstanceExtensions(uint32_t& outCount);
 
 		// Time //
 		static Tick GetStartTick();
@@ -45,17 +48,14 @@ namespace Candle {
 		{
 			return TicksToMicroseconds(end.Value - start.Value);
 		}
-
 		inline static double ToSeconds(const Tick& start, const Tick& end)
 		{
 			return static_cast<double>(end.Value - start.Value) / s_TickFrequency;
 		}
-
 		inline static double ToMilliseconds(const Tick& start, const Tick& end)
 		{
 			return static_cast<double>(end.Value - start.Value) * 1'000.0 / s_TickFrequency;
 		}
-
 		inline static uint64_t ToUnixMicroseconds(const Tick& tick)
 		{
 			return s_StartUnixMicroseconds + TicksToMicroseconds(tick.Value - s_StartTime);

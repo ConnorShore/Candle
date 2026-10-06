@@ -18,6 +18,8 @@
 #define CDL_THREAD_PAUSE() std::this_thread::yield() // Fallback to yield for non-x86 architectures
 #endif
 
+#include "Candle/Core/Version.h"
+
 #include "Candle/Core/Asserts.h"
 #include "Candle/Core/Logger.h"
 
