@@ -1,5 +1,7 @@
 #pragma once
 
+#include <cstdint>
+
 namespace Candle {
 
 	enum class VulkanAPIVersion
@@ -10,7 +12,11 @@ namespace Candle {
 
 	struct ValidationSpecification
 	{
+#ifdef CDL_DEBUG
 		bool EnableValidation = true;
+#else
+		bool EnableValidation = false;
+#endif
 
 		// A minimum, like LogLevel: Warning reports warnings and errors. Ordered, so it compares as a threshold.
 		enum class ValidationSeverity : uint8_t
@@ -40,7 +46,7 @@ namespace Candle {
 
 	struct RenderSpecification
 	{
-		VulkanAPIVersion VulkanVersion = VulkanAPIVersion::API_1_4;
+		VulkanAPIVersion VulkanVersion = VulkanAPIVersion::API_1_3;
 		ValidationSpecification ValidationSpec = { };
 		RenderDevicePreference DevicePreference = RenderDevicePreference::DiscreteGPU;
 

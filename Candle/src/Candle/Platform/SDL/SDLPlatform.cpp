@@ -48,10 +48,20 @@ namespace Candle {
 			CDL_CORE_ERROR(LogChannel::Window, "{}", error);
 			throw std::runtime_error(error);
 		}
+
+		// SDL's Vulkan queries require its loader loaded; holding a reference for the backend's lifetime makes that true whenever windowing is.
+		if (!SDL_Vulkan_LoadLibrary(nullptr))
+		{
+			const std::string error = std::format("SDL_Vulkan_LoadLibrary failed: {}", SDL_GetError());
+			CDL_CORE_ERROR(LogChannel::Window, "{}", error);
+			SDL_Quit();
+			throw std::runtime_error(error);
+		}
 	}
 
 	void Platform::ShutdownWindowing()
 	{
+		SDL_Vulkan_UnloadLibrary();
 		SDL_Quit();
 	}
 
@@ -123,7 +133,15 @@ namespace Candle {
 	{
 		// SDL dereferences its video device without a null check, so calling this headless would crash.
 		CDL_CORE_ASSERT(IsWindowingInitialized(), "Vulkan instance extensions need the windowing backend initialized");
-		return SDL_Vulkan_GetInstanceExtensions(&outCount);
+
+		const char* const* extensions = SDL_Vulkan_GetInstanceExtensions(&outCount);
+		if (!extensions)
+		{
+			const std::string error = std::format("SDL_Vulkan_GetInstanceExtensions failed: {}", SDL_GetError());
+			CDL_CORE_ERROR(LogChannel::Render, "{}", error);
+			throw std::runtime_error(error);
+		}
+		return extensions;
 	}
 
 }

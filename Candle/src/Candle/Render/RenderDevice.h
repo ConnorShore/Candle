@@ -1,20 +1,24 @@
 #pragma once
 
+#include "Candle/Core/Threading/AdaptiveSpinLock.h"
+
 #include <vulkan/vulkan_raii.hpp>
 
+#include <array>
 #include <optional>
 #include <span>
-#include <unordered_map>
+#include <utility>
 
 namespace Candle {
 
 	class RenderInstance;
 	struct RenderSpecification;
 
-	enum class QueueType
+	enum class QueueType : uint8_t
 	{
 		Graphics,
-		Transfer
+		Transfer,
+		Count
 	};
 
 	struct QueueFamilyIndices
@@ -48,6 +52,13 @@ namespace Candle {
 		inline uint32_t GetQueueFamily(QueueType queue) const { return queue == QueueType::Graphics ? m_QueueFamilies.Graphics : m_QueueFamilies.Transfer; }
 
 	private:
+		// A role's queue and the lock guarding submission to it; roles aliasing one VkQueue copy the handle and share the lock.
+		struct QueueSlot
+		{
+			vk::raii::Queue Queue{ nullptr };
+			AdaptiveSpinLock* SubmitLock = nullptr;
+		};
+
 		void CreateLogicalDeviceAndQueues();
 
 	private:
@@ -55,7 +66,9 @@ namespace Candle {
 		QueueFamilyIndices m_QueueFamilies{};
 		vk::raii::Device m_LogicalDevice{ nullptr };
 
-		std::unordered_map<QueueType, vk::raii::Queue> m_Queues;
+		// One lock per distinct VkQueue; the Transfer lock goes unused while Transfer aliases Graphics.
+		std::array<AdaptiveSpinLock, std::to_underlying(QueueType::Count)> m_SubmitLocks;
+		std::array<QueueSlot, std::to_underlying(QueueType::Count)> m_Queues;	// Indexed by QueueType, every slot filled
 	};
 
 }

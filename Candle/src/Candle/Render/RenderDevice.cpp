@@ -33,7 +33,7 @@ namespace Candle {
 
 	namespace {
 
-		std::vector<const char*> requiredDeviceExtension = {
+		constexpr std::array<const char*, 1> kRequiredDeviceExtensions = {
 			vk::KHRSwapchainExtensionName
 		};
 
@@ -45,10 +45,8 @@ namespace Candle {
 
 		std::optional<QueueFamilyIndices> IsPhysicalDeviceSuitable(RenderSpecification renderSpec, vk::raii::PhysicalDevice const& physicalDevice)
 		{
-			// Check if the physicalDevice supports the Vulkan API requested
 			bool supportsVulkan = physicalDevice.getProperties().apiVersion >= ToVulkanApiVersion(renderSpec.VulkanVersion);
 
-			// Check if the physicalDevice is of the preferred type (discrete or integrated GPU)
 			// TODO: Fix: If user sets DevicePreference to DiscreteGPU, but the only available GPU is an IntegratedGPU, we need to fall back to it or throw an error
 			bool isPreferredDeviceType = false;
 			if (renderSpec.DevicePreference == RenderDevicePreference::DiscreteGPU)
@@ -58,10 +56,9 @@ namespace Candle {
 			else
 				isPreferredDeviceType = true;
 
-			// Check if all required physicalDevice extensions are available
 			auto availableDeviceExtensions = physicalDevice.enumerateDeviceExtensionProperties();
 			bool supportsAllRequiredExtensions =
-				std::ranges::all_of(requiredDeviceExtension,
+				std::ranges::all_of(kRequiredDeviceExtensions,
 					[&availableDeviceExtensions](auto const& requiredDeviceExtension)
 					{
 						return std::ranges::any_of(availableDeviceExtensions,
@@ -69,7 +66,6 @@ namespace Candle {
 							{ return strcmp(availableDeviceExtension.extensionName, requiredDeviceExtension) == 0; });
 					});
 
-			// Check if the physicalDevice supports the required features (shader draw parameters, dynamic rendering and extended dynamic state)
 			auto features = physicalDevice.template getFeatures2<vk::PhysicalDeviceFeatures2,
 				vk::PhysicalDeviceVulkan11Features,
 				vk::PhysicalDeviceVulkan13Features,
@@ -81,7 +77,7 @@ namespace Candle {
 				features.template get<vk::PhysicalDeviceExtendedDynamicStateFeaturesEXT>().extendedDynamicState;
 
 			// Suitable devices also report the queue families to use, so selection and creation can't disagree
-			if (!supportsVulkan || !supportsAllRequiredExtensions || !supportsRequiredFeatures)
+			if (!supportsVulkan || !supportsAllRequiredExtensions || !supportsRequiredFeatures || !isPreferredDeviceType)
 				return std::nullopt;
 			return FindQueueFamilies(physicalDevice.getQueueFamilyProperties());
 		}
@@ -117,11 +113,13 @@ namespace Candle {
 
 		// query for Vulkan features and extensions, and enable the required ones
 		vk::StructureChain<vk::PhysicalDeviceFeatures2,
+			vk::PhysicalDeviceVulkan11Features,
 			vk::PhysicalDeviceVulkan13Features,
 			vk::PhysicalDeviceExtendedDynamicStateFeaturesEXT,
 			vk::PhysicalDeviceTimelineSemaphoreFeaturesKHR>
 			featureChain = {
 				{.features = {.samplerAnisotropy = true}},                   // vk::PhysicalDeviceFeatures2
+				{.shaderDrawParameters = true },							 // vk::PhysicalDeviceVulkan11Features
 				{.synchronization2 = true, .dynamicRendering = true},        // vk::PhysicalDeviceVulkan13Features
 				{.extendedDynamicState = true},                              // vk::PhysicalDeviceExtendedDynamicStateFeaturesEXT
 				{.timelineSemaphore = true}                                  // vk::PhysicalDeviceTimelineSemaphoreFeaturesKHR
@@ -141,13 +139,19 @@ namespace Candle {
 		vk::DeviceCreateInfo deviceCreateInfo{ .pNext = &featureChain.get<vk::PhysicalDeviceFeatures2>(),
 												   .queueCreateInfoCount = static_cast<uint32_t>(queueCreateInfos.size()),
 												   .pQueueCreateInfos = queueCreateInfos.data(),
-												   .enabledExtensionCount = static_cast<uint32_t>(requiredDeviceExtension.size()),
-												   .ppEnabledExtensionNames = requiredDeviceExtension.data() };
+												   .enabledExtensionCount = static_cast<uint32_t>(kRequiredDeviceExtensions.size()),
+												   .ppEnabledExtensionNames = kRequiredDeviceExtensions.data() };
 
 		m_LogicalDevice = vk::raii::Device(m_PhysicalDevice, deviceCreateInfo);
-		m_Queues.insert_or_assign(QueueType::Graphics, vk::raii::Queue(m_LogicalDevice, m_QueueFamilies.Graphics, 0));
-		if (m_QueueFamilies.Transfer != m_QueueFamilies.Graphics)
-			m_Queues.insert_or_assign(QueueType::Transfer, vk::raii::Queue(m_LogicalDevice, m_QueueFamilies.Transfer, 0));	// Index within the family, which has one queue
+
+		// Queue index 0 within each family, the only queue created in it
+		constexpr size_t graphicsSlot = std::to_underlying(QueueType::Graphics);
+		constexpr size_t transferSlot = std::to_underlying(QueueType::Transfer);
+		m_Queues[graphicsSlot] = { vk::raii::Queue(m_LogicalDevice, m_QueueFamilies.Graphics, 0), &m_SubmitLocks[graphicsSlot] };
+		if (m_QueueFamilies.Transfer == m_QueueFamilies.Graphics)
+			m_Queues[transferSlot] = m_Queues[graphicsSlot];
+		else
+			m_Queues[transferSlot] = { vk::raii::Queue(m_LogicalDevice, m_QueueFamilies.Transfer, 0), &m_SubmitLocks[transferSlot] };
 	}
 
 }

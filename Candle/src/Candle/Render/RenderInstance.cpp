@@ -11,7 +11,7 @@ namespace Candle {
 
 	namespace {
 
-		const std::array<const char*, 1> validationLayers = {
+		constexpr std::array<const char*, 1> kValidationLayers = {
 			"VK_LAYER_KHRONOS_validation"
 		};
 
@@ -47,16 +47,6 @@ namespace Candle {
 																const vk::DebugUtilsMessengerCallbackDataEXT* pCallbackData,
 																void* pUserData)
 		{
-			std::string severity;
-			if (messageSeverity & vk::DebugUtilsMessageSeverityFlagBitsEXT::eVerbose)
-				severity = "Verbose";
-			else if (messageSeverity & vk::DebugUtilsMessageSeverityFlagBitsEXT::eInfo)
-				severity = "Info";
-			else if (messageSeverity & vk::DebugUtilsMessageSeverityFlagBitsEXT::eWarning)
-				severity = "Warning";
-			else if (messageSeverity & vk::DebugUtilsMessageSeverityFlagBitsEXT::eError)
-				severity = "Error";
-
 			std::string type;
 			if (messageType & vk::DebugUtilsMessageTypeFlagBitsEXT::eGeneral)
 				type = "General";
@@ -65,7 +55,25 @@ namespace Candle {
 			else if (messageType & vk::DebugUtilsMessageTypeFlagBitsEXT::ePerformance)
 				type = "Performance";
 
-			CDL_CORE_ERROR(LogChannel::Render, "[Vulkan Debug] Severity: {}, Type: {}, Message: {}", severity, type, pCallbackData->pMessage);
+			switch (messageSeverity)
+			{
+			case vk::DebugUtilsMessageSeverityFlagBitsEXT::eVerbose:
+				CDL_CORE_TRACE(LogChannel::Render, "[Vulkan Debug] Severity: Verbose, Type: {}, Message: {}", type, pCallbackData->pMessage);
+				break;
+			case vk::DebugUtilsMessageSeverityFlagBitsEXT::eInfo:
+				CDL_CORE_INFO(LogChannel::Render, "[Vulkan Debug] Severity: Info, Type: {}, Message: {}", type, pCallbackData->pMessage);
+				break;
+			case vk::DebugUtilsMessageSeverityFlagBitsEXT::eWarning:
+				CDL_CORE_WARN(LogChannel::Render, "[Vulkan Debug] Severity: Warning, Type: {}, Message: {}", type, pCallbackData->pMessage);
+				break;
+			case vk::DebugUtilsMessageSeverityFlagBitsEXT::eError:
+				CDL_CORE_ERROR(LogChannel::Render, "[Vulkan Debug] Severity: Error, Type: {}, Message: {}", type, pCallbackData->pMessage);
+				break;
+			default:
+				CDL_CORE_ERROR(LogChannel::Render, "[Vulkan Debug] Unknown severity level. Type: {}, Message: {}", type, pCallbackData->pMessage);
+				break;
+			}
+
 			return VK_FALSE;
 		}
 	}
@@ -78,22 +86,21 @@ namespace Candle {
 		SetupDebugMessenger();
 	}
 
-
 	void RenderInstance::CreateInstance()
 	{
 		vk::ApplicationInfo appInfo{ .pApplicationName = m_Specification.ApplicationName.data(),
-											.applicationVersion = m_Specification.ApplicationVersion,
+											.applicationVersion = ToVulkanVersion(m_Specification.ApplicationVersion),
 											.pEngineName = "Candle Engine",
-											.engineVersion = kCandleVersion,
+											.engineVersion = ToVulkanVersion(kCandleVersion),
 											.apiVersion = ToVulkanApiVersion(m_Specification.VulkanVersion) };
 
 		// Get the required validation layers
-		int layerCount = m_Specification.ValidationSpec.EnableValidation ? static_cast<int>(validationLayers.size()) : 0;
+		int layerCount = m_Specification.ValidationSpec.EnableValidation ? static_cast<int>(kValidationLayers.size()) : 0;
 		std::vector<char const*> requiredLayers;
 		requiredLayers.reserve(layerCount);
 
 		if (m_Specification.ValidationSpec.EnableValidation)
-			requiredLayers.assign(validationLayers.begin(), validationLayers.end());
+			requiredLayers.assign(kValidationLayers.begin(), kValidationLayers.end());
 
 		// Check if the required layers are supported by the Vulkan implementation.
 		auto layerProperties = m_Context.enumerateInstanceLayerProperties();
@@ -133,7 +140,6 @@ namespace Candle {
 				throw std::runtime_error("Required extension not supported: " + std::string(requiredExtension));
 		}
 
-		// This struct tells the Vulkan driver which global extensions and validation layers we want to use
 		vk::InstanceCreateInfo createInfo{
 			.pApplicationInfo = &appInfo,
 			.enabledLayerCount = static_cast<uint32_t>(requiredLayers.size()),
@@ -142,7 +148,6 @@ namespace Candle {
 			.ppEnabledExtensionNames = requiredExtensions.data()
 		};
 
-		// Create the Vulkan instance using the RAII wrapper. The instance will be automatically destroyed when it goes out of scope.
 		m_Instance = vk::raii::Instance(m_Context, createInfo);
 	}
 

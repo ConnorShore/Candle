@@ -3,7 +3,7 @@
 
 namespace Candle {
 
-	// Holds the vulkan swapchain, surface, images, image views, framebuffers, etc
+	// Holds the vulkan swapchain, surface, images and image views; dynamic rendering needs no framebuffers
 	// Can be used on render thread only
 	class SwapChain
 	{

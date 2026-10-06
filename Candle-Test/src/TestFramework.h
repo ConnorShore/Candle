@@ -30,7 +30,7 @@ namespace Candle::Test {
 	namespace Type {
 		inline constexpr const char* Unit = "unit";       // single-threaded logic, fast, headless
 		inline constexpr const char* Stress = "stress";   // many threads or many iterations, hunting races
-		inline constexpr const char* Display = "display"; // opens real OS windows; skips itself where SDL video can't start
+		inline constexpr const char* Display = "display"; // opens real OS windows, skipping where SDL video can't start; a windowed Application also needs a suitable GPU, and in Debug the validation layers
 		inline constexpr const char* Gpu = "gpu";         // creates real Vulkan objects; needs a driver, the SDK's validation layers and SDL video
 	}
 

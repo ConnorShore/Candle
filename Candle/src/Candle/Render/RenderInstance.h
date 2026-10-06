@@ -5,7 +5,7 @@
 
 #include <vulkan/vulkan_raii.hpp>
 
-#include <string_view>
+#include <string>
 
 namespace Candle {
 
@@ -14,7 +14,7 @@ namespace Candle {
 		VulkanAPIVersion VulkanVersion = VulkanAPIVersion::API_1_4;
 		ValidationSpecification ValidationSpec = { };
 
-		std::string_view ApplicationName = "Candle App";
+		std::string ApplicationName = "Candle App";
 		VersionInfo ApplicationVersion = { 1, 0, 0 };
 	};
 

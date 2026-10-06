@@ -15,7 +15,7 @@ namespace Candle {
 	{
 	public:
 		RenderManager(const RenderSpecification& renderSpec, const ApplicationInfo& appInfo, Window& window);
-		~RenderManager();									 // Waits for the GPU, then tears down in reverse
+		~RenderManager();									 // Tears down in reverse; must wait for the GPU first once anything is submitted
 
 		//void OnPlatformEvent(const PlatformEvent& event);  // Resize/minimize: marks the swapchain stale
 		//void SubmitFrame(/* FramePacket&& */);             // Simulation never touches the packet again
