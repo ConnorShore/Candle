@@ -11,7 +11,7 @@ namespace Candle {
 	class ShaderLoader
 	{
 	public:
-		static Shader LoadShader(const std::string& name, const std::filesystem::path filePath, RenderDevice& device);
+		static Shader LoadShader(const std::string& name, const std::filesystem::path& filePath, RenderDevice& device);
 	};
 
 }

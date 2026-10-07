@@ -46,13 +46,14 @@ namespace Candle {
 			return buffer;
 		}
 
-		std::vector<ShaderEntryPoint> ExtractShaderSourceInfo(const std::vector<uint32_t>& shaderCode)
+		std::vector<ShaderEntryPoint> ExtractShaderSourceInfo(const std::vector<uint32_t>& shaderCode, const std::filesystem::path& filePath)
 		{
 			auto shaderModule = spv_reflect::ShaderModule(shaderCode);
 
 			// TODO: Eventually just return error and such
 			if (shaderModule.GetResult() != SPV_REFLECT_RESULT_SUCCESS) {
-				throw std::runtime_error("Failed to create SPIR-V reflection module");
+				throw std::runtime_error(std::format("Failed to reflect shader file '{}' (SpvReflectResult {})",
+					filePath.string(), static_cast<int>(shaderModule.GetResult())));
 			}
 
 			std::vector<ShaderEntryPoint> entryPoints;
@@ -70,7 +71,7 @@ namespace Candle {
 
 	}
 
-	Shader ShaderLoader::LoadShader(const std::string& name, std::filesystem::path filePath, RenderDevice& device)
+	Shader ShaderLoader::LoadShader(const std::string& name, const std::filesystem::path& filePath, RenderDevice& device)
 	{
 		auto shaderCode = ReadShaderFile(filePath);
 
@@ -79,6 +80,13 @@ namespace Candle {
 			throw std::runtime_error(std::format("Shader file '{}' is not SPIR-V (bad magic number)", filePath.string()));
 		}
 
+		// Reflect first since it bounds-checks every instruction whereas creating vulkan shader module on malformed SPIR-V is undefined
+		ShaderCreationInfo shaderInfo{
+			.Name = name,
+			.FilePath = filePath,
+			.EntryPoints = ExtractShaderSourceInfo(shaderCode, filePath)
+		};
+
 		vk::ShaderModuleCreateInfo createInfo{
 			.codeSize = shaderCode.size() * sizeof(uint32_t),
 			.pCode = reinterpret_cast<const uint32_t*>(shaderCode.data())
@@ -86,12 +94,6 @@ namespace Candle {
 		vk::raii::ShaderModule shaderModule{
 			device.GetDevice(),
 			createInfo
-		};
-
-		ShaderCreationInfo shaderInfo{
-			.Name = name,
-			.FilePath = filePath,
-			.EntryPoints = ExtractShaderSourceInfo(shaderCode)
 		};
 
 		return { std::move(shaderInfo), std::move(shaderModule) };

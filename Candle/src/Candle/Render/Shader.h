@@ -25,6 +25,8 @@ namespace Candle {
 
 		inline const std::string& GetName() const { return m_Name; }
 		inline const std::filesystem::path& GetFilePath() const { return m_FilePath; }
+		inline const vk::raii::ShaderModule& GetModule() const { return m_ShaderModule; }
+		inline const std::vector<ShaderEntryPoint>& GetEntryPoints() const { return m_EntryPoints; }
 
 	private:
 		std::string m_Name;

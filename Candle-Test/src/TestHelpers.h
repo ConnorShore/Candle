@@ -8,8 +8,12 @@
 #include <Candle.h>
 #include <Candle/Core/LogSink.h>
 
+#include <atomic>
+#include <filesystem>
+#include <format>
 #include <latch>
 #include <optional>
+#include <system_error>
 #include <thread>
 #include <vector>
 
@@ -199,6 +203,35 @@ namespace Candle::Test {
 
 		WindowingBackend(const WindowingBackend&) = delete;
 		WindowingBackend& operator=(const WindowingBackend&) = delete;
+	};
+
+	// A fresh directory under the system temp path, deleted with its contents on destruction. std::filesystem,
+	// because Platform has no temp-path or directory calls. Test-body thread only.
+	class TempDirectory
+	{
+	public:
+		TempDirectory()
+			: m_Path(std::filesystem::temp_directory_path() /
+				std::format("Candle-Test-{}-{}", Platform::GetTick().Value, s_Next.fetch_add(1)))
+		{
+			std::filesystem::create_directories(m_Path);
+		}
+
+		~TempDirectory()
+		{
+			std::error_code ignored;
+			std::filesystem::remove_all(m_Path, ignored);
+		}
+
+		TempDirectory(const TempDirectory&) = delete;
+		TempDirectory& operator=(const TempDirectory&) = delete;
+
+		const std::filesystem::path& Path() const { return m_Path; }
+		std::filesystem::path operator/(const std::filesystem::path& name) const { return m_Path / name; }
+
+	private:
+		inline static std::atomic<uint32_t> s_Next = 0;
+		std::filesystem::path m_Path;
 	};
 
 }

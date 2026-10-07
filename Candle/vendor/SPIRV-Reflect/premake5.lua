@@ -24,6 +24,10 @@ project "SPIRV-Reflect"
       "$(VULKAN_SDK)/Source/SPIRV-Reflect/spirv_reflect.c",
    }
 
+   -- Every config: its raw asserts (not SPIRV_REFLECT_ENABLE_ASSERTS, which gates only some) abort on malformed
+   -- SPIR-V, but a corrupt .spv is a runtime condition for Candle and the range checks beside them return an error.
+   defines { "NDEBUG" }
+
    filter "system:windows"
       systemversion "latest"
 
