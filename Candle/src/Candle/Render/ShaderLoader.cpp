@@ -64,10 +64,17 @@ namespace Candle {
 			entryPoints.reserve(shaderModule.GetEntryPointCount());
 			for (uint32_t i = 0; i < shaderModule.GetEntryPointCount(); ++i) {
 				ShaderStage stage = ToShaderStage(shaderModule.GetEntryPointShaderStage(i));
-				if (stage < ShaderStage::Count)
-					entryPoints.push_back({ .Stage = stage, .Name = shaderModule.GetEntryPointName(i) });
+
+				// If unsupported stage, warn and skip it.
+				if (stage == ShaderStage::Count) {
+					CDL_CORE_WARN(LogChannel::Render, "Shader file '{}' has an entry point '{}' with an unhandled stage (SpvReflectShaderStageFlagBits {})",
+						ToUtf8(filePath), shaderModule.GetEntryPointName(i), static_cast<int>(shaderModule.GetEntryPointShaderStage(i)));
+					continue;
+				}
 
 				// In future, handle descriptor sets, push constants, etc. here as well
+
+				entryPoints.push_back({ .Stage = stage, .Name = shaderModule.GetEntryPointName(i) });
 			}
 
 			return entryPoints;

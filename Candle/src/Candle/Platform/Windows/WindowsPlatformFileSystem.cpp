@@ -85,6 +85,9 @@ namespace Candle {
 			if (!success)
 				return std::unexpected(LastFileError());
 
+			if (bytesRead != static_cast<DWORD>(buffer.size()))
+				return std::unexpected(FileError{ FileErrorCode::IO, ERROR_HANDLE_EOF });
+
 			return buffer;
 		}
 
@@ -141,6 +144,9 @@ namespace Candle {
 
 		if (!success)
 			return std::unexpected(LastFileError());
+
+		if (bytesWritten != static_cast<DWORD>(data.size()))
+			return std::unexpected(FileError{ FileErrorCode::IO, ERROR_WRITE_FAULT });
 
 		return {};
 	}

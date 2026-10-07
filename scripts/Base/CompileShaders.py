@@ -58,8 +58,8 @@ def compile_shaders(slangc, base_directory, spirv_version):
             diagnostics = (result.stdout + result.stderr).strip()
 
             if result.returncode != 0 and NO_ENTRY_POINTS_DIAGNOSTIC in diagnostics:
-                print(f"Skipped  {relative_path} (no entry points, imported module)")
-                skipped += 1
+                if os.path.isfile(output_path):
+                    os.remove(output_path)
             elif result.returncode != 0:
                 print(f"FAILED   {relative_path}", file=sys.stderr)
                 print(diagnostics, file=sys.stderr)
