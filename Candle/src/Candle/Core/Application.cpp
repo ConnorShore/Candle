@@ -47,7 +47,7 @@ namespace Candle {
 
 			// Update the frame stats
 			Tick endTick = Platform::GetTick();
-			m_FrameStats.DeltaTime = TimeStep(Platform::ToSeconds(startTick, endTick));
+			m_FrameStats.DeltaTime = TimeStep(static_cast<float>(Platform::ToSeconds(startTick, endTick)));
 			m_FrameStats.TotalTime += m_FrameStats.DeltaTime;
 			m_FrameStats.FrameCount++;
 			startTick = endTick;
@@ -58,8 +58,6 @@ namespace Candle {
 			{
 				CDL_CORE_INFO(LogChannel::Application, "Application running: {}; Frame FPS: {}", 
 					m_Specification.AppInfo.Name, (1.0f / m_FrameStats.DeltaTime));
-				CDL_CORE_INFO(LogChannel::Input, "Space bar Pressed: {}; Left mouse button pressed: {}", 
-					inputSnapshot.IsKeyDown(KeyCode::Space), inputSnapshot.IsMouseDown(MouseButton::Left));
 
 				timeSinceLastLog = 0.0f;
 			}

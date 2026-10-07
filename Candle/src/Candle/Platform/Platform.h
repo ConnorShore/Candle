@@ -5,10 +5,14 @@
 #include "Candle/Core/Threading/ThreadPriority.h"
 
 #include <chrono>
+#include <cstddef>
 #include <cstdint>
 #include <thread>
 #include <string>
 #include <vector>
+#include <filesystem>
+#include <expected>
+#include <span>
 
 namespace Candle {
 
@@ -24,6 +28,35 @@ namespace Candle {
 		uint32_t NumPhysicalCores = 0;
 		uint32_t NumLogicalCores = 0;
 	};
+
+	// Coarse enough to branch on: a missing asset falls back to a placeholder, a sharing violation is retried.
+	enum class FileErrorCode : uint8_t
+	{
+		NotFound,
+		AccessDenied,
+		SharingViolation,	// Another handle has the file open incompatibly, e.g. a shader compiler mid-write
+		TooLarge,			// More than one read or write call can move (4 GiB - 1 on Windows); OSError is 0
+		IO,					// Anything else; FileError::OSError says what
+	};
+
+	struct FileError
+	{
+		FileErrorCode Code = FileErrorCode::IO;
+		uint32_t OSError = 0;	// The platform's own code (GetLastError on Windows), for the log
+	};
+
+	constexpr const char* ToString(FileErrorCode code)
+	{
+		switch (code)
+		{
+		case FileErrorCode::NotFound:			return "NotFound";
+		case FileErrorCode::AccessDenied:		return "AccessDenied";
+		case FileErrorCode::SharingViolation:	return "SharingViolation";
+		case FileErrorCode::TooLarge:			return "TooLarge";
+		case FileErrorCode::IO:					return "IO";
+		}
+		return "Unknown";
+	}
 
 	class Platform
 	{
@@ -87,6 +120,12 @@ namespace Candle {
 		// Events //
 		// Clears outEvents, then appends this frame's events in arrival order. Main thread only, after InitWindowing.
 		static void PumpEvents(std::vector<PlatformEvent>& outEvents);
+
+		// Filesystem //
+		// Threading: any thread, concurrently; no shared state. Blocking, so never on the main or render thread mid-frame
+		static std::expected<std::vector<std::byte>, FileError> ReadFile(const std::filesystem::path& path);
+		static std::expected<std::string, FileError> ReadTextFile(const std::filesystem::path& path);
+		static std::expected<void, FileError> WriteFile(const std::filesystem::path& path, std::span<const std::byte> data);
 
 	private:
 		// Defined per platform alongside the tick queries

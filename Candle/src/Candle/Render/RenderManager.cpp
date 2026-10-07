@@ -1,5 +1,7 @@
 #include "cdlpch.h"
 #include "RenderManager.h"
+#include "ShaderLoader.h"
+#include "Shader.h"
 
 #include "Candle/Core/Window.h"
 

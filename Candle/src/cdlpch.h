@@ -32,6 +32,7 @@
 #include <limits>
 #include <atomic>
 #include <ranges>
+#include <expected>
 
 #ifdef CDL_PLATFORM_WINDOWS
 	#include <Windows.h>

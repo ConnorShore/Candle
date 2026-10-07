@@ -5,14 +5,19 @@ import sys
 from fnmatch import fnmatch
 from pathlib import Path
 
+from CompileShaders import DEFAULT_SPIRV_VERSION, VULKAN_SDK_URL, compile_shaders, find_slangc
+
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 SOLUTION = PROJECT_ROOT / "Candle.slnx"
 
 CONFIGURATIONS = ["Debug", "Release", "Profile", "Dist"]
 DEFAULT_CONFIGURATION = "Debug"
 
-# Directories removed by clean(), relative to PROJECT_ROOT
-CLEAN_DIRS = ["bin", ".vs"]
+# Directories removed by clean(), relative to PROJECT_ROOT. Every bin/ goes too -- see _iter_bin_dirs().
+CLEAN_DIRS = [".vs"]
+
+# Where each project keeps its Slang sources, relative to the project directory.
+SHADER_DIR = Path("res") / "shaders"
 
 # Generated Premake/Visual Studio files removed by clean(). Matched anywhere under
 # PROJECT_ROOT except inside vendor submodules -- see _iter_generated_files().
@@ -48,10 +53,26 @@ def _iter_generated_files():
                 yield Path(dirpath) / name
 
 
+def _iter_bin_dirs():
+    """Yields every bin/ directory under PROJECT_ROOT outside vendor code.
+
+    vendor/premake/bin and vendor/tracy/bin hold the tools InitializeRepo.py installs, and the
+    default command sequence runs 'generate' straight after 'clean', so vendor/ is never entered.
+    """
+    for dirpath, dirnames, _ in os.walk(PROJECT_ROOT):
+        dirnames[:] = [
+            d for d in dirnames
+            if d not in (".git", "vendor") and not (Path(dirpath) / d / ".git").exists()
+        ]
+        if "bin" in dirnames:
+            dirnames.remove("bin")
+            yield Path(dirpath) / "bin"
+
+
 def clean():
     """Cleans all Premake/Visual Studio generated files and build output from every sub project."""
-    for dir_name in CLEAN_DIRS:
-        target = PROJECT_ROOT / dir_name
+    targets = [PROJECT_ROOT / dir_name for dir_name in CLEAN_DIRS] + list(_iter_bin_dirs())
+    for target in targets:
         if target.is_dir():
             print(f"Removing {target}...")
             shutil.rmtree(target, ignore_errors=True)
@@ -132,7 +153,38 @@ def run_tests(configuration: str = DEFAULT_CONFIGURATION, test_args: list[str] |
     result = subprocess.run([str(test_exe), *(test_args or [])], cwd=PROJECT_ROOT, check=False)
     return result.returncode
 
-VALID_COMMANDS = ("clean", "generate", "build", "test")
+def _iter_projects():
+    """Yields Candle's own projects: top-level directories with a premake5.lua. Vendors sit under vendor/ and never match."""
+    for child in sorted(PROJECT_ROOT.iterdir()):
+        if child.is_dir() and (child / "premake5.lua").is_file():
+            yield child
+
+
+def compile_project_shaders() -> int:
+    """Compiles <project>/res/shaders for every Candle project that has one."""
+    slangc = find_slangc()
+    if not slangc:
+        print(
+            f"ERROR: Could not find slangc. Install a recent Vulkan SDK from {VULKAN_SDK_URL}, or put slangc on PATH.",
+            file=sys.stderr,
+        )
+        return 1
+
+    print(f"Using {slangc}")
+    failed = 0
+    for project in _iter_projects():
+        shader_dir = project / SHADER_DIR
+        if shader_dir.is_dir():
+            print(f"\n{project.name}: {shader_dir.relative_to(PROJECT_ROOT)}")
+            # A str, not a Path: compile_shaders compares os.walk's str roots against it to skip bin/.
+            failed += compile_shaders(slangc, str(shader_dir), DEFAULT_SPIRV_VERSION)
+
+    if failed:
+        print(f"\nERROR: {failed} shader(s) failed to compile.\n", file=sys.stderr)
+    return 1 if failed else 0
+
+
+VALID_COMMANDS = ("clean", "generate", "shaders", "build", "test")
 
 def main():
     commands = []
@@ -156,13 +208,17 @@ def main():
         sys.exit(1)
 
     if not commands:
-        commands = ["clean", "generate", "build"]
+        commands = ["clean", "generate", "shaders", "build"]
 
     for command in commands:
         if command == "clean":
             clean()
         elif command == "generate":
             generate_projects()
+        elif command == "shaders":
+            code = compile_project_shaders()
+            if code != 0:
+                sys.exit(code)
         elif command == "build":
             code = build(configuration)
             if code != 0:

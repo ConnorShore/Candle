@@ -20,6 +20,8 @@ jobs:
         run: python scripts/Base/InitializeRepo.py
       - name: Generate Candle Projects and Solution
         run: python scripts/Base/Build.py generate
+      - name: Compile Shaders
+        run: python scripts/Base/Build.py shaders
       - name: Build Candle
         run: python scripts/Base/Build.py build
       - name: Candle Unit tests
