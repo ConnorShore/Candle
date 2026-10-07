@@ -247,7 +247,7 @@ namespace Candle::Test {
 			if (!wasSkipped)
 				failures.insert(failures.begin(), context.SoftFailures.begin(), context.SoftFailures.end());
 
-			const char* tag = wasSkipped ? "SKIP" : failures.empty() ? "PASS" : "FAIL";
+			const char* tag = wasSkipped ? "SKIP" : failures.empty() ? "PASS" : "FAILED";
 			std::println("  [{}] [{:<6}] {:<60} {:8.2f} ms", tag, test.TestType,
 				std::format("{}::{}", test.Suite, test.Name), ms);
 

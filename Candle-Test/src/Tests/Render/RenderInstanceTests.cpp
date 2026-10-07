@@ -70,7 +70,8 @@ CDL_TEST_CASE(RenderInstance, ForwardsMessagesAtTheConfiguredSeverity, Gpu)
 
 CDL_TEST_CASE(RenderInstance, DropsMessagesBelowTheConfiguredSeverity, Gpu)
 {
-	LoggerFixture logs(LogLevel::Warn, kRenderChannelMask);
+	// Captures at Trace: a leaked Info message is logged at Info, so a Warn fixture would drop it and pass anyway.
+	LoggerFixture logs(LogLevel::Trace, kRenderChannelMask);
 	{
 		WindowingBackend backend;
 		RenderInstance instance(TestInstanceSpec(StrictRenderSpec()));

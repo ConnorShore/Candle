@@ -1,6 +1,7 @@
 #pragma once
 
 #include "RenderSpecification.h"
+
 #include "Candle/Core/Core.h"
 #include "Candle/Core/Version.h"
 

@@ -1,8 +1,11 @@
 #pragma once
 
+#include "ShaderCreationInfo.h"
+
 #include <vulkan/vulkan_raii.hpp>
 
 #include <string>
+#include <vector>
 #include <filesystem>
 
 namespace Candle {
@@ -11,7 +14,7 @@ namespace Candle {
 	class Shader
 	{
 	public:
-		Shader(const std::string& name, std::filesystem::path filePath, vk::raii::ShaderModule&& module);
+		Shader(ShaderCreationInfo info, vk::raii::ShaderModule&& module);
 		~Shader() = default;
 
 		Shader(Shader&&) = default;
@@ -21,12 +24,13 @@ namespace Candle {
 		Shader& operator=(const Shader&) = delete;
 
 		inline const std::string& GetName() const { return m_Name; }
-		inline const std::filesystem::path GetFilePath() const { return m_FilePath; }
+		inline const std::filesystem::path& GetFilePath() const { return m_FilePath; }
 
 	private:
 		std::string m_Name;
 		std::filesystem::path m_FilePath;
 		vk::raii::ShaderModule m_ShaderModule{ nullptr };
+		std::vector<ShaderEntryPoint> m_EntryPoints;
 	};
 
 }

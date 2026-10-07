@@ -20,6 +20,7 @@
       "vendor/imgui/imgui/backends",
       "vendor/tracy/tracy/public",
       "$(VULKAN_SDK)/Include",
+      "$(VULKAN_SDK)/Source/SPIRV-Reflect",
    }
 
    files 
@@ -34,6 +35,7 @@
       "SDL3",
       "imgui",
       "tracy",
+      "SPIRV-Reflect",
    }
 
    defines

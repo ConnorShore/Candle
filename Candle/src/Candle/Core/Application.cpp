@@ -58,8 +58,6 @@ namespace Candle {
 			{
 				CDL_CORE_INFO(LogChannel::Application, "Application running: {}; Frame FPS: {}", 
 					m_Specification.AppInfo.Name, (1.0f / m_FrameStats.DeltaTime));
-				CDL_CORE_INFO(LogChannel::Input, "Space bar Pressed: {}; Left mouse button pressed: {}", 
-					inputSnapshot.IsKeyDown(KeyCode::Space), inputSnapshot.IsMouseDown(MouseButton::Left));
 
 				timeSinceLastLog = 0.0f;
 			}

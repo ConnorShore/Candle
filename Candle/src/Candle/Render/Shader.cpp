@@ -3,8 +3,8 @@
 
 namespace Candle {
 
-	Shader::Shader(const std::string& name, std::filesystem::path filePath, vk::raii::ShaderModule&& module)
-		: m_Name(name), m_FilePath(filePath), m_ShaderModule(std::move(module))
+	Shader::Shader(ShaderCreationInfo info, vk::raii::ShaderModule&& module)
+		: m_Name(std::move(info.Name)), m_FilePath(std::move(info.FilePath)), m_ShaderModule(std::move(module)), m_EntryPoints(std::move(info.EntryPoints))
 	{
 	}
 

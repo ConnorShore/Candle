@@ -9,6 +9,7 @@
 #include <Candle/Render/RenderSpecification.h>
 
 #include <string>
+#include <string_view>
 #include <vector>
 
 namespace Candle::Test {
@@ -35,8 +36,9 @@ namespace Candle::Test {
 	// The debug messenger logs on the Render channel; pass to LoggerFixture to capture only that.
 	inline constexpr uint16_t kRenderChannelMask = static_cast<uint16_t>(LogChannel::Render);
 
-	// The debug messenger logs every Vulkan message as a Render-channel error. Flushes first, so call it
-	// after the Vulkan objects under test are destroyed to include their teardown messages.
+	// The debug messenger logs at the message's own severity, so match its prefix rather than a level: Render
+	// also warns about non-Vulkan things. Flushes first, so call it after the Vulkan objects under test are
+	// destroyed to include their teardown messages.
 	inline std::vector<std::string> VulkanDebugMessages(LoggerFixture& logs)
 	{
 		CDL_CHECK(Logger::Flush());
@@ -44,7 +46,7 @@ namespace Candle::Test {
 		std::vector<std::string> messages;
 		for (const LogRecord& record : logs.Records)
 		{
-			if (record.Channel == LogChannel::Render && record.Level >= LogLevel::Error)
+			if (record.Channel == LogChannel::Render && std::string_view(record.Message).starts_with("[Vulkan Debug]"))
 				messages.emplace_back(record.Message);
 		}
 		return messages;
