@@ -155,7 +155,7 @@ namespace Candle {
 	const char* LogChannelName(LogChannel channel)
 	{
 		static constexpr const char* s_Names[] = {
-			"App", "AI", "Animation", "Render", "Input", "Audio", "Physics", "Memory", "Thread", "Math", "Job", "Window"
+			"App", "AI", "Animation", "Render", "Input", "Audio", "Physics", "Memory", "Thread", "Math", "Job", "Window", "FileSystem"
 		};
 
 		const uint16_t value = static_cast<uint16_t>(channel);

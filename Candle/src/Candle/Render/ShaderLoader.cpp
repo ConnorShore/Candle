@@ -3,7 +3,12 @@
 #include "RenderDevice.h"
 #include "Shader.h"
 
+#include "Candle/Platform/Platform.h"
+
 #include <spirv_reflect.h>
+
+#include <cstring>
+#include <span>
 
 namespace Candle {
 
@@ -22,38 +27,37 @@ namespace Candle {
 			return ShaderStage::Count;
 		}
 
-		// TODO: Move this to some utility class (or maybe Platform)
-		// and don't crash program if a load fails
-		std::vector<uint32_t> ReadShaderFile(const std::filesystem::path filename) {
-			std::ifstream file(filename, std::ios::ate | std::ios::binary);
-			if (!file.is_open()) {
-				throw std::runtime_error(std::format("Failed to open shader file '{}'", filename.string()));
-			}
-
-			// Checked here because this is the last point the byte count exists; dividing into words drops any remainder.
-			const std::streamoff byteSize = file.tellg();
-			if (byteSize <= 0 || byteSize % 4 != 0) {
-				throw std::runtime_error(std::format("Shader file '{}' is {} bytes; SPIR-V must be a non-empty multiple of 4", filename.string(), byteSize));
-			}
-
-			std::vector<uint32_t> buffer(static_cast<size_t>(byteSize) / sizeof(uint32_t));
-
-			file.seekg(0, std::ios::beg);
-			if (!file.read(reinterpret_cast<char*>(buffer.data()), byteSize)) {
-				throw std::runtime_error(std::format("Failed to read shader file '{}'", filename.string()));
-			}
-
-			return buffer;
+		std::string ToUtf8(const std::filesystem::path& path)
+		{
+			const std::u8string utf8 = path.u8string();
+			return { reinterpret_cast<const char*>(utf8.data()), utf8.size() };
 		}
 
-		std::vector<ShaderEntryPoint> ExtractShaderSourceInfo(const std::vector<uint32_t>& shaderCode, const std::filesystem::path& filePath)
+		// TODO: Don't crash program if a load fails
+		std::vector<std::byte> ReadShaderFile(const std::filesystem::path& filePath)
 		{
-			auto shaderModule = spv_reflect::ShaderModule(shaderCode);
+			auto code = Platform::ReadFile(filePath);
+			if (!code) {
+				throw std::runtime_error(std::format("Failed to read shader file '{}': {} (OS error {})",
+					ToUtf8(filePath), ToString(code.error().Code), code.error().OSError));
+			}
+
+			if (code->empty() || code->size() % sizeof(uint32_t) != 0) {
+				throw std::runtime_error(std::format("Shader file '{}' is {} bytes; SPIR-V must be a non-empty multiple of 4",
+					ToUtf8(filePath), code->size()));
+			}
+
+			return std::move(*code);
+		}
+
+		std::vector<ShaderEntryPoint> ExtractShaderSourceInfo(std::span<const std::byte> shaderCode, const std::filesystem::path& filePath)
+		{
+			auto shaderModule = spv_reflect::ShaderModule(shaderCode.size(), shaderCode.data());
 
 			// TODO: Eventually just return error and such
 			if (shaderModule.GetResult() != SPV_REFLECT_RESULT_SUCCESS) {
 				throw std::runtime_error(std::format("Failed to reflect shader file '{}' (SpvReflectResult {})",
-					filePath.string(), static_cast<int>(shaderModule.GetResult())));
+					ToUtf8(filePath), static_cast<int>(shaderModule.GetResult())));
 			}
 
 			std::vector<ShaderEntryPoint> entryPoints;
@@ -73,11 +77,13 @@ namespace Candle {
 
 	Shader ShaderLoader::LoadShader(const std::string& name, const std::filesystem::path& filePath, RenderDevice& device)
 	{
-		auto shaderCode = ReadShaderFile(filePath);
+		const std::vector<std::byte> shaderCode = ReadShaderFile(filePath);
 
-		// ReadShaderFile guarantees at least one word.
-		if (shaderCode[0] != SpvMagicNumber) {
-			throw std::runtime_error(std::format("Shader file '{}' is not SPIR-V (bad magic number)", filePath.string()));
+		// ReadShaderFile guarantees at least one word; memcpy because the buffer holds bytes, not uint32_t objects.
+		uint32_t magic = 0;
+		std::memcpy(&magic, shaderCode.data(), sizeof(magic));
+		if (magic != SpvMagicNumber) {
+			throw std::runtime_error(std::format("Shader file '{}' is not SPIR-V (bad magic number)", ToUtf8(filePath)));
 		}
 
 		// Reflect first since it bounds-checks every instruction whereas creating vulkan shader module on malformed SPIR-V is undefined
@@ -87,8 +93,10 @@ namespace Candle {
 			.EntryPoints = ExtractShaderSourceInfo(shaderCode, filePath)
 		};
 
+		// pCode must be 4-byte aligned; the vector's storage comes from operator new, which aligns to at least this.
+		CDL_STATIC_ASSERT(__STDCPP_DEFAULT_NEW_ALIGNMENT__ >= alignof(uint32_t));
 		vk::ShaderModuleCreateInfo createInfo{
-			.codeSize = shaderCode.size() * sizeof(uint32_t),
+			.codeSize = shaderCode.size(),
 			.pCode = reinterpret_cast<const uint32_t*>(shaderCode.data())
 		};
 		vk::raii::ShaderModule shaderModule{

@@ -11,6 +11,8 @@
 namespace Candle {
 
 	// TODO: This will become an Asset/Resource in the future when the Asset/Resource managment system is implemented
+	// Threading: not internally synchronized. Immutable once constructed, so any thread may read it after it has been handed over (e.g. across a job dependency)
+	// Lifetime: destroy before the RenderDevice that created it, since the module is destroyed through that device
 	class Shader
 	{
 	public:
