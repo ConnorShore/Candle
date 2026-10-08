@@ -23,11 +23,12 @@ namespace Candle {
 
 	struct QueueFamilyIndices
 	{
-		uint32_t Graphics;   // Graphics + compute + transfer; also presents on Windows, verified per swapchain
+		uint32_t Graphics;   // Graphics + compute + transfer + present; still verified per surface when a swapchain is created
 		uint32_t Transfer;   // Transfer only queue (if available, otherwise graphics queue)
 	};
 
-	std::optional<QueueFamilyIndices> FindQueueFamilies(std::span<const vk::QueueFamilyProperties> families);
+	// Returns the queue family indices for graphics and transfer queues, or std::nullopt if the device is unsuitable
+	std::optional<QueueFamilyIndices> FindQueueFamilies(std::span<const vk::QueueFamilyProperties> families, std::span<const vk::Bool32> presentSupport);
 
 	// Holds the vulkan physical & logical device, queues, command and resource pools, frame timeline, deletion queues etc
 	// Will own buffer pools to be allocated from, but the buffers themselves will be owned by the Mesh asset
@@ -49,6 +50,8 @@ namespace Candle {
 		//void Submit(QueueType queue, std::span<const vk::SubmitInfo2> submits);
 
 		inline vk::raii::Device& GetDevice() { return m_LogicalDevice; }
+		inline vk::raii::PhysicalDevice& GetPhysicalDevice() { return m_PhysicalDevice; }
+
 		inline uint32_t GetQueueFamily(QueueType queue) const { return queue == QueueType::Graphics ? m_QueueFamilies.Graphics : m_QueueFamilies.Transfer; }
 
 	private:

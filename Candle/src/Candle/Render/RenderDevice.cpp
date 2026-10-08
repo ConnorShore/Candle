@@ -5,12 +5,16 @@
 #include "RenderSpecification.h"
 #include "VulkanUtils.h"
 
+#include "Candle/Platform/Platform.h"
+
 namespace Candle {
 
-	// Graphics needs graphics + compute (either implies transfer)
+	// Graphics needs graphics + compute (either implies transfer) + present
 	// Transfer prefers a dedicated DMA family.
-	std::optional<QueueFamilyIndices> FindQueueFamilies(std::span<const vk::QueueFamilyProperties> families)
+	std::optional<QueueFamilyIndices> FindQueueFamilies(std::span<const vk::QueueFamilyProperties> families, std::span<const vk::Bool32> presentSupport)
 	{
+		CDL_CORE_ASSERT(presentSupport.size() == families.size(), "Need one present-support entry per queue family");
+
 		constexpr vk::QueueFlags graphicsCompute = vk::QueueFlagBits::eGraphics | vk::QueueFlagBits::eCompute;
 		// Sparse binding and protected don't stop a family being a copy engine; video or compute bits do.
 		constexpr vk::QueueFlags dmaFlags = vk::QueueFlagBits::eTransfer | vk::QueueFlagBits::eSparseBinding | vk::QueueFlagBits::eProtected;
@@ -19,7 +23,7 @@ namespace Candle {
 		for (uint32_t i = 0; i < families.size(); ++i)
 		{
 			vk::QueueFlags flags = families[i].queueFlags;
-			if (!graphics && (flags & graphicsCompute) == graphicsCompute)
+			if (!graphics && (flags & graphicsCompute) == graphicsCompute && presentSupport[i])
 				graphics = i;
 			if (!transfer && (flags & vk::QueueFlagBits::eTransfer) && !(flags & ~dmaFlags))
 				transfer = i;
@@ -43,7 +47,7 @@ namespace Candle {
 			QueueFamilyIndices QueueFamilies;
 		};
 
-		std::optional<QueueFamilyIndices> IsPhysicalDeviceSuitable(RenderSpecification renderSpec, vk::raii::PhysicalDevice const& physicalDevice)
+		std::optional<QueueFamilyIndices> IsPhysicalDeviceSuitable(RenderInstance& instance, RenderSpecification renderSpec, vk::raii::PhysicalDevice const& physicalDevice)
 		{
 			bool supportsVulkan = physicalDevice.getProperties().apiVersion >= ToVulkanApiVersion(renderSpec.VulkanVersion);
 
@@ -79,14 +83,20 @@ namespace Candle {
 			// Suitable devices also report the queue families to use, so selection and creation can't disagree
 			if (!supportsVulkan || !supportsAllRequiredExtensions || !supportsRequiredFeatures || !isPreferredDeviceType)
 				return std::nullopt;
-			return FindQueueFamilies(physicalDevice.getQueueFamilyProperties());
+
+			// Find queue families that support graphics + present, and a dedicated transfer queue if available
+			const std::vector<vk::QueueFamilyProperties> families = physicalDevice.getQueueFamilyProperties();
+			std::vector<vk::Bool32> presentSupport(families.size());
+			for (uint32_t i = 0; i < families.size(); ++i)
+				presentSupport[i] = Platform::GetVulkanPresentationSupport(instance, physicalDevice, i);
+			return FindQueueFamilies(families, presentSupport);
 		}
 
 		PhysicalDeviceSelection SelectPhysicalDevice(RenderInstance& instance, const RenderSpecification& renderSpec)
 		{
 			for (vk::raii::PhysicalDevice& physicalDevice : instance.GetVulkanInstance().enumeratePhysicalDevices())
 			{
-				if (auto queueFamilies = IsPhysicalDeviceSuitable(renderSpec, physicalDevice))
+				if (auto queueFamilies = IsPhysicalDeviceSuitable(instance, renderSpec, physicalDevice))
 				{
 					std::string deviceName = physicalDevice.getProperties().deviceName;
 					CDL_CORE_INFO(LogChannel::Render, "Selected Render Device: {0}", deviceName);

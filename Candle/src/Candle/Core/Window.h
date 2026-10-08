@@ -36,6 +36,8 @@ namespace Candle {
 		inline uint32_t GetWidth() const { return GetSize().x; }
 		inline uint32_t GetHeight() const { return GetSize().y; }
 
+		inline NativeWindowHandle GetNativeHandle() const { return m_NativeHandle; }
+
 	private:
 		NativeWindowHandle m_NativeHandle;
 	};

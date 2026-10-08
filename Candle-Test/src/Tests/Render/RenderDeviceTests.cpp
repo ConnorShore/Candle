@@ -11,6 +11,7 @@
 #include <format>
 #include <initializer_list>
 #include <optional>
+#include <span>
 #include <vector>
 
 using namespace Candle;
@@ -31,6 +32,12 @@ namespace {
 		return families;
 	}
 
+	// Every family presents, as on Windows desktop drivers; the present tests pass their own support.
+	std::optional<QueueFamilyIndices> FindAllPresenting(std::span<const vk::QueueFamilyProperties> families)
+	{
+		return FindQueueFamilies(families, std::vector<vk::Bool32>(families.size(), VK_TRUE));
+	}
+
 }
 
 // NVIDIA's layout: a pure DMA family ahead of the compute and video families that also report transfer.
@@ -42,7 +49,7 @@ CDL_TEST_CASE(RenderDevice, PrefersADedicatedTransferFamily, Unit)
 		eCompute | eTransfer | eSparseBinding,
 		eTransfer | eSparseBinding | eVideoDecodeKHR });
 
-	const std::optional<QueueFamilyIndices> indices = FindQueueFamilies(families);
+	const std::optional<QueueFamilyIndices> indices = FindAllPresenting(families);
 	CDL_CHECK(indices.has_value());
 	CDL_EXPECT_EQ(indices->Graphics, 0u);
 	CDL_EXPECT_EQ(indices->Transfer, 1u);
@@ -56,7 +63,7 @@ CDL_TEST_CASE(RenderDevice, SkipsComputeFamiliesForTransfer, Unit)
 		eCompute | eTransfer | eSparseBinding,
 		eTransfer | eSparseBinding });
 
-	const std::optional<QueueFamilyIndices> indices = FindQueueFamilies(families);
+	const std::optional<QueueFamilyIndices> indices = FindAllPresenting(families);
 	CDL_CHECK(indices.has_value());
 	CDL_EXPECT_EQ(indices->Transfer, 2u);
 }
@@ -69,7 +76,7 @@ CDL_TEST_CASE(RenderDevice, SkipsVideoFamiliesForTransfer, Unit)
 		eTransfer | eVideoDecodeKHR,
 		eTransfer });
 
-	const std::optional<QueueFamilyIndices> indices = FindQueueFamilies(families);
+	const std::optional<QueueFamilyIndices> indices = FindAllPresenting(families);
 	CDL_CHECK(indices.has_value());
 	CDL_EXPECT_EQ(indices->Transfer, 2u);
 }
@@ -77,12 +84,12 @@ CDL_TEST_CASE(RenderDevice, SkipsVideoFamiliesForTransfer, Unit)
 // Older Intel iGPUs expose one family for everything, so Transfer has to alias Graphics.
 CDL_TEST_CASE(RenderDevice, TransferAliasesGraphicsWithoutADedicatedFamily, Unit)
 {
-	const std::optional<QueueFamilyIndices> single = FindQueueFamilies(Families({ eGraphics | eCompute | eTransfer }));
+	const std::optional<QueueFamilyIndices> single = FindAllPresenting(Families({ eGraphics | eCompute | eTransfer }));
 	CDL_CHECK(single.has_value());
 	CDL_EXPECT_EQ(single->Graphics, 0u);
 	CDL_EXPECT_EQ(single->Transfer, 0u);
 
-	const std::optional<QueueFamilyIndices> withCompute = FindQueueFamilies(Families({ eGraphics | eCompute | eTransfer, eCompute | eTransfer }));
+	const std::optional<QueueFamilyIndices> withCompute = FindAllPresenting(Families({ eGraphics | eCompute | eTransfer, eCompute | eTransfer }));
 	CDL_CHECK(withCompute.has_value());
 	CDL_EXPECT_EQ(withCompute->Transfer, withCompute->Graphics);
 }
@@ -90,7 +97,7 @@ CDL_TEST_CASE(RenderDevice, TransferAliasesGraphicsWithoutADedicatedFamily, Unit
 // The spec makes reporting the transfer bit optional on graphics and compute families, since both imply it.
 CDL_TEST_CASE(RenderDevice, GraphicsFamilyNeedNotReportTransfer, Unit)
 {
-	const std::optional<QueueFamilyIndices> indices = FindQueueFamilies(Families({ eGraphics | eCompute }));
+	const std::optional<QueueFamilyIndices> indices = FindAllPresenting(Families({ eGraphics | eCompute }));
 	CDL_CHECK(indices.has_value());
 	CDL_EXPECT_EQ(indices->Graphics, 0u);
 	CDL_EXPECT_EQ(indices->Transfer, 0u);
@@ -98,7 +105,7 @@ CDL_TEST_CASE(RenderDevice, GraphicsFamilyNeedNotReportTransfer, Unit)
 
 CDL_TEST_CASE(RenderDevice, FindsAGraphicsFamilyThatIsNotFirst, Unit)
 {
-	const std::optional<QueueFamilyIndices> indices = FindQueueFamilies(Families({ eCompute | eTransfer, eTransfer, eGraphics | eCompute | eTransfer }));
+	const std::optional<QueueFamilyIndices> indices = FindAllPresenting(Families({ eCompute | eTransfer, eTransfer, eGraphics | eCompute | eTransfer }));
 	CDL_CHECK(indices.has_value());
 	CDL_EXPECT_EQ(indices->Graphics, 2u);
 	CDL_EXPECT_EQ(indices->Transfer, 1u);
@@ -107,8 +114,29 @@ CDL_TEST_CASE(RenderDevice, FindsAGraphicsFamilyThatIsNotFirst, Unit)
 // Graphics and compute must share a family; split across two, the device is unsuitable.
 CDL_TEST_CASE(RenderDevice, RejectsADeviceWithoutAGraphicsComputeFamily, Unit)
 {
-	CDL_EXPECT_FALSE(FindQueueFamilies(Families({ eGraphics | eTransfer, eCompute | eTransfer })).has_value());
-	CDL_EXPECT_FALSE(FindQueueFamilies({}).has_value());
+	CDL_EXPECT_FALSE(FindAllPresenting(Families({ eGraphics | eTransfer, eCompute | eTransfer })).has_value());
+	CDL_EXPECT_FALSE(FindAllPresenting({}).has_value());
+}
+
+// Presenting gates Graphics only; the DMA family is still taken for transfer though it cannot present.
+CDL_TEST_CASE(RenderDevice, SkipsAGraphicsFamilyThatCannotPresent, Unit)
+{
+	const auto families = Families({ eGraphics | eCompute | eTransfer, eTransfer, eGraphics | eCompute | eTransfer });
+	const std::vector<vk::Bool32> presentSupport = { VK_FALSE, VK_FALSE, VK_TRUE };
+
+	const std::optional<QueueFamilyIndices> indices = FindQueueFamilies(families, presentSupport);
+	CDL_CHECK(indices.has_value());
+	CDL_EXPECT_EQ(indices->Graphics, 2u);
+	CDL_EXPECT_EQ(indices->Transfer, 1u);
+}
+
+// A present-capable family that can't do graphics doesn't help; Candle has no separate present queue.
+CDL_TEST_CASE(RenderDevice, RejectsADeviceWhoseGraphicsFamilyCannotPresent, Unit)
+{
+	const auto families = Families({ eGraphics | eCompute | eTransfer, eCompute | eTransfer });
+	const std::vector<vk::Bool32> presentSupport = { VK_FALSE, VK_TRUE };
+
+	CDL_EXPECT_FALSE(FindQueueFamilies(families, presentSupport).has_value());
 }
 
 // Selection, logical device and queue retrieval on whatever GPU the machine picks, checked by validation.

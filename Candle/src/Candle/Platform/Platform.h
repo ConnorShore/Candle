@@ -14,7 +14,16 @@
 #include <expected>
 #include <span>
 
+namespace vk::raii
+{
+	class PhysicalDevice;
+	class SurfaceKHR;
+}
+
 namespace Candle {
+
+	class Window;
+	class RenderInstance;
 
 	struct Tick
 	{
@@ -72,6 +81,8 @@ namespace Candle {
 
 		// Rendering //
 		static const char* const* GetVulkanRequiredInstanceExtensions(uint32_t& outCount);
+		static ::vk::raii::SurfaceKHR CreateVulkanSurface(Window& window, RenderInstance& renderInstance);
+		static bool GetVulkanPresentationSupport(RenderInstance& renderInstance, const ::vk::raii::PhysicalDevice& physicalDevice, uint32_t queueFamily);
 
 		// Time //
 		static Tick GetStartTick();

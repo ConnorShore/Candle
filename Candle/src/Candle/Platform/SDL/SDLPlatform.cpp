@@ -1,8 +1,11 @@
 #include "cdlpch.h"
 #include "SDLPlatform.h"
 #include "Candle/Platform/Platform.h"
+#include "Candle/Core/Window.h"
+#include "Candle/Render/RenderInstance.h"
 
 #include <SDL3/SDL_vulkan.h>
+#include <vulkan/vulkan_raii.hpp>
 
 namespace Candle {
 
@@ -142,6 +145,38 @@ namespace Candle {
 			throw std::runtime_error(error);
 		}
 		return extensions;
+	}
+
+	::vk::raii::SurfaceKHR Platform::CreateVulkanSurface(Window& window, RenderInstance& renderInstance)
+	{
+		SDL_Window* sdlWindow = reinterpret_cast<SDL_Window*>(window.GetNativeHandle());
+		VkSurfaceKHR surface = VK_NULL_HANDLE;
+		if (!SDL_Vulkan_CreateSurface(sdlWindow, *renderInstance.GetVulkanInstance(), nullptr, &surface)) {
+			//std::cerr << "Failed to create Vulkan surface: " << SDL_GetError() << std::endl;
+			//vkDestroyInstance(instance, nullptr);
+			//SDL_DestroyWindow(window);
+			//SDL_Quit();
+			//return nullptr;
+
+			CDL_CORE_ERROR(LogChannel::Render, "Failed to create Vulkan surface: {}", SDL_GetError());
+			// Throw error or return some null/invalid surface handle and handle it in the calling code??
+		}
+
+		return ::vk::raii::SurfaceKHR{ renderInstance.GetVulkanInstance(), surface };
+	}
+
+	bool Platform::GetVulkanPresentationSupport(RenderInstance& renderInstance, const ::vk::raii::PhysicalDevice& physicalDevice, uint32_t queueFamily)
+	{
+		CDL_CORE_ASSERT(IsWindowingInitialized(), "Vulkan presentation support needs the windowing backend initialized");
+
+		SDL_ClearError();
+		if (SDL_Vulkan_GetPresentationSupport(*renderInstance.GetVulkanInstance(), *physicalDevice, queueFamily))
+			return true;
+
+		if (const char* error = SDL_GetError(); *error != '\0')
+			CDL_CORE_ERROR(LogChannel::Render, "SDL_Vulkan_GetPresentationSupport failed for queue family {}: {}", queueFamily, error);
+
+		return false;
 	}
 
 }
