@@ -69,11 +69,10 @@ namespace Candle {
 	}
 
 
-	SwapChain::SwapChain(Window& window, RenderInstance& renderInstance, RenderDevice& renderDevice)
-		: m_Surface(std::move(Platform::CreateVulkanSurface(window, renderInstance)))
+	SwapChain::SwapChain(RenderInstance& renderInstance, RenderDevice& renderDevice, Window& window)
+		: m_RenderDevice(renderDevice), m_Surface(std::move(Platform::CreateVulkanSurface(window, renderInstance)))
 	{
-		CreateSwapChain(window, renderDevice);
-		CreateImages(renderDevice);
+		Recreate(window.GetSize());
 	}
 
 	SwapChain::~SwapChain()
@@ -81,16 +80,19 @@ namespace Candle {
 
 	}
 
-	void SwapChain::CreateSwapChain(Window& window, RenderDevice& renderDevice)
+	void SwapChain::Recreate(const glm::uvec2& extent)
 	{
-		auto physicalDevice = renderDevice.GetPhysicalDevice();
+		CreateSwapChain(extent);
+		CreateImages();
+	}
+
+	void SwapChain::CreateSwapChain(const glm::uvec2& extent)
+	{
+		auto physicalDevice = m_RenderDevice.GetPhysicalDevice();
 
 		vk::SurfaceCapabilitiesKHR surfaceCapabilities = physicalDevice.getSurfaceCapabilitiesKHR(*m_Surface);
 		std::vector<vk::SurfaceFormatKHR> availableFormats = physicalDevice.getSurfaceFormatsKHR(*m_Surface);
 		std::vector<vk::PresentModeKHR> availablePresentModes = physicalDevice.getSurfacePresentModesKHR(*m_Surface);
-
-		vk::Extent2D swapChainExtent = ChooseSwapExtent(surfaceCapabilities, window);
-		m_Extent = glm::uvec2(swapChainExtent.width, swapChainExtent.height);
 
 		uint32_t minImageCount = ChooseSwapMinImageCount(surfaceCapabilities);
 		m_SwapChainSurfaceFormat = ChooseSwapSurfaceFormat(availableFormats);
@@ -100,7 +102,7 @@ namespace Candle {
 											   .minImageCount = minImageCount,
 											   .imageFormat = m_SwapChainSurfaceFormat.format,
 											   .imageColorSpace = m_SwapChainSurfaceFormat.colorSpace,
-											   .imageExtent = swapChainExtent,
+											   .imageExtent = vk::Extent2D(extent.x, extent.y),
 											   .imageArrayLayers = 1,
 											   .imageUsage = vk::ImageUsageFlagBits::eColorAttachment,
 											   .imageSharingMode = vk::SharingMode::eExclusive,
@@ -109,10 +111,10 @@ namespace Candle {
 											   .presentMode = ChooseSwapPresentMode(availablePresentModes),
 											   .clipped = true };
 
-		m_SwapChain = vk::raii::SwapchainKHR(renderDevice.GetDevice(), swapChainCreateInfo);
+		m_SwapChain = vk::raii::SwapchainKHR(m_RenderDevice.GetDevice(), swapChainCreateInfo);
 	}
 
-	void SwapChain::CreateImages(RenderDevice& renderDevice)
+	void SwapChain::CreateImages()
 	{
 		std::vector<vk::Image> swapChainImages = m_SwapChain.getImages();
 		vk::ImageViewCreateInfo imageViewCreateInfo{ .viewType = vk::ImageViewType::e2D,
@@ -125,8 +127,8 @@ namespace Candle {
 		{
 			imageViewCreateInfo.image = image;
 
-			vk::raii::ImageView imageView(renderDevice.GetDevice(), imageViewCreateInfo);
-			m_SwapChainImages.emplace_back(std::move(image), std::move(imageView));
+			vk::raii::ImageView imageView(m_RenderDevice.GetDevice(), imageViewCreateInfo);
+			m_SwapChainImages.emplace_back(image, std::move(imageView));
 		}
 	}
 
