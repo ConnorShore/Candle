@@ -1,5 +1,7 @@
 #pragma once
 
+#include "Image.h"
+
 #include <vulkan/vulkan_raii.hpp>
 #include <glm/glm.hpp>
 
@@ -10,7 +12,6 @@ namespace Candle {
 	class Window;
 	class RenderInstance;
 	class RenderDevice;
-	class Image;
 
 	// Holds the vulkan swapchain, surface, images and image views; dynamic rendering needs no framebuffers
 	// Can be used on render thread only
@@ -18,9 +19,11 @@ namespace Candle {
 	{
 	public:
 		SwapChain(RenderInstance& renderInstance, RenderDevice& renderDevice, Window& window);
-		~SwapChain();
+		~SwapChain() = default;
 
 		void Recreate(const glm::uvec2& extent);
+
+		inline const vk::SurfaceFormatKHR& GetSurfaceFormat() const { return m_SwapChainSurfaceFormat; }
 
 	private:
 		// Must be created on the main thread as it requires getting the window size from the windowing backend, which is main thread only.

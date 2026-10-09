@@ -40,7 +40,7 @@ namespace Candle {
 		}
 
 		// The swap extent is the resolution of the images in the swap chain. The swap extent is determined by the surface capabilities and the window size.
-		vk::Extent2D ChooseSwapExtent(vk::SurfaceCapabilitiesKHR const& capabilities, Window& window)
+		vk::Extent2D ChooseSwapExtent(vk::SurfaceCapabilitiesKHR const& capabilities, glm::uvec2 extent)
 		{
 			// currentExtent is only set to the special "undefined" value described above
 			// when the window manager lets us choose the extent ourselves; any other value
@@ -49,8 +49,8 @@ namespace Candle {
 				return capabilities.currentExtent;
 
 			return {
-				std::clamp<uint32_t>(window.GetWidth(), capabilities.minImageExtent.width, capabilities.maxImageExtent.width),
-				std::clamp<uint32_t>(window.GetHeight(), capabilities.minImageExtent.height, capabilities.maxImageExtent.height)
+				std::clamp<uint32_t>(extent.x, capabilities.minImageExtent.width, capabilities.maxImageExtent.width),
+				std::clamp<uint32_t>(extent.y, capabilities.minImageExtent.height, capabilities.maxImageExtent.height)
 			};
 		}
 
@@ -72,12 +72,11 @@ namespace Candle {
 	SwapChain::SwapChain(RenderInstance& renderInstance, RenderDevice& renderDevice, Window& window)
 		: m_RenderDevice(renderDevice), m_Surface(std::move(Platform::CreateVulkanSurface(window, renderInstance)))
 	{
+		// Only query the available formats once, as they are unlikely to change during the lifetime of the application.
+		std::vector<vk::SurfaceFormatKHR> availableFormats = m_RenderDevice.GetPhysicalDevice().getSurfaceFormatsKHR(*m_Surface);
+		m_SwapChainSurfaceFormat = ChooseSwapSurfaceFormat(availableFormats);
+
 		Recreate(window.GetSize());
-	}
-
-	SwapChain::~SwapChain()
-	{
-
 	}
 
 	void SwapChain::Recreate(const glm::uvec2& extent)
@@ -91,18 +90,17 @@ namespace Candle {
 		auto physicalDevice = m_RenderDevice.GetPhysicalDevice();
 
 		vk::SurfaceCapabilitiesKHR surfaceCapabilities = physicalDevice.getSurfaceCapabilitiesKHR(*m_Surface);
-		std::vector<vk::SurfaceFormatKHR> availableFormats = physicalDevice.getSurfaceFormatsKHR(*m_Surface);
 		std::vector<vk::PresentModeKHR> availablePresentModes = physicalDevice.getSurfacePresentModesKHR(*m_Surface);
 
 		uint32_t minImageCount = ChooseSwapMinImageCount(surfaceCapabilities);
-		m_SwapChainSurfaceFormat = ChooseSwapSurfaceFormat(availableFormats);
+		vk::Extent2D swapChainExtent = ChooseSwapExtent(surfaceCapabilities, extent);
 
 		// Create the swap chain using the chosen settings
 		vk::SwapchainCreateInfoKHR swapChainCreateInfo{ .surface = *m_Surface,
 											   .minImageCount = minImageCount,
 											   .imageFormat = m_SwapChainSurfaceFormat.format,
 											   .imageColorSpace = m_SwapChainSurfaceFormat.colorSpace,
-											   .imageExtent = vk::Extent2D(extent.x, extent.y),
+											   .imageExtent = swapChainExtent,
 											   .imageArrayLayers = 1,
 											   .imageUsage = vk::ImageUsageFlagBits::eColorAttachment,
 											   .imageSharingMode = vk::SharingMode::eExclusive,

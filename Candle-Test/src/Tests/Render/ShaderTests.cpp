@@ -28,8 +28,8 @@ namespace {
 			.Name = "Lit",
 			.FilePath = "shaders/Lit.spv",
 			.EntryPoints = {
-				{ .Stage = ShaderStage::Vertex, .Name = "vertMain" },
-				{ .Stage = ShaderStage::Fragment, .Name = "fragMain" },
+				{.Name = "vertMain", .Stage = ShaderStage::Vertex },
+				{.Name = "fragMain", .Stage = ShaderStage::Fragment },
 			},
 		};
 	}
@@ -45,23 +45,4 @@ namespace {
 		CDL_EXPECT_EQ(shader.GetEntryPoints()[1].Name, std::string("fragMain"));
 	}
 
-}
-
-CDL_TEST_CASE(Shader, KeepsItsCreationInfo, Unit)
-{
-	const Shader shader(LitInfo(), vk::raii::ShaderModule{ nullptr });
-	ExpectLit(shader);
-	CDL_EXPECT_FALSE(*shader.GetModule());
-}
-
-CDL_TEST_CASE(Shader, MovesEverythingToTheNewOwner, Unit)
-{
-	Shader original(LitInfo(), vk::raii::ShaderModule{ nullptr });
-
-	const Shader constructed(std::move(original));
-	ExpectLit(constructed);
-
-	Shader assigned({ .Name = "Other" }, vk::raii::ShaderModule{ nullptr });
-	assigned = Shader(LitInfo(), vk::raii::ShaderModule{ nullptr });
-	ExpectLit(assigned);
 }

@@ -27,7 +27,7 @@ namespace Candle {
 		, m_RenderInstance(CreateRenderInstanceSpec(renderSpec, appInfo))
 		, m_RenderDevice(m_RenderInstance, m_Specification)
 		, m_SwapChain(m_RenderInstance, m_RenderDevice, window)
-		, m_Renderer(m_RenderDevice)
+		, m_Renderer(m_RenderDevice, m_SwapChain.GetSurfaceFormat().format)
 	{
 	}
 
