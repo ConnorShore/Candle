@@ -6,6 +6,7 @@
 #include "Window.h"
 
 #include "Candle/Core/Input/InputSystem.h"
+#include "Candle/Core/Job/JobSystem.h"
 
 #include <atomic>
 
@@ -50,8 +51,9 @@ namespace Candle {
 		LoggerScope m_LoggerScope;
 		WindowingScope m_WindowingScope;			// After the logger, so a backend failure can be logged
 		ScopedPtr<Window> m_Window;					// Empty when headless
-		ScopedPtr<RenderManager> m_RenderManager;	// Empty when headless
 		InputSystem m_InputSystem;					// Never fed when headless, since nothing is pumped
+		JobSystem m_JobSystem;
+		ScopedPtr<RenderManager> m_RenderManager;	// Empty when headless
 
 		std::atomic<bool> m_QuitRequested{ false };
 		FrameStats m_FrameStats;

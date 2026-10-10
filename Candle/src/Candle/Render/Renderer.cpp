@@ -1,8 +1,12 @@
 #include "cdlpch.h"
+
 #include "Renderer.h"
 #include "RenderDevice.h"
 #include "PipelineSpecification.h"
 #include "ShaderLoader.h"
+#include "FramePacket.h"
+#include "FrameContext.h"
+#include "Image.h"
 
 namespace Candle {
 
@@ -21,6 +25,14 @@ namespace Candle {
 		};
 
 		CreatePipeline(spec);
+	}
+
+	void Renderer::Render(const FramePacket& packet, FrameContext& frame, const Image& target)
+	{
+		// For now, just record a command buffer that draws a triangle to the target image using the first pipeline in m_Pipelines
+		// In the future, this will be more complex and involve a render graph and multiple pipelines
+
+
 	}
 
 	void Renderer::CreatePipeline(PipelineSpecification& spec)

@@ -13,6 +13,12 @@ namespace Candle {
 	class RenderInstance;
 	class RenderDevice;
 
+	struct ImageResult
+	{
+		vk::Result Result;
+		uint32_t ImageIndex;
+	};
+
 	// Holds the vulkan swapchain, surface, images and image views; dynamic rendering needs no framebuffers
 	// Can be used on render thread only
 	class SwapChain
@@ -21,8 +27,11 @@ namespace Candle {
 		SwapChain(RenderInstance& renderInstance, RenderDevice& renderDevice, Window& window);
 		~SwapChain() = default;
 
+		ImageResult AquireNextImage(vk::raii::Semaphore& signalSemaphore, uint64_t timeout = UINT64_MAX);
+
 		void Recreate(const glm::uvec2& extent);
 
+		inline const Image& GetImage(uint32_t imageIndex) { return m_SwapChainImages[imageIndex]; }
 		inline const vk::SurfaceFormatKHR& GetSurfaceFormat() const { return m_SwapChainSurfaceFormat; }
 
 	private:

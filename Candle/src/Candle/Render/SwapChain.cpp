@@ -79,6 +79,12 @@ namespace Candle {
 		Recreate(window.GetSize());
 	}
 
+	ImageResult SwapChain::AquireNextImage(vk::raii::Semaphore& signalSemaphore, uint64_t timeout /*= UINT64_MAX*/)
+	{
+		auto [result, index] = m_SwapChain.acquireNextImage(timeout, *signalSemaphore, nullptr);
+		return { result, index };
+	}
+
 	void SwapChain::Recreate(const glm::uvec2& extent)
 	{
 		CreateSwapChain(extent);

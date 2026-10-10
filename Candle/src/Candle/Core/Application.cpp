@@ -21,7 +21,7 @@ namespace Candle {
 		, m_LoggerScope(m_Specification.LoggerSpec)
 		, m_WindowingScope(!m_Specification.Headless)
 		, m_Window(m_Specification.Headless ? ScopedPtr<Window>() : ScopedPtr<Window>::Create(m_Specification.WindowSpec))
-		, m_RenderManager(m_Specification.Headless ? ScopedPtr<RenderManager>() : ScopedPtr<RenderManager>::Create(m_Specification.RenderSpec, m_Specification.AppInfo, *m_Window))
+		, m_RenderManager(m_Specification.Headless ? ScopedPtr<RenderManager>() : ScopedPtr<RenderManager>::Create(m_Specification.RenderSpec, m_Specification.AppInfo, *m_Window, m_JobSystem))
 	{
 		CDL_CORE_INFO(LogChannel::Application, "Application created: {}", m_Specification.AppInfo.Name);
 	}
@@ -44,6 +44,9 @@ namespace Candle {
 			InputSnapshot inputSnapshot = m_InputSystem.CaptureSnapshot();
 
 			// TODO: Implement game logic
+
+			// TODO: This will be ran by the render thread, but here for now so we can get a triangle to render
+			m_RenderManager->RenderThreadMain();
 
 			// Update the frame stats
 			Tick endTick = Platform::GetTick();
