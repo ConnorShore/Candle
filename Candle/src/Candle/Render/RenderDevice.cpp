@@ -5,12 +5,17 @@
 #include "RenderSpecification.h"
 #include "VulkanUtils.h"
 
+#include "Candle/Core/Threading/ScopedLock.h"
+#include "Candle/Platform/Platform.h"
+
 namespace Candle {
 
-	// Graphics needs graphics + compute (either implies transfer)
+	// Graphics needs graphics + compute (either implies transfer) + present
 	// Transfer prefers a dedicated DMA family.
-	std::optional<QueueFamilyIndices> FindQueueFamilies(std::span<const vk::QueueFamilyProperties> families)
+	std::optional<QueueFamilyIndices> FindQueueFamilies(std::span<const vk::QueueFamilyProperties> families, std::span<const vk::Bool32> presentSupport)
 	{
+		CDL_CORE_ASSERT(presentSupport.size() == families.size(), "Need one present-support entry per queue family");
+
 		constexpr vk::QueueFlags graphicsCompute = vk::QueueFlagBits::eGraphics | vk::QueueFlagBits::eCompute;
 		// Sparse binding and protected don't stop a family being a copy engine; video or compute bits do.
 		constexpr vk::QueueFlags dmaFlags = vk::QueueFlagBits::eTransfer | vk::QueueFlagBits::eSparseBinding | vk::QueueFlagBits::eProtected;
@@ -19,7 +24,7 @@ namespace Candle {
 		for (uint32_t i = 0; i < families.size(); ++i)
 		{
 			vk::QueueFlags flags = families[i].queueFlags;
-			if (!graphics && (flags & graphicsCompute) == graphicsCompute)
+			if (!graphics && (flags & graphicsCompute) == graphicsCompute && presentSupport[i])
 				graphics = i;
 			if (!transfer && (flags & vk::QueueFlagBits::eTransfer) && !(flags & ~dmaFlags))
 				transfer = i;
@@ -43,7 +48,7 @@ namespace Candle {
 			QueueFamilyIndices QueueFamilies;
 		};
 
-		std::optional<QueueFamilyIndices> IsPhysicalDeviceSuitable(RenderSpecification renderSpec, vk::raii::PhysicalDevice const& physicalDevice)
+		std::optional<QueueFamilyIndices> IsPhysicalDeviceSuitable(RenderInstance& instance, RenderSpecification renderSpec, vk::raii::PhysicalDevice const& physicalDevice)
 		{
 			bool supportsVulkan = physicalDevice.getProperties().apiVersion >= ToVulkanApiVersion(renderSpec.VulkanVersion);
 
@@ -79,14 +84,20 @@ namespace Candle {
 			// Suitable devices also report the queue families to use, so selection and creation can't disagree
 			if (!supportsVulkan || !supportsAllRequiredExtensions || !supportsRequiredFeatures || !isPreferredDeviceType)
 				return std::nullopt;
-			return FindQueueFamilies(physicalDevice.getQueueFamilyProperties());
+
+			// Find queue families that support graphics + present, and a dedicated transfer queue if available
+			const std::vector<vk::QueueFamilyProperties> families = physicalDevice.getQueueFamilyProperties();
+			std::vector<vk::Bool32> presentSupport(families.size());
+			for (uint32_t i = 0; i < families.size(); ++i)
+				presentSupport[i] = Platform::GetVulkanPresentationSupport(instance, physicalDevice, i);
+			return FindQueueFamilies(families, presentSupport);
 		}
 
 		PhysicalDeviceSelection SelectPhysicalDevice(RenderInstance& instance, const RenderSpecification& renderSpec)
 		{
 			for (vk::raii::PhysicalDevice& physicalDevice : instance.GetVulkanInstance().enumeratePhysicalDevices())
 			{
-				if (auto queueFamilies = IsPhysicalDeviceSuitable(renderSpec, physicalDevice))
+				if (auto queueFamilies = IsPhysicalDeviceSuitable(instance, renderSpec, physicalDevice))
 				{
 					std::string deviceName = physicalDevice.getProperties().deviceName;
 					CDL_CORE_INFO(LogChannel::Render, "Selected Render Device: {0}", deviceName);
@@ -104,6 +115,59 @@ namespace Candle {
 		m_PhysicalDevice = std::move(selection.PhysicalDevice);
 		m_QueueFamilies = selection.QueueFamilies;
 		CreateLogicalDeviceAndQueues();
+	}
+
+	uint64_t RenderDevice::Submit(QueueType queue, const SubmitDesc& desc)
+	{
+		CDL_CORE_ASSERT(desc.Signals.size() <= SubmitDesc::kMaxSignals, "Too many signal semaphores in one submit");
+
+		QueueState& state = *m_Queues[std::to_underlying(queue)];
+
+		std::array<vk::SemaphoreSubmitInfo, SubmitDesc::kMaxSignals + 1> signals{};
+		std::ranges::copy(desc.Signals, signals.begin());
+
+		// Timeline waiters reset command pools and free memory, so every stage of the submission must be finished
+		vk::SemaphoreSubmitInfo& timelineSignal = signals[desc.Signals.size()];
+		timelineSignal.semaphore = *state.Timeline;
+		timelineSignal.stageMask = vk::PipelineStageFlagBits2::eAllCommands;
+
+		vk::SubmitInfo2 submitInfo{
+			.waitSemaphoreInfoCount = static_cast<uint32_t>(desc.Waits.size()),
+			.pWaitSemaphoreInfos = desc.Waits.data(),
+			.commandBufferInfoCount = static_cast<uint32_t>(desc.CommandBuffers.size()),
+			.pCommandBufferInfos = desc.CommandBuffers.data(),
+			.signalSemaphoreInfoCount = static_cast<uint32_t>(desc.Signals.size() + 1),
+			.pSignalSemaphoreInfos = signals.data() };
+
+		ScopedLock<AdaptiveSpinLock> lock(state.SubmitLock);
+		timelineSignal.value = ++state.LastSubmitted;
+		state.Queue.submit2(submitInfo);
+		return timelineSignal.value;
+	}
+
+	vk::Result RenderDevice::Present(const vk::PresentInfoKHR& presentInfo)
+	{
+		QueueState& state = *m_Queues[std::to_underlying(QueueType::Graphics)];
+		ScopedLock<AdaptiveSpinLock> lock(state.SubmitLock);
+		return state.Queue.presentKHR(presentInfo);
+	}
+
+	void RenderDevice::WaitFor(QueueType queue, uint64_t value) const
+	{
+		const QueueState& state = *m_Queues[std::to_underlying(queue)];
+		vk::SemaphoreWaitInfo waitInfo{ .semaphoreCount = 1, .pSemaphores = &*state.Timeline, .pValues = &value };
+
+		// With no timeout the only result that doesn't throw is eSuccess
+		[[maybe_unused]] vk::Result result = m_LogicalDevice.waitSemaphores(waitInfo, UINT64_MAX);
+		CDL_CORE_ASSERT(result == vk::Result::eSuccess, "Untimed timeline wait returned early");
+	}
+
+	void RenderDevice::WaitIdle()
+	{
+		// Locks the storage, not m_Queues, so an aliased queue's lock isn't taken twice
+		ScopedLock<AdaptiveSpinLock> graphicsLock(m_QueueStates[std::to_underlying(QueueType::Graphics)].SubmitLock);
+		ScopedLock<AdaptiveSpinLock> transferLock(m_QueueStates[std::to_underlying(QueueType::Transfer)].SubmitLock);
+		m_LogicalDevice.waitIdle();
 	}
 
 	void RenderDevice::CreateLogicalDeviceAndQueues()
@@ -144,14 +208,25 @@ namespace Candle {
 
 		m_LogicalDevice = vk::raii::Device(m_PhysicalDevice, deviceCreateInfo);
 
+		vk::SemaphoreTypeCreateInfo timelineType{ .semaphoreType = vk::SemaphoreType::eTimeline, .initialValue = 0 };
+		vk::SemaphoreCreateInfo timelineCreateInfo{ .pNext = &timelineType };
+
 		// Queue index 0 within each family, the only queue created in it
+		auto createQueue = [&](QueueType queue, uint32_t family)
+		{
+			QueueState& state = m_QueueStates[std::to_underlying(queue)];
+			state.Queue = vk::raii::Queue(m_LogicalDevice, family, 0);
+			state.Timeline = vk::raii::Semaphore(m_LogicalDevice, timelineCreateInfo);
+			return &state;
+		};
+
 		constexpr size_t graphicsSlot = std::to_underlying(QueueType::Graphics);
 		constexpr size_t transferSlot = std::to_underlying(QueueType::Transfer);
-		m_Queues[graphicsSlot] = { vk::raii::Queue(m_LogicalDevice, m_QueueFamilies.Graphics, 0), &m_SubmitLocks[graphicsSlot] };
+		m_Queues[graphicsSlot] = createQueue(QueueType::Graphics, m_QueueFamilies.Graphics);
 		if (m_QueueFamilies.Transfer == m_QueueFamilies.Graphics)
 			m_Queues[transferSlot] = m_Queues[graphicsSlot];
 		else
-			m_Queues[transferSlot] = { vk::raii::Queue(m_LogicalDevice, m_QueueFamilies.Transfer, 0), &m_SubmitLocks[transferSlot] };
+			m_Queues[transferSlot] = createQueue(QueueType::Transfer, m_QueueFamilies.Transfer);
 	}
 
 }

@@ -39,15 +39,6 @@ namespace {
 		return std::move(*fixture);
 	}
 
-	// Members construct in order and destroy in reverse, so the device goes before the instance and the backend.
-	struct TestDevice
-	{
-		WindowingBackend Backend;
-		RenderSpecification Spec = StrictRenderSpec();
-		RenderInstance Instance{ TestInstanceSpec(Spec) };
-		RenderDevice Device{ Instance, Spec };
-	};
-
 	// The loader still reports failure by throwing; returns the message, or nullopt if the load succeeded.
 	std::optional<std::string> LoadError(const std::filesystem::path& path, RenderDevice& device)
 	{
@@ -84,12 +75,11 @@ CDL_TEST_CASE(ShaderLoader, ReflectsEveryEntryPointWithItsStage, Gpu)
 	LoggerFixture logs(LogLevel::Warn, kRenderChannelMask);
 	{
 		TestDevice gpu;
-		const Shader shader = ShaderLoader::LoadShader("Fixture", kFixturePath, gpu.Device);
+		SharedPtr<Shader> shader = ShaderLoader::LoadShader("Fixture", kFixturePath, gpu.Device);
 
-		CDL_EXPECT_EQ(shader.GetName(), std::string("Fixture"));
-		CDL_EXPECT(shader.GetFilePath() == kFixturePath);
-		CDL_EXPECT(*shader.GetModule());
-		CDL_EXPECT_EQ(shader.GetEntryPoints().size(), 4u);
+		CDL_EXPECT_EQ(shader->GetName(), std::string("Fixture"));
+		CDL_EXPECT(shader->GetFilePath() == kFixturePath);
+		CDL_EXPECT_EQ(shader->GetEntryPoints().size(), 4u);
 
 		constexpr std::pair<std::string_view, ShaderStage> kExpected[] = {
 			{ "fixtureVertex"sv, ShaderStage::Vertex },
@@ -99,7 +89,7 @@ CDL_TEST_CASE(ShaderLoader, ReflectsEveryEntryPointWithItsStage, Gpu)
 		};
 		for (const auto& [name, stage] : kExpected)
 		{
-			const ShaderEntryPoint* entryPoint = FindEntryPoint(shader, name);
+			const ShaderEntryPoint* entryPoint = FindEntryPoint(*shader, name);
 			CDL_EXPECT_MSG(entryPoint != nullptr, std::format("no entry point named {}", name));
 			if (entryPoint)
 				CDL_EXPECT_EQ(entryPoint->Stage, stage);

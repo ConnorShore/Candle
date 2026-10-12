@@ -30,6 +30,8 @@ namespace Candle {
 		// Any non-worker thread. Never call from inside a job: if every worker blocks on queued work, nothing can run it (asserted).
 		void WaitForJob(JobHandle job);
 
+		inline uint32_t GetNumWorkers() const { return static_cast<uint32_t>(m_Workers.size()); }
+
 	private:
 		void QueueJobSlot(uint32_t slotIndex);
 		void FinishJob(uint32_t jobRunSlotIndex);	// One chunk done; the last one calls FinishSlot

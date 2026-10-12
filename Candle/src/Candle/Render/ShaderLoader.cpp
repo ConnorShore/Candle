@@ -74,7 +74,7 @@ namespace Candle {
 
 				// In future, handle descriptor sets, push constants, etc. here as well
 
-				entryPoints.push_back({ .Stage = stage, .Name = shaderModule.GetEntryPointName(i) });
+				entryPoints.push_back({ .Name = shaderModule.GetEntryPointName(i), .Stage = stage });
 			}
 
 			return entryPoints;
@@ -82,9 +82,9 @@ namespace Candle {
 
 	}
 
-	Shader ShaderLoader::LoadShader(const std::string& name, const std::filesystem::path& filePath, RenderDevice& device)
+	SharedPtr<Shader> ShaderLoader::LoadShader(const std::string& name, const std::filesystem::path& filePath, RenderDevice& device)
 	{
-		const std::vector<std::byte> shaderCode = ReadShaderFile(filePath);
+		std::vector<std::byte> shaderCode = ReadShaderFile(filePath);
 
 		// ReadShaderFile guarantees at least one word; memcpy because the buffer holds bytes, not uint32_t objects.
 		uint32_t magic = 0;
@@ -100,18 +100,7 @@ namespace Candle {
 			.EntryPoints = ExtractShaderSourceInfo(shaderCode, filePath)
 		};
 
-		// pCode must be 4-byte aligned; the vector's storage comes from operator new, which aligns to at least this.
-		CDL_STATIC_ASSERT(__STDCPP_DEFAULT_NEW_ALIGNMENT__ >= alignof(uint32_t));
-		vk::ShaderModuleCreateInfo createInfo{
-			.codeSize = shaderCode.size(),
-			.pCode = reinterpret_cast<const uint32_t*>(shaderCode.data())
-		};
-		vk::raii::ShaderModule shaderModule{
-			device.GetDevice(),
-			createInfo
-		};
-
-		return { std::move(shaderInfo), std::move(shaderModule) };
+		return SharedPtr<Shader>::Create(std::move(shaderInfo), std::move(shaderCode));
 	}
 
 }

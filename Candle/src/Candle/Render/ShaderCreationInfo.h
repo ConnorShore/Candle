@@ -17,8 +17,8 @@ namespace Candle {
 	// Reflection is per entry point, not per stage: one .spv holds every entry point of its source, and may hold several of one stage.
 	struct ShaderEntryPoint
 	{
-		ShaderStage Stage;
 		std::string Name;
+		ShaderStage Stage;
 		// In future will add more info such as descriptor sets, push constants, etc.
 	};
 
