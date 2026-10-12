@@ -39,15 +39,6 @@ namespace {
 		return std::move(*fixture);
 	}
 
-	// Members construct in order and destroy in reverse, so the device goes before the instance and the backend.
-	struct TestDevice
-	{
-		WindowingBackend Backend;
-		RenderSpecification Spec = StrictRenderSpec();
-		RenderInstance Instance{ TestInstanceSpec(Spec) };
-		RenderDevice Device{ Instance, Spec };
-	};
-
 	// The loader still reports failure by throwing; returns the message, or nullopt if the load succeeded.
 	std::optional<std::string> LoadError(const std::filesystem::path& path, RenderDevice& device)
 	{

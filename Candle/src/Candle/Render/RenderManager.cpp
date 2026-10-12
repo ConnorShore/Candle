@@ -87,6 +87,7 @@ namespace Candle {
 		{
 			//framebufferResized = false;
 			// TODO: Reset/recreate other resources that need it
+			m_RenderDevice.WaitIdle();
 			RecreateResources();
 			return;
 		}

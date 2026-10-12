@@ -147,11 +147,12 @@ namespace Candle {
 			.depthAttachmentFormat = m_Specification.DepthAttachmentFormat};
 
 		// Create the graphics pipeline
+		vk::PipelineVertexInputStateCreateInfo vertexInputInfo{};	// No vertex input for now, will revisit later once I get to the vertex input chapter
 		vk::StructureChain<vk::GraphicsPipelineCreateInfo, vk::PipelineRenderingCreateInfo> pipelineCreateInfoChain = {
 													{
 													 .stageCount = static_cast<uint32_t>(shaderStages.size()),
 													 .pStages = shaderStages.data(),
-													 .pVertexInputState = nullptr, // No vertex input for now, will revisit later once I get to the vertex input chapter
+													 .pVertexInputState = &vertexInputInfo,
 													 .pInputAssemblyState = &inputAssembly,
 													 .pViewportState = &viewportState,
 													 .pRasterizationState = &rasterizer,

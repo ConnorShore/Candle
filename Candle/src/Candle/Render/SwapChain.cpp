@@ -151,7 +151,8 @@ namespace Candle {
 											   .preTransform = surfaceCapabilities.currentTransform,
 											   .compositeAlpha = vk::CompositeAlphaFlagBitsKHR::eOpaque,
 											   .presentMode = ChooseSwapPresentMode(availablePresentModes),
-											   .clipped = true };
+											   .clipped = true,
+											   .oldSwapchain = *m_SwapChain};
 
 		m_SwapChain = vk::raii::SwapchainKHR(m_RenderDevice.GetDevice(), swapChainCreateInfo);
 	}
