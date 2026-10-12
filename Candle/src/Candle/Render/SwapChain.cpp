@@ -3,6 +3,7 @@
 #include "SwapChain.h"
 #include "RenderInstance.h"
 #include "RenderDevice.h"
+#include "RenderConstants.h"
 #include "Image.h"
 
 #include "Candle/Core/Window.h"
@@ -13,6 +14,9 @@ namespace Candle {
 	namespace {
 
 		constexpr uint32_t kDesiredMinImageCount = 3;
+
+		// An acquired image is first used as a color attachment; its first barrier starts here to chain with the wait
+		constexpr vk::PipelineStageFlags2 kAcquireWaitStage = vk::PipelineStageFlagBits2::eColorAttachmentOutput;
 
 		// Choosing the best surface format is a matter of preference, but we will just pick the first one for now.
 		// The 3 things to consider when choosing a surface format are:
@@ -77,36 +81,70 @@ namespace Candle {
 		m_SwapChainSurfaceFormat = ChooseSwapSurfaceFormat(availableFormats);
 
 		Recreate(window.GetSize());
+
+		m_AcquireSemaphores.reserve(kMaxFramesInFlight);
+		for (uint32_t i = 0; i < kMaxFramesInFlight; ++i)
+			m_AcquireSemaphores.emplace_back(m_RenderDevice.GetDevice(), vk::SemaphoreCreateInfo{});
 	}
 
-	ImageResult SwapChain::AquireNextImage(vk::raii::Semaphore& signalSemaphore, uint64_t timeout /*= UINT64_MAX*/)
+	ImageResult SwapChain::AquireNextImage(uint32_t frameIndex, uint64_t timeout /*= UINT64_MAX*/)
 	{
-		auto [result, index] = m_SwapChain.acquireNextImage(timeout, *signalSemaphore, nullptr);
+		auto [result, index] = m_SwapChain.acquireNextImage(timeout, *m_AcquireSemaphores[frameIndex], nullptr);
+
+		// Presentation leaves no barrier of ours to chain from; Undefined discards contents every frame overwrites
+		if (result == vk::Result::eSuccess || result == vk::Result::eSuboptimalKHR)
+			m_SwapChainImages[index].SetState(vk::ImageLayout::eUndefined, vk::AccessFlagBits2::eNone, kAcquireWaitStage);
+
 		return { result, index };
+	}
+
+	vk::Result SwapChain::Present(uint32_t imageIndex)
+	{
+		vk::PresentInfoKHR presentInfo{
+			.waitSemaphoreCount = 1,
+			.pWaitSemaphores = &*m_PresentSemaphores[imageIndex],
+			.swapchainCount = 1,
+			.pSwapchains = &*m_SwapChain,
+			.pImageIndices = &imageIndex };
+
+		return m_RenderDevice.Present(presentInfo);
+	}
+
+	vk::SemaphoreSubmitInfo SwapChain::GetAcquireWait(uint32_t frameIndex) const
+	{
+		return { .semaphore = *m_AcquireSemaphores[frameIndex], .stageMask = kAcquireWaitStage };
+	}
+
+	vk::SemaphoreSubmitInfo SwapChain::GetPresentSignal(uint32_t imageIndex) const
+	{
+		// All commands, as a legacy vkQueueSubmit signal: presentation must see every write and the final layout transition
+		return { .semaphore = *m_PresentSemaphores[imageIndex], .stageMask = vk::PipelineStageFlagBits2::eAllCommands };
 	}
 
 	void SwapChain::Recreate(const glm::uvec2& extent)
 	{
-		CreateSwapChain(extent);
-		CreateImages();
+		auto physicalDevice = m_RenderDevice.GetPhysicalDevice();
+		vk::SurfaceCapabilitiesKHR surfaceCapabilities = physicalDevice.getSurfaceCapabilitiesKHR(*m_Surface);
+		vk::Extent2D swapChainExtent = ChooseSwapExtent(surfaceCapabilities, extent);
+
+		CreateSwapChain(surfaceCapabilities, swapChainExtent);
+		CreateImages(swapChainExtent);
 	}
 
-	void SwapChain::CreateSwapChain(const glm::uvec2& extent)
+	void SwapChain::CreateSwapChain(const vk::SurfaceCapabilitiesKHR& surfaceCapabilities, const vk::Extent2D& extent)
 	{
 		auto physicalDevice = m_RenderDevice.GetPhysicalDevice();
 
-		vk::SurfaceCapabilitiesKHR surfaceCapabilities = physicalDevice.getSurfaceCapabilitiesKHR(*m_Surface);
 		std::vector<vk::PresentModeKHR> availablePresentModes = physicalDevice.getSurfacePresentModesKHR(*m_Surface);
 
 		uint32_t minImageCount = ChooseSwapMinImageCount(surfaceCapabilities);
-		vk::Extent2D swapChainExtent = ChooseSwapExtent(surfaceCapabilities, extent);
 
 		// Create the swap chain using the chosen settings
 		vk::SwapchainCreateInfoKHR swapChainCreateInfo{ .surface = *m_Surface,
 											   .minImageCount = minImageCount,
 											   .imageFormat = m_SwapChainSurfaceFormat.format,
 											   .imageColorSpace = m_SwapChainSurfaceFormat.colorSpace,
-											   .imageExtent = swapChainExtent,
+											   .imageExtent = extent,
 											   .imageArrayLayers = 1,
 											   .imageUsage = vk::ImageUsageFlagBits::eColorAttachment,
 											   .imageSharingMode = vk::SharingMode::eExclusive,
@@ -118,7 +156,7 @@ namespace Candle {
 		m_SwapChain = vk::raii::SwapchainKHR(m_RenderDevice.GetDevice(), swapChainCreateInfo);
 	}
 
-	void SwapChain::CreateImages()
+	void SwapChain::CreateImages(const vk::Extent2D& extent)
 	{
 		std::vector<vk::Image> swapChainImages = m_SwapChain.getImages();
 		vk::ImageViewCreateInfo imageViewCreateInfo{ .viewType = vk::ImageViewType::e2D,
@@ -126,13 +164,17 @@ namespace Candle {
 													.subresourceRange = {vk::ImageAspectFlagBits::eColor, 0, 1, 0, 1} };
 
 		m_SwapChainImages.clear();
+		m_PresentSemaphores.clear();
 		m_SwapChainImages.reserve(swapChainImages.size());
+		m_PresentSemaphores.reserve(swapChainImages.size());
 		for (const auto& image : swapChainImages)
 		{
 			imageViewCreateInfo.image = image;
 
 			vk::raii::ImageView imageView(m_RenderDevice.GetDevice(), imageViewCreateInfo);
-			m_SwapChainImages.emplace_back(image, std::move(imageView));
+			ImageDesc desc{ .Extent = extent, .Format = m_SwapChainSurfaceFormat.format };
+			m_SwapChainImages.emplace_back(image, std::move(imageView), desc);
+			m_PresentSemaphores.emplace_back(m_RenderDevice.GetDevice(), vk::SemaphoreCreateInfo{});
 		}
 	}
 

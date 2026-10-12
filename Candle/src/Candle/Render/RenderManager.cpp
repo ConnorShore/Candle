@@ -33,39 +33,39 @@ namespace Candle {
 		, m_Renderer(m_RenderDevice, m_SwapChain.GetSurfaceFormat().format)
 		, m_CommandPoolManager(m_RenderDevice, m_JobSystem.GetNumWorkers())
 	{
+		CreateFrameContexts();
 	}
 
 	RenderManager::~RenderManager()
 	{
+		// Members are destroyed after this body returns, and the GPU may still be using them
+		m_RenderDevice.WaitIdle();
 	}
 
 	void RenderManager::RenderThreadMain()
 	{
 		// Wait for a frame slot → acquire → Renderer::Render → submit → present
-		auto& frameContext = m_FrameContexts[m_FrameSync.FrameIndex];
+		FrameContext& frameContext = m_FrameContexts[m_FrameIndex];
 
-		auto fenceResult = m_RenderDevice.GetDevice().waitForFences(*m_FrameSync.InFlightFences[m_FrameSync.FrameIndex], vk::True, UINT64_MAX);
-		if (fenceResult != vk::Result::eSuccess)
-		{
-			// Should I handle this differently?
-			throw std::runtime_error("Failed to wait for fence!");
-		}
-
-		m_CommandPoolManager.BeginFrame(m_FrameSync.FrameIndex);
+		// Once the GPU reaches the slot's retire value, its command pools and acquire semaphore are free to reuse
+		m_RenderDevice.WaitFor(QueueType::Graphics, frameContext.RetireValue);
+		frameContext.CommandPool.reset();
+		m_CommandPoolManager.BeginFrame(m_FrameIndex);
 
 		// Acquire the next image from the swapchain
-		auto [result, imageIndex] = m_SwapChain.AquireNextImage(m_FrameSync.ImageAvailableSemaphores[m_FrameSync.FrameIndex]);
-		//TODO: if (result == vk::Result::eErrorOutOfDateKHR || framebufferResized)
-		//{
-		//	framebufferResized = false;
-		//	recreateSwapChain();
-		//	return;
-		//}
-		//if (result != vk::Result::eSuccess && result != vk::Result::eSuboptimalKHR)
-		//{
-		//	assert(result == vk::Result::eTimeout || result == vk::Result::eNotReady);
-		//	throw std::runtime_error("failed to acquire swap chain image!");
-		//}
+		auto [result, imageIndex] = m_SwapChain.AquireNextImage(m_FrameIndex);
+		if (result == vk::Result::eErrorOutOfDateKHR)
+		{
+			RecreateResources();
+			return;
+		}
+		else if (result != vk::Result::eSuccess && result != vk::Result::eSuboptimalKHR)
+		{
+			// On other success codes than eSuccess and eSuboptimalKHR we just throw an exception.
+			// On any error code, aquireNextImage already threw an exception.
+			CDL_CORE_ASSERT(result == vk::Result::eTimeout || result == vk::Result::eNotReady, "Failed to quire swap chain image!");
+			throw std::runtime_error("Failed to acquire swap chain image!");
+		}
 
 		// IN FUTURE: Kick of compute jobs async from rendering (usually for frame N+1) while gpu renders frame N
 
@@ -73,15 +73,52 @@ namespace Candle {
 		FramePacket packet{};	// Temporary
 		m_Renderer.Render(packet, frameContext, m_SwapChain.GetImage(imageIndex));
 
-		// Collect submit info and submit to the graphics queue
+		vk::CommandBufferSubmitInfo commandBufferInfo{ .commandBuffer = *frameContext.CommandBuffer };
+		vk::SemaphoreSubmitInfo acquireWait = m_SwapChain.GetAcquireWait(m_FrameIndex);
+		vk::SemaphoreSubmitInfo presentSignal = m_SwapChain.GetPresentSignal(imageIndex);
+		frameContext.RetireValue = m_RenderDevice.Submit(QueueType::Graphics, {
+			.CommandBuffers = { &commandBufferInfo, 1 },
+			.Waits = { &acquireWait, 1 },
+			.Signals = { &presentSignal, 1 } });
 
-		// Wait for the GPU to finish rendering and present the image
+		// Present the image on the swapchain
+		result = m_SwapChain.Present(imageIndex);
+		if ((result == vk::Result::eSuboptimalKHR) || (result == vk::Result::eErrorOutOfDateKHR)/* || framebufferResized */)
+		{
+			//framebufferResized = false;
+			// TODO: Reset/recreate other resources that need it
+			RecreateResources();
+			return;
+		}
+		else
+		{
+			CDL_CORE_ASSERT(result == vk::Result::eSuccess, "Should be no other codes than eSuccess");
+		}
 
-		// Present the image to the swapchain
+		m_FrameIndex = (m_FrameIndex + 1) % kMaxFramesInFlight;
+	}
 
-		// Update the retire value and frame index for the next frame
-		frameContext.RetireValue = ++m_FrameSync.TimelineValue;
-		m_FrameSync.FrameIndex = (m_FrameSync.FrameIndex + 1) % kMaxFramesInFlight;
+	void RenderManager::CreateFrameContexts()
+	{
+		vk::raii::Device& device = m_RenderDevice.GetDevice();
+		vk::CommandPoolCreateInfo poolInfo{ .queueFamilyIndex = m_RenderDevice.GetQueueFamily(QueueType::Graphics) };
+
+		for (FrameContext& frameContext : m_FrameContexts)
+		{
+			frameContext.CommandPool = vk::raii::CommandPool(device, poolInfo);
+
+			vk::CommandBufferAllocateInfo allocInfo{
+				.commandPool = *frameContext.CommandPool,
+				.level = vk::CommandBufferLevel::ePrimary,
+				.commandBufferCount = 1
+			};
+			frameContext.CommandBuffer = std::move(vk::raii::CommandBuffers(device, allocInfo).front());
+		}
+	}
+
+	void RenderManager::RecreateResources()
+	{
+		m_SwapChain.Recreate(m_Window.GetSize());
 	}
 
 }

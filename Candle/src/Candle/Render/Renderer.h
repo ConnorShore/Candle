@@ -22,7 +22,7 @@ namespace Candle {
 	{
 	public:
 		explicit Renderer(RenderDevice& renderDevice, vk::Format targetFormat);				// pipelines, bindless tables, render graph
-		void Render(const FramePacket& packet, FrameContext& frame, const Image& target);   // target is imported into the graph; its owner presents it
+		void Render(const FramePacket& packet, FrameContext& frame, Image& target);   // target is imported into the graph; its owner presents it
 
 	private:
 		void CreatePipeline(PipelineSpecification& spec); // create pipelines for all known shaders
@@ -31,8 +31,10 @@ namespace Candle {
 		RenderDevice& m_RenderDevice;
 		vk::Format m_TargetFormat;
 
-		// Eventually this will go in a PipelineLibrary and the RenderPa
+		// Eventually this will go in a PipelineLibrary and the RenderPass
 		std::vector<Pipeline> m_Pipelines;
+
+
 	};
 
 }

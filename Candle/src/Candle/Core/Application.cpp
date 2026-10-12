@@ -46,7 +46,8 @@ namespace Candle {
 			// TODO: Implement game logic
 
 			// TODO: This will be ran by the render thread, but here for now so we can get a triangle to render
-			m_RenderManager->RenderThreadMain();
+			if (m_RenderManager)
+				m_RenderManager->RenderThreadMain();
 
 			// Update the frame stats
 			Tick endTick = Platform::GetTick();

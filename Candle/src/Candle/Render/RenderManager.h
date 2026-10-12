@@ -49,14 +49,8 @@ namespace Candle {
 		void RenderThreadMain();   // Wait for a frame slot → acquire → Renderer::Render → submit → present
 
 	private:
-		struct FrameSync
-		{
-			uint32_t FrameIndex{ 0 };
-			vk::raii::Semaphore TimelineSemaphore{ nullptr };
-			uint64_t TimelineValue{ 0 };
-			std::vector<vk::raii::Semaphore> ImageAvailableSemaphores;
-			std::vector<vk::raii::Fence> InFlightFences;
-		};
+		void CreateFrameContexts();
+		void RecreateResources();
 
 	private:
 		RenderSpecification m_Specification;
@@ -69,8 +63,7 @@ namespace Candle {
 		RenderCommandPoolManager m_CommandPoolManager;
 
 		std::array<FrameContext, kMaxFramesInFlight> m_FrameContexts;
-
-		FrameSync m_FrameSync;
+		uint32_t m_FrameIndex{ 0 };
 	};
 
 }

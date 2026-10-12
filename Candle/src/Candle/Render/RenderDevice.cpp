@@ -5,6 +5,7 @@
 #include "RenderSpecification.h"
 #include "VulkanUtils.h"
 
+#include "Candle/Core/Threading/ScopedLock.h"
 #include "Candle/Platform/Platform.h"
 
 namespace Candle {
@@ -116,6 +117,59 @@ namespace Candle {
 		CreateLogicalDeviceAndQueues();
 	}
 
+	uint64_t RenderDevice::Submit(QueueType queue, const SubmitDesc& desc)
+	{
+		CDL_CORE_ASSERT(desc.Signals.size() <= SubmitDesc::kMaxSignals, "Too many signal semaphores in one submit");
+
+		QueueState& state = *m_Queues[std::to_underlying(queue)];
+
+		std::array<vk::SemaphoreSubmitInfo, SubmitDesc::kMaxSignals + 1> signals{};
+		std::ranges::copy(desc.Signals, signals.begin());
+
+		// Timeline waiters reset command pools and free memory, so every stage of the submission must be finished
+		vk::SemaphoreSubmitInfo& timelineSignal = signals[desc.Signals.size()];
+		timelineSignal.semaphore = *state.Timeline;
+		timelineSignal.stageMask = vk::PipelineStageFlagBits2::eAllCommands;
+
+		vk::SubmitInfo2 submitInfo{
+			.waitSemaphoreInfoCount = static_cast<uint32_t>(desc.Waits.size()),
+			.pWaitSemaphoreInfos = desc.Waits.data(),
+			.commandBufferInfoCount = static_cast<uint32_t>(desc.CommandBuffers.size()),
+			.pCommandBufferInfos = desc.CommandBuffers.data(),
+			.signalSemaphoreInfoCount = static_cast<uint32_t>(desc.Signals.size() + 1),
+			.pSignalSemaphoreInfos = signals.data() };
+
+		ScopedLock<AdaptiveSpinLock> lock(state.SubmitLock);
+		timelineSignal.value = ++state.LastSubmitted;
+		state.Queue.submit2(submitInfo);
+		return timelineSignal.value;
+	}
+
+	vk::Result RenderDevice::Present(const vk::PresentInfoKHR& presentInfo)
+	{
+		QueueState& state = *m_Queues[std::to_underlying(QueueType::Graphics)];
+		ScopedLock<AdaptiveSpinLock> lock(state.SubmitLock);
+		return state.Queue.presentKHR(presentInfo);
+	}
+
+	void RenderDevice::WaitFor(QueueType queue, uint64_t value) const
+	{
+		const QueueState& state = *m_Queues[std::to_underlying(queue)];
+		vk::SemaphoreWaitInfo waitInfo{ .semaphoreCount = 1, .pSemaphores = &*state.Timeline, .pValues = &value };
+
+		// With no timeout the only result that doesn't throw is eSuccess
+		[[maybe_unused]] vk::Result result = m_LogicalDevice.waitSemaphores(waitInfo, UINT64_MAX);
+		CDL_CORE_ASSERT(result == vk::Result::eSuccess, "Untimed timeline wait returned early");
+	}
+
+	void RenderDevice::WaitIdle()
+	{
+		// Locks the storage, not m_Queues, so an aliased queue's lock isn't taken twice
+		ScopedLock<AdaptiveSpinLock> graphicsLock(m_QueueStates[std::to_underlying(QueueType::Graphics)].SubmitLock);
+		ScopedLock<AdaptiveSpinLock> transferLock(m_QueueStates[std::to_underlying(QueueType::Transfer)].SubmitLock);
+		m_LogicalDevice.waitIdle();
+	}
+
 	void RenderDevice::CreateLogicalDeviceAndQueues()
 	{
 		if (m_QueueFamilies.Transfer == m_QueueFamilies.Graphics)
@@ -154,14 +208,25 @@ namespace Candle {
 
 		m_LogicalDevice = vk::raii::Device(m_PhysicalDevice, deviceCreateInfo);
 
+		vk::SemaphoreTypeCreateInfo timelineType{ .semaphoreType = vk::SemaphoreType::eTimeline, .initialValue = 0 };
+		vk::SemaphoreCreateInfo timelineCreateInfo{ .pNext = &timelineType };
+
 		// Queue index 0 within each family, the only queue created in it
+		auto createQueue = [&](QueueType queue, uint32_t family)
+		{
+			QueueState& state = m_QueueStates[std::to_underlying(queue)];
+			state.Queue = vk::raii::Queue(m_LogicalDevice, family, 0);
+			state.Timeline = vk::raii::Semaphore(m_LogicalDevice, timelineCreateInfo);
+			return &state;
+		};
+
 		constexpr size_t graphicsSlot = std::to_underlying(QueueType::Graphics);
 		constexpr size_t transferSlot = std::to_underlying(QueueType::Transfer);
-		m_Queues[graphicsSlot] = { vk::raii::Queue(m_LogicalDevice, m_QueueFamilies.Graphics, 0), &m_SubmitLocks[graphicsSlot] };
+		m_Queues[graphicsSlot] = createQueue(QueueType::Graphics, m_QueueFamilies.Graphics);
 		if (m_QueueFamilies.Transfer == m_QueueFamilies.Graphics)
 			m_Queues[transferSlot] = m_Queues[graphicsSlot];
 		else
-			m_Queues[transferSlot] = { vk::raii::Queue(m_LogicalDevice, m_QueueFamilies.Transfer, 0), &m_SubmitLocks[transferSlot] };
+			m_Queues[transferSlot] = createQueue(QueueType::Transfer, m_QueueFamilies.Transfer);
 	}
 
 }
