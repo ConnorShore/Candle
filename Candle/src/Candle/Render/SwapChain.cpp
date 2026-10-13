@@ -129,6 +129,7 @@ namespace Candle {
 
 		CreateSwapChain(surfaceCapabilities, swapChainExtent);
 		CreateImages(swapChainExtent);
+		m_RequestedExtent = extent;
 	}
 
 	void SwapChain::CreateSwapChain(const vk::SurfaceCapabilitiesKHR& surfaceCapabilities, const vk::Extent2D& extent)

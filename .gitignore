@@ -94,5 +94,9 @@ __pycache__/
 # Claude files
 *.claude
 CLAUDE.md
+
 # Tracy viewer and tools, installed by scripts/Base/InitializeRepo.py
 vendor/tracy/bin/
+
+# Internal docs
+docs/internal/*

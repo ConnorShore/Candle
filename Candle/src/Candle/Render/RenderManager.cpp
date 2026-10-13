@@ -6,6 +6,7 @@
 
 #include "Candle/Core/Window.h"
 #include "Candle/Core/Job/JobSystem.h"
+#include "Candle/Platform/Platform.h"
 
 namespace Candle {
 
@@ -32,6 +33,7 @@ namespace Candle {
 		, m_SwapChain(m_RenderInstance, m_RenderDevice, window)
 		, m_Renderer(m_RenderDevice, m_SwapChain.GetSurfaceFormat().format)
 		, m_CommandPoolManager(m_RenderDevice, m_JobSystem.GetNumWorkers())
+		, m_SurfaceExtent(window.GetSize())
 	{
 		CreateFrameContexts();
 	}
@@ -42,8 +44,24 @@ namespace Candle {
 		m_RenderDevice.WaitIdle();
 	}
 
+	void RenderManager::OnSurfaceResized(const glm::uvec2& pixelExtent)
+	{
+		CDL_CORE_ASSERT(Platform::IsMainThread(), "RenderManager::OnSurfaceResized() must be called from the main thread.");
+		m_SurfaceExtent = pixelExtent;
+	}
+
+	void RenderManager::OnSurfaceMinimized(bool minimized)
+	{
+		CDL_CORE_ASSERT(Platform::IsMainThread(), "RenderManager::OnSurfaceMinimized() must be called from the main thread.");
+		m_SurfaceMinimized = minimized;
+	}
+
 	void RenderManager::RenderThreadMain()
 	{
+		// A minimized surface reports a zero extent, and a swapchain can't be created at that size
+		if (m_SurfaceMinimized || m_SurfaceExtent.x == 0 || m_SurfaceExtent.y == 0)
+			return;
+
 		// Wait for a frame slot → acquire → Renderer::Render → submit → present
 		FrameContext& frameContext = m_FrameContexts[m_FrameIndex];
 
@@ -52,7 +70,11 @@ namespace Candle {
 		frameContext.CommandPool.reset();
 		m_CommandPoolManager.BeginFrame(m_FrameIndex);
 
-		// Acquire the next image from the swapchain
+		// Rebuild before acquiring: an image acquired and then abandoned leaves its acquire semaphore signaled
+		if (!m_SwapChain.IsValid(m_SurfaceExtent))
+			RecreateResources();
+
+		// Acquire the next image from the swapchain; out of date signals nothing, so returning leaves the semaphore reusable
 		auto [result, imageIndex] = m_SwapChain.AquireNextImage(m_FrameIndex);
 		if (result == vk::Result::eErrorOutOfDateKHR)
 		{
@@ -83,11 +105,8 @@ namespace Candle {
 
 		// Present the image on the swapchain
 		result = m_SwapChain.Present(imageIndex);
-		if ((result == vk::Result::eSuboptimalKHR) || (result == vk::Result::eErrorOutOfDateKHR)/* || framebufferResized */)
+		if (result == vk::Result::eSuboptimalKHR || result == vk::Result::eErrorOutOfDateKHR)
 		{
-			//framebufferResized = false;
-			// TODO: Reset/recreate other resources that need it
-			m_RenderDevice.WaitIdle();
 			RecreateResources();
 			return;
 		}
@@ -119,7 +138,10 @@ namespace Candle {
 
 	void RenderManager::RecreateResources()
 	{
-		m_SwapChain.Recreate(m_Window.GetSize());
+		m_RenderDevice.WaitIdle();
+
+		// The reported extent, not Window::GetSize(): Window is main thread only, and this will run on the render thread
+		m_SwapChain.Recreate(m_SurfaceExtent);
 	}
 
 }

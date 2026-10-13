@@ -80,9 +80,9 @@ namespace Candle {
 			std::visit(Overloaded{
 				[&](const QuitRequested&) { RequestQuit(); },
 				[&](const WindowCloseRequested& e) { if (e.WindowID == m_Window->GetID()) RequestQuit(); },
-				[&](const WindowResized& e) {},
+				[&](const WindowResized& e) { if (m_RenderManager && e.WindowID == m_Window->GetID()) m_RenderManager->OnSurfaceResized({ e.Width, e.Height }); },
 				[&](const WindowFocus& e) {},
-				[&](const WindowMinimized& e) {},
+				[&](const WindowMinimized& e) { if (m_RenderManager && e.WindowID == m_Window->GetID()) m_RenderManager->OnSurfaceMinimized(e.Minimized); },
 				[&](const InputEvent& e) { m_InputSystem.ConsumeEvent(e); }
 				}, evt);
 		}

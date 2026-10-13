@@ -39,10 +39,13 @@ namespace Candle {
 		RenderManager(const RenderSpecification& renderSpec, const ApplicationInfo& appInfo, Window& window, JobSystem& jobSystem);
 		~RenderManager(); // Join render thread, wait for GPU idle (shutdown only), reverse teardown
 
-		//void OnPlatformEvent(const PlatformEvent& event);  // Resize/minimize: marks the swapchain stale
 		//void SubmitFrame(/* FramePacket&& */);             // Simulation never touches the packet again
 
 		inline RenderDevice& GetRenderDevice() { return m_RenderDevice; }
+
+		// Main thread only. Report what happened to the surface; RenderManager decides whether that means a rebuild
+		void OnSurfaceResized(const glm::uvec2& pixelExtent);
+		void OnSurfaceMinimized(bool minimized);
 
 		// TODO: This will be ran by the render thread in here once its implemented. will become private but its public for now so
 		// we can call it from application directly to get the triangle to render
@@ -64,6 +67,9 @@ namespace Candle {
 
 		std::array<FrameContext, kMaxFramesInFlight> m_FrameContexts;
 		uint32_t m_FrameIndex{ 0 };
+
+		glm::uvec2 m_SurfaceExtent;
+		bool m_SurfaceMinimized{ false };
 	};
 
 }

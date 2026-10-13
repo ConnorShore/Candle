@@ -38,6 +38,9 @@ namespace Candle {
 
 		void Recreate(const glm::uvec2& extent);
 
+		// True after Recreate(extent) even if the surface overrode it, so a disagreeing surface can't force a rebuild every frame
+		inline bool IsValid(const glm::uvec2& extent) const { return extent == m_RequestedExtent; }
+
 		inline Image& GetImage(uint32_t imageIndex) { return m_SwapChainImages[imageIndex]; }
 		inline const vk::SurfaceFormatKHR& GetSurfaceFormat() const { return m_SwapChainSurfaceFormat; }
 
@@ -51,6 +54,7 @@ namespace Candle {
 		vk::raii::SurfaceKHR	m_Surface{ nullptr };
 		vk::raii::SwapchainKHR	m_SwapChain{ nullptr };
 		vk::SurfaceFormatKHR	m_SwapChainSurfaceFormat;
+		glm::uvec2				m_RequestedExtent;	// Set by Recreate; the real extent is on each image's desc
 
 		std::vector<Image> m_SwapChainImages;
 
