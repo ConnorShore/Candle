@@ -1,14 +1,10 @@
 #pragma once
 
+#include "RenderConstants.h"
+
 #include <cstdint>
 
 namespace Candle {
-
-	enum class VulkanAPIVersion
-	{
-		API_1_3,
-		API_1_4
-	};
 
 	struct ValidationSpecification
 	{
@@ -46,9 +42,9 @@ namespace Candle {
 
 	struct RenderSpecification
 	{
-		VulkanAPIVersion VulkanVersion = VulkanAPIVersion::API_1_3;
+		VulkanAPIVersion VulkanVersion{ kDefaultVulkanVersion };
 		ValidationSpecification ValidationSpec = { };
-		RenderDevicePreference DevicePreference = RenderDevicePreference::DiscreteGPU;
+		RenderDevicePreference DevicePreference{ RenderDevicePreference::DiscreteGPU };
 
 		bool EnableVSync = true;
 	};

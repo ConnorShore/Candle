@@ -38,9 +38,40 @@ namespace Candle {
 
 	namespace {
 
+		// Only extensions that aren't core in 1.3 and that Candle can't run without; a device missing one is skipped
 		constexpr std::array<const char*, 1> kRequiredDeviceExtensions = {
 			vk::KHRSwapchainExtensionName
 		};
+
+		using FeatureChain = vk::StructureChain<vk::PhysicalDeviceFeatures2,
+			vk::PhysicalDeviceVulkan11Features,
+			vk::PhysicalDeviceVulkan12Features,
+			vk::PhysicalDeviceVulkan13Features>;
+		using FeatureField = vk::Bool32& (*)(FeatureChain&);
+
+		// The one list of required features: device selection checks each, device creation enables each
+#define CDL_REQUIRED_FEATURE(Struct, Member) [](FeatureChain& chain) -> vk::Bool32& { return chain.get<Struct>().Member; }
+		constexpr FeatureField kRequiredFeatures[] = {
+			CDL_REQUIRED_FEATURE(vk::PhysicalDeviceFeatures2, features.samplerAnisotropy),
+			CDL_REQUIRED_FEATURE(vk::PhysicalDeviceVulkan11Features, shaderDrawParameters),	// Slang lowers SV_VertexID to VertexIndex - BaseVertex
+			CDL_REQUIRED_FEATURE(vk::PhysicalDeviceVulkan12Features, timelineSemaphore),
+			CDL_REQUIRED_FEATURE(vk::PhysicalDeviceVulkan12Features, bufferDeviceAddress),	// For VMA_ALLOCATOR_CREATE_BUFFER_DEVICE_ADDRESS_BIT
+			CDL_REQUIRED_FEATURE(vk::PhysicalDeviceVulkan13Features, dynamicRendering),
+			CDL_REQUIRED_FEATURE(vk::PhysicalDeviceVulkan13Features, synchronization2),
+		};
+#undef CDL_REQUIRED_FEATURE
+
+		// Queries exactly the structs in the chain, so the queried and enabled lists can't name different ones
+		template <typename... Structs>
+		void QueryFeatures(vk::raii::PhysicalDevice const& physicalDevice, vk::StructureChain<Structs...>& chain)
+		{
+			chain = physicalDevice.getFeatures2<Structs...>();
+		}
+
+		bool HasExtension(std::span<const vk::ExtensionProperties> available, const char* name)
+		{
+			return std::ranges::any_of(available, [name](vk::ExtensionProperties const& extension) { return strcmp(extension.extensionName, name) == 0; });
+		}
 
 		struct PhysicalDeviceSelection
 		{
@@ -50,7 +81,9 @@ namespace Candle {
 
 		std::optional<QueueFamilyIndices> IsPhysicalDeviceSuitable(RenderInstance& instance, RenderSpecification renderSpec, vk::raii::PhysicalDevice const& physicalDevice)
 		{
-			bool supportsVulkan = physicalDevice.getProperties().apiVersion >= ToVulkanApiVersion(renderSpec.VulkanVersion);
+			// Checked first: querying the 1.3 feature structs below is invalid on an older device
+			if (physicalDevice.getProperties().apiVersion < ToVulkanApiVersion(renderSpec.VulkanVersion))
+				return std::nullopt;
 
 			// TODO: Fix: If user sets DevicePreference to DiscreteGPU, but the only available GPU is an IntegratedGPU, we need to fall back to it or throw an error
 			bool isPreferredDeviceType = false;
@@ -62,27 +95,16 @@ namespace Candle {
 				isPreferredDeviceType = true;
 
 			auto availableDeviceExtensions = physicalDevice.enumerateDeviceExtensionProperties();
-			bool supportsAllRequiredExtensions =
-				std::ranges::all_of(kRequiredDeviceExtensions,
-					[&availableDeviceExtensions](auto const& requiredDeviceExtension)
-					{
-						return std::ranges::any_of(availableDeviceExtensions,
-							[requiredDeviceExtension](auto const& availableDeviceExtension)
-							{ return strcmp(availableDeviceExtension.extensionName, requiredDeviceExtension) == 0; });
-					});
+			bool supportsAllRequiredExtensions = std::ranges::all_of(kRequiredDeviceExtensions,
+				[&availableDeviceExtensions](const char* extension) { return HasExtension(availableDeviceExtensions, extension); });
 
-			auto features = physicalDevice.template getFeatures2<vk::PhysicalDeviceFeatures2,
-				vk::PhysicalDeviceVulkan11Features,
-				vk::PhysicalDeviceVulkan13Features,
-				vk::PhysicalDeviceExtendedDynamicStateFeaturesEXT>();
-			bool supportsRequiredFeatures = features.template get<vk::PhysicalDeviceFeatures2>().features.samplerAnisotropy &&
-				features.template get<vk::PhysicalDeviceVulkan11Features>().shaderDrawParameters &&
-				features.template get<vk::PhysicalDeviceVulkan13Features>().dynamicRendering &&
-				features.template get<vk::PhysicalDeviceVulkan13Features>().synchronization2 &&
-				features.template get<vk::PhysicalDeviceExtendedDynamicStateFeaturesEXT>().extendedDynamicState;
+			FeatureChain supportedFeatures;
+			QueryFeatures(physicalDevice, supportedFeatures);
+			bool supportsRequiredFeatures = std::ranges::all_of(kRequiredFeatures,
+				[&supportedFeatures](FeatureField field) { return field(supportedFeatures) == vk::True; });
 
 			// Suitable devices also report the queue families to use, so selection and creation can't disagree
-			if (!supportsVulkan || !supportsAllRequiredExtensions || !supportsRequiredFeatures || !isPreferredDeviceType)
+			if (!supportsAllRequiredExtensions || !supportsRequiredFeatures || !isPreferredDeviceType)
 				return std::nullopt;
 
 			// Find queue families that support graphics + present, and a dedicated transfer queue if available
@@ -175,19 +197,16 @@ namespace Candle {
 		if (m_QueueFamilies.Transfer == m_QueueFamilies.Graphics)
 			CDL_CORE_WARN(LogChannel::Render, "No dedicated transfer queue found. Using graphics queue for transfer operations.");
 
-		// query for Vulkan features and extensions, and enable the required ones
-		vk::StructureChain<vk::PhysicalDeviceFeatures2,
-			vk::PhysicalDeviceVulkan11Features,
-			vk::PhysicalDeviceVulkan13Features,
-			vk::PhysicalDeviceExtendedDynamicStateFeaturesEXT,
-			vk::PhysicalDeviceTimelineSemaphoreFeaturesKHR>
-			featureChain = {
-				{.features = {.samplerAnisotropy = true}},                   // vk::PhysicalDeviceFeatures2
-				{.shaderDrawParameters = true },							 // vk::PhysicalDeviceVulkan11Features
-				{.synchronization2 = true, .dynamicRendering = true},        // vk::PhysicalDeviceVulkan13Features
-				{.extendedDynamicState = true},                              // vk::PhysicalDeviceExtendedDynamicStateFeaturesEXT
-				{.timelineSemaphore = true}                                  // vk::PhysicalDeviceTimelineSemaphoreFeaturesKHR
-		};
+		// A feature must be enabled to be used, even one 1.3 guarantees every device supports
+		FeatureChain featureChain;
+		for (FeatureField field : kRequiredFeatures)
+			field(featureChain) = vk::True;
+
+		// Without memory budget VMA estimates the budget from heap sizes, so it's enabled only when present
+		std::vector<const char*> enabledExtensions(kRequiredDeviceExtensions.begin(), kRequiredDeviceExtensions.end());
+		m_HasMemoryBudget = HasExtension(m_PhysicalDevice.enumerateDeviceExtensionProperties(), vk::EXTMemoryBudgetExtensionName);
+		if (m_HasMemoryBudget)
+			enabledExtensions.push_back(vk::EXTMemoryBudgetExtensionName);
 
 		const float queuePriority = 1.0f;
 
@@ -203,8 +222,8 @@ namespace Candle {
 		vk::DeviceCreateInfo deviceCreateInfo{ .pNext = &featureChain.get<vk::PhysicalDeviceFeatures2>(),
 												   .queueCreateInfoCount = static_cast<uint32_t>(queueCreateInfos.size()),
 												   .pQueueCreateInfos = queueCreateInfos.data(),
-												   .enabledExtensionCount = static_cast<uint32_t>(kRequiredDeviceExtensions.size()),
-												   .ppEnabledExtensionNames = kRequiredDeviceExtensions.data() };
+												   .enabledExtensionCount = static_cast<uint32_t>(enabledExtensions.size()),
+												   .ppEnabledExtensionNames = enabledExtensions.data() };
 
 		m_LogicalDevice = vk::raii::Device(m_PhysicalDevice, deviceCreateInfo);
 

@@ -10,3 +10,6 @@
 [submodule "Candle/vendor/tracy/tracy"]
 	path = Candle/vendor/tracy/tracy
 	url = https://github.com/wolfpld/tracy.git
+[submodule "Candle/vendor/VMA/VMA"]
+	path = Candle/vendor/VMA/VMA
+	url = https://github.com/GPUOpen-LibrariesAndSDKs/VulkanMemoryAllocator.git
