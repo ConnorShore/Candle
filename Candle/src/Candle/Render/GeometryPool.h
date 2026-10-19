@@ -1,11 +1,11 @@
 #pragma once
 
 #include "GPUHandles.h"
-#include "Vertex.h"
 #include "GPUBuffer.h"
 #include "GPUAllocator.h"
 
 #include "Candle/Render/Assets/MeshDrawInfo.h"
+#include "Candle/Render/ShaderInterop/Vertex.h"
 
 #include <vector>
 #include <optional>
@@ -29,7 +29,7 @@ namespace Candle {
 		GeometryPool(GeometryPool&&) = default;
 		GeometryPool& operator=(GeometryPool&&) = default;
 
-		GPUMeshHandle CreateMesh(std::span<const Vertex> vertices, std::span<const uint32_t> indices);
+		GPUMeshHandle CreateMesh(std::span<const GPU::Vertex> vertices, std::span<const uint32_t> indices);
 		void DestroyMesh(GPUMeshHandle handle);
 
 		MeshDrawInfo GetMeshInfo(GPUMeshHandle handle);

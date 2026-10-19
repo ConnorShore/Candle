@@ -11,7 +11,7 @@ namespace Candle {
 	{
 	}
 
-	GPUMeshHandle GeometryPool::CreateMesh(std::span<const Vertex> vertices, std::span<const uint32_t> indices)
+	GPUMeshHandle GeometryPool::CreateMesh(std::span<const GPU::Vertex> vertices, std::span<const uint32_t> indices)
 	{
 		CDL_CORE_ASSERT(!vertices.empty() && !indices.empty(), "A mesh needs vertices and indices; Vulkan rejects zero-sized buffers");
 
@@ -25,8 +25,7 @@ namespace Candle {
 			.m_Usage = vk::BufferUsageFlagBits::eIndexBuffer | vk::BufferUsageFlagBits::eTransferDst
 			});
 
-		vk::BufferDeviceAddressInfo addressInfo{ .buffer = vertexBuffer.GetBuffer() };
-		vk::DeviceAddress vertexAddress = m_Allocator.GetDevice()->GetDevice().getBufferAddress(addressInfo);
+		vk::DeviceAddress vertexAddress = vertexBuffer.GetDeviceAddress();
 
 		// Vertices are read through their address in the vertex shader, indices by the input assembler
 		const std::array<BufferUpload, 2> uploads = {

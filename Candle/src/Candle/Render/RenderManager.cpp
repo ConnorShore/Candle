@@ -11,6 +11,7 @@
 #include "Candle/Asset/AssetManager.h"
 
 #include "Candle/Render/Assets/MeshAssetHandler.h"
+#include "Candle/Render/ShaderInterop/FrameData.h"
 
 namespace Candle {
 
@@ -108,7 +109,7 @@ namespace Candle {
 
 		// IN FUTURE: Kick of compute jobs async from rendering (usually for frame N+1) while gpu renders frame N
 
-		// Get the next frame packet to render (this will be replaced with a more sophisticated frame graph in the future)
+		// Get the next frame packet to render (this will be replaced with a more sophisticated frame pumping system in the future)
 		FramePacket packet = m_FrameQueue.front();
 		m_FrameQueue.erase(m_FrameQueue.begin());
 
@@ -132,9 +133,7 @@ namespace Candle {
 			return;
 		}
 		else
-		{
 			CDL_CORE_ASSERT(result == vk::Result::eSuccess, "Should be no other codes than eSuccess");
-		}
 
 		m_FrameIndex = (m_FrameIndex + 1) % kMaxFramesInFlight;
 	}
@@ -154,6 +153,12 @@ namespace Candle {
 				.commandBufferCount = 1
 			};
 			frameContext.CommandBuffer = std::move(vk::raii::CommandBuffers(device, allocInfo).front());
+
+			// Written by the CPU every frame and read once per draw, so host-visible rather than staged into device memory
+			frameContext.FrameData = m_GPUAllocator.CreateBuffer({
+				.m_Size = sizeof(GPU::FrameData),
+				.m_Usage = vk::BufferUsageFlagBits::eShaderDeviceAddress,
+				.m_Flags = VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT | VMA_ALLOCATION_CREATE_MAPPED_BIT });
 		}
 	}
 

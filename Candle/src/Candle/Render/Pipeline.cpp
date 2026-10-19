@@ -75,22 +75,20 @@ namespace Candle {
 			return colorBlendAttachment;
 		}
 
-		vk::PushConstantRange MergePushConstants(const std::vector<ShaderEntryPoint>& entryPoints)
+		// The shader half of the push-constant contract; Pipeline::PushConstants checks the C++ half
+		void ValidatePushConstants(const std::vector<ShaderEntryPoint>& entryPoints)
 		{
-			vk::PushConstantRange range{ .offset = std::numeric_limits<uint32_t>::max() };
-			uint32_t end = 0;
 			for (const ShaderEntryPoint& entryPoint : entryPoints)
 			{
-				PushConstantBlock block = entryPoint.m_PushConstantBlock;
-				for (const PushConstantMember& member : block.Members)
-				{
-					range.stageFlags |= ShaderStageToVulkanShaderStage(entryPoint.Stage);
-					range.offset = std::min(range.offset, member.Offset);
-					end = std::max(end, member.Offset + member.Size);
-				}
+				const PushConstantBlock& block = entryPoint.m_PushConstantBlock;
+				if (block.Size == 0)
+					continue;
+
+				CDL_CORE_ASSERT(block.Size <= kPushConstantsSize, "Push-constant block exceeds the engine-wide range");
+				CDL_CORE_ASSERT(!block.Members.empty() && block.Members[0].Name == "Global" && block.Members[0].Offset == 0
+					&& block.Members[0].Size == sizeof(GPU::GlobalPushConstants),
+					"A push-constant block must start with 'GlobalPushConstants Global' (see ShaderInterop/GlobalPushConstants.h)");
 			}
-			range.size = range.stageFlags ? end - range.offset : 0;
-			return range;
 		}
 
 	}
@@ -154,11 +152,13 @@ namespace Candle {
 
 #pragma region Pipeline Layout
 		// Create pipeline layout (descriptor set layouts, push constants)
-		vk::PushConstantRange pushConstantRange = MergePushConstants(m_Specification.Shader->GetEntryPoints());
-		vk::PipelineLayoutCreateInfo pipelineLayoutInfo{ 
-			.setLayoutCount = 0, 
-			.pushConstantRangeCount = pushConstantRange.size > 0 ? 1u : 0u,
-			.pPushConstantRanges = pushConstantRange.size > 0 ? &pushConstantRange : nullptr
+		// Every layout declares the same range whatever its shader uses, so all are compatible for push constants
+		ValidatePushConstants(m_Specification.Shader->GetEntryPoints());
+		vk::PushConstantRange pushConstantRange{ .stageFlags = kPushConstantStages, .offset = 0, .size = kPushConstantsSize };
+		vk::PipelineLayoutCreateInfo pipelineLayoutInfo{
+			.setLayoutCount = 0,
+			.pushConstantRangeCount = 1,
+			.pPushConstantRanges = &pushConstantRange
 		};
 		m_Layout = vk::raii::PipelineLayout{ renderDevice.GetDevice(), pipelineLayoutInfo };
 #pragma endregion

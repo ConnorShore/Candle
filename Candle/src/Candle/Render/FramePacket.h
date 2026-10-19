@@ -12,6 +12,7 @@ namespace Candle {
 	{
 		// Vector not span as data is copied to the render thread, and the simulation thread may modify its own copy of the vector after sending it to the render thread
 		std::vector<GPUMeshHandle> Meshes;
+		double Time{ 0.0 };		// Simulation time in seconds at extraction; the renderer never reads a clock of its own
 	};
 
 }

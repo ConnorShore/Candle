@@ -83,6 +83,10 @@ CDL_TEST_CASE(RenderInstance, DropsMessagesBelowTheConfiguredSeverity, Gpu)
 // A validation error is a bug, so the spec a game gets without touching validation settings must report it.
 CDL_TEST_CASE(RenderInstance, DefaultSpecForwardsValidationErrors, Gpu)
 {
+	// Without validation debug utils is never loaded, so injecting a message would assert in vulkan_raii
+	if (!RenderSpecification{}.ValidationSpec.EnableValidation)
+		CDL_SKIP("The default spec enables validation in Debug only");
+
 	LoggerFixture logs(LogLevel::Warn, kRenderChannelMask);
 	{
 		WindowingBackend backend;

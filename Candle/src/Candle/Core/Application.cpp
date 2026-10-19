@@ -37,9 +37,9 @@ namespace Candle {
 		// TEMPORARY FOR TESTING
 		MeshData testMeshData{
 			.Vertices = {
-				{ { 0.5f, -0.5f, 0.0f }, 0.0f, { 0.0f, 1.0f, 0.0f, 1.0f } },
-				{ { 0.0f, 0.5f, 0.0f }, 0.0f, { 1.0f, 0.0f, 0.0f, 1.0f } },
-				{ { -0.5f, -0.5f, 0.0f }, 0.0f, { 0.0f, 0.0f, 1.0f, 1.0f } }
+				{ { 0.5f, -0.5f, 0.0f } },
+				{ { 0.0f, 0.5f, 0.0f } },
+				{ { -0.5f, -0.5f, 0.0f } }
 			},
 			.Indices = { 0, 1, 2 }
 		};
@@ -72,7 +72,7 @@ namespace Candle {
 			if (m_RenderManager) 
 			{
 				// Simulate a test packed
-				FramePacket testPacket{ .Meshes = meshes };
+				FramePacket testPacket{ .Meshes = meshes, .Time = m_FrameStats.TotalTime };
 				m_RenderManager->SubmitFrame(std::move(testPacket));
 
 				// TODO: This will be ran by the render thread, but here for now so we can get a triangle to render

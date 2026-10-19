@@ -17,9 +17,7 @@ namespace Candle {
 
 		virtual PipelineSpecification CreateSpecification(RenderDevice& renderDevice, vk::Format format) const = 0;
 
-		// TODO: Maybe add methods for defining push constants, uniforms, etc that are unique to pipelines
-
-		const std::string& GetName() const { return m_Name; }
+		inline const std::string& GetName() const { return m_Name; }
 
 	protected:
 		explicit RenderPipeline(std::string name) : m_Name(std::move(name)) {}
