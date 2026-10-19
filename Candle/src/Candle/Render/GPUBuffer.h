@@ -11,6 +11,7 @@ namespace Candle {
 	{
 		size_t m_Size{ 0 };
 		vk::BufferUsageFlags m_Usage{ };
+		VmaAllocationCreateFlags m_Flags{ };
 	};
 
 	class GPUBuffer
@@ -48,6 +49,7 @@ namespace Candle {
 
 		inline vk::Buffer GetBuffer() const { return m_Buffer; }
 		inline vk::DeviceSize GetSize() const { return m_Size; }
+		inline VmaAllocation GetAllocation() const { return m_Allocation; }
 
 	private:
 		VmaAllocator m_Allocator{ nullptr };

@@ -6,7 +6,7 @@
 
 namespace Candle {
 
-	GPUAllocator::GPUAllocator(GPUAllocatorSpec& spec)
+	GPUAllocator::GPUAllocator(GPUAllocatorSpec spec)
 		: m_Spec(spec)
 	{
 		VmaAllocatorCreateInfo allocatorCreateInfo = {};
@@ -29,6 +29,11 @@ namespace Candle {
 	GPUBuffer GPUAllocator::CreateBuffer(GPUBufferSpec spec)
 	{
 		return { spec, *this };
+	}
+
+	void GPUAllocator::DestroyBuffer(GPUBuffer& buffer)
+	{
+		vmaDestroyBuffer(m_Allocator, buffer.GetBuffer(), buffer.GetAllocation());
 	}
 
 }

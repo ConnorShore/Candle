@@ -7,11 +7,20 @@
 #include "FramePacket.h"
 #include "FrameContext.h"
 #include "Image.h"
+#include "GeometryPool.h"
 
 namespace Candle {
 
-	Renderer::Renderer(RenderDevice& renderDevice, vk::Format targetFormat)
-		: m_RenderDevice(renderDevice), m_TargetFormat(targetFormat)
+	// Temporary push constant struct for the triangle shader (will eventually live with each pipeline)
+	// TODO: Maybe move to a TriangleRenderPass class that owns the pipeline and the push constants to mimic future structure
+	struct MeshDrawPushConstants
+	{
+		vk::DeviceAddress VertexBufferAddress;
+	};
+	CDL_STATIC_ASSERT(sizeof(MeshDrawPushConstants) == 8, "Push constants out of sync with the shader");
+
+	Renderer::Renderer(RenderDevice& renderDevice, GeometryPool& geometryPool, vk::Format targetFormat)
+		: m_RenderDevice(renderDevice), m_GeometryPool(geometryPool), m_TargetFormat(targetFormat)
 	{
 		// Create triangle pipeline here for now, will eventually be created on demand when a pipeline is needed
 		SharedPtr<Shader> shader = ShaderLoader::LoadShader(
@@ -69,7 +78,16 @@ namespace Candle {
 
 		// Draw a triangle with 3 vertices, 1 instance, starting at vertex 0 and instance 0
 		// (Vertex data is generated in the vertex shader, so no vertex buffer is bound)
-		frame.CommandBuffer.draw(3, 1, 0, 0);
+		//frame.CommandBuffer.draw(3, 1, 0, 0);
+
+		// Push constants for the triangle shader (will eventually be set per mesh)
+		// TODO: Maybe pass the triangle mesh to the frame packet
+		MeshDrawInfo drawInfo = m_GeometryPool.GetMeshInfo(packet.Meshes[0]);
+		MeshDrawPushConstants pushConstants{.VertexBufferAddress = drawInfo.VerticesAddr };
+		frame.CommandBuffer.pushConstants<MeshDrawPushConstants>(m_Pipelines[0].GetLayout(), vk::ShaderStageFlagBits::eVertex, 0, pushConstants);
+		frame.CommandBuffer.bindIndexBuffer(drawInfo.Indices, 0, vk::IndexType::eUint32);
+
+		frame.CommandBuffer.drawIndexed(drawInfo.IndexCount, 1, 0, 0, 0);
 
 		// End the render pass.
 		frame.CommandBuffer.endRendering();

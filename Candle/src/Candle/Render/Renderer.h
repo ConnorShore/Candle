@@ -11,6 +11,7 @@ namespace Candle {
 	class RenderDevice;
 	class Pipeline;
 	class Image;
+	class GeometryPool;
 
 	struct PipelineSpecification;
 	struct FrameContext;
@@ -21,7 +22,7 @@ namespace Candle {
 	class Renderer
 	{
 	public:
-		explicit Renderer(RenderDevice& renderDevice, vk::Format targetFormat);				// pipelines, bindless tables, render graph
+		explicit Renderer(RenderDevice& renderDevice, GeometryPool& geometryPool, vk::Format targetFormat);				// pipelines, bindless tables, render graph
 		void Render(const FramePacket& packet, FrameContext& frame, Image& target);   // target is imported into the graph; its owner presents it
 
 	private:
@@ -29,6 +30,7 @@ namespace Candle {
 
 	private:
 		RenderDevice& m_RenderDevice;
+		GeometryPool& m_GeometryPool;
 		vk::Format m_TargetFormat;
 
 		// Eventually this will go in a PipelineLibrary and the RenderPass

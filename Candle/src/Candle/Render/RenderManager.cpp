@@ -6,7 +6,11 @@
 
 #include "Candle/Core/Window.h"
 #include "Candle/Core/Job/JobSystem.h"
+#include "Candle/Core/Memory/ScopedPtr.h"
 #include "Candle/Platform/Platform.h"
+#include "Candle/Asset/AssetManager.h"
+
+#include "Candle/Render/Assets/MeshAssetHandler.h"
 
 namespace Candle {
 
@@ -31,7 +35,10 @@ namespace Candle {
 		, m_RenderInstance(CreateRenderInstanceSpec(renderSpec, appInfo))
 		, m_RenderDevice(m_RenderInstance, m_Specification)
 		, m_SwapChain(m_RenderInstance, m_RenderDevice, window)
-		, m_Renderer(m_RenderDevice, m_SwapChain.GetSurfaceFormat().format)
+		, m_GPUAllocator({ renderSpec.VulkanVersion, &m_RenderDevice, &m_RenderInstance })
+		, m_GPUUploader(m_RenderDevice, m_GPUAllocator)
+		, m_GeometryPool(m_GPUAllocator, m_GPUUploader)
+		, m_Renderer(m_RenderDevice, m_GeometryPool, m_SwapChain.GetSurfaceFormat().format)
 		, m_CommandPoolManager(m_RenderDevice, m_JobSystem.GetNumWorkers())
 		, m_SurfaceExtent(window.GetSize())
 	{
@@ -42,6 +49,16 @@ namespace Candle {
 	{
 		// Members are destroyed after this body returns, and the GPU may still be using them
 		m_RenderDevice.WaitIdle();
+	}
+
+	void RenderManager::RegisterAssetHandlers(AssetManager& assetManager)
+	{
+		assetManager.RegisterAssetHandler(ScopedPtr<MeshAssetHandler>::Create(m_GeometryPool));
+	}
+
+	void RenderManager::SubmitFrame(FramePacket&& packet)
+	{
+		m_FrameQueue.push_back(std::move(packet));
 	}
 
 	void RenderManager::OnSurfaceResized(const glm::uvec2& pixelExtent)
@@ -91,10 +108,14 @@ namespace Candle {
 
 		// IN FUTURE: Kick of compute jobs async from rendering (usually for frame N+1) while gpu renders frame N
 
-		// Record command buffers for rendering (this may be Renderer::Render?)
-		FramePacket packet{};	// Temporary
+		// Get the next frame packet to render (this will be replaced with a more sophisticated frame graph in the future)
+		FramePacket packet = m_FrameQueue.front();
+		m_FrameQueue.erase(m_FrameQueue.begin());
+
+		// Record command buffers for rendering
 		m_Renderer.Render(packet, frameContext, m_SwapChain.GetImage(imageIndex));
 
+		// Submit the command buffer to the graphics queue, waiting on the acquire semaphore and signaling the present semaphore
 		vk::CommandBufferSubmitInfo commandBufferInfo{ .commandBuffer = *frameContext.CommandBuffer };
 		vk::SemaphoreSubmitInfo acquireWait = m_SwapChain.GetAcquireWait(m_FrameIndex);
 		vk::SemaphoreSubmitInfo presentSignal = m_SwapChain.GetPresentSignal(imageIndex);

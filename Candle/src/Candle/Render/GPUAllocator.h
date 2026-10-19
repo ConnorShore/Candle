@@ -20,31 +20,19 @@ namespace Candle {
 	class GPUAllocator
 	{
 	public:
-		GPUAllocator(GPUAllocatorSpec& spec);
+		GPUAllocator(GPUAllocatorSpec spec);
 		~GPUAllocator();
 
 		// Delete copy constructor and assignment operator
 		GPUAllocator(const GPUAllocator&) = delete;
 		GPUAllocator& operator=(const GPUAllocator&) = delete;
 
-		// Move constructor and assignment operator
-		GPUAllocator(GPUAllocator&& other) noexcept
-			: m_Spec(std::move(other.m_Spec)), m_Allocator(other.m_Allocator)
-		{
-			other.m_Allocator = nullptr;
-		}
-		GPUAllocator& operator=(GPUAllocator&& other) noexcept
-		{
-			if (this != &other)
-			{
-				m_Spec = std::move(other.m_Spec);
-				m_Allocator = other.m_Allocator;
-				other.m_Allocator = nullptr;
-			}
-			return *this;
-		}
+		// Delete move constructor and assignment operator
+		GPUAllocator(GPUAllocator&&) = delete;
+		GPUAllocator& operator=(GPUAllocator&&) = delete;
 
 		GPUBuffer CreateBuffer(GPUBufferSpec spec);
+		void DestroyBuffer(GPUBuffer& buffer);	// TODO: This will be handled by a deletion queue (or placed in a deletion queue)
 
 		inline VmaAllocator& GetAllocator() { return m_Allocator; }
 		inline RenderDevice* GetDevice() { return m_Spec.Device; }

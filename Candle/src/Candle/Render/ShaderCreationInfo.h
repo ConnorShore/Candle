@@ -14,12 +14,27 @@ namespace Candle {
 		Count
 	};
 
+	struct PushConstantMember
+	{
+		std::string Name;
+		uint32_t Size;
+		uint32_t Offset;
+	};
+
+	struct PushConstantBlock
+	{
+		std::string Name;
+		uint32_t Size;
+		uint32_t Offset;
+		std::vector<PushConstantMember> Members;
+	};
+
 	// Reflection is per entry point, not per stage: one .spv holds every entry point of its source, and may hold several of one stage.
 	struct ShaderEntryPoint
 	{
 		std::string Name;
 		ShaderStage Stage;
-		// In future will add more info such as descriptor sets, push constants, etc.
+		PushConstantBlock m_PushConstantBlock;
 	};
 
 	struct ShaderCreationInfo

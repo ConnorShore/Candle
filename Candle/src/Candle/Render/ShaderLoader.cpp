@@ -50,6 +50,28 @@ namespace Candle {
 			return std::move(*code);
 		}
 
+		PushConstantBlock ExtractPushConstantBlock(spv_reflect::ShaderModule& shaderModule, std::string_view entryPointName)
+		{
+			const SpvReflectBlockVariable* pcBlock = shaderModule.GetEntryPointPushConstantBlock(entryPointName.data());
+			if (pcBlock == nullptr) {
+				return {};
+			}
+
+			PushConstantBlock pushConstantBlock;
+			pushConstantBlock.Name = pcBlock->name ? pcBlock->name : "";
+			pushConstantBlock.Size = pcBlock->size;
+			for (uint32_t i = 0; i < pcBlock->member_count; ++i) {
+				const SpvReflectBlockVariable& member = pcBlock->members[i];
+				pushConstantBlock.Members.push_back({
+					.Name = member.name ? member.name : "",
+					.Size = member.size,
+					.Offset = member.offset
+					});
+			}
+
+			return pushConstantBlock;
+		}
+
 		std::vector<ShaderEntryPoint> ExtractShaderSourceInfo(std::span<const std::byte> shaderCode, const std::filesystem::path& filePath)
 		{
 			auto shaderModule = spv_reflect::ShaderModule(shaderCode.size(), shaderCode.data());
@@ -72,9 +94,12 @@ namespace Candle {
 					continue;
 				}
 
-				// In future, handle descriptor sets, push constants, etc. here as well
-
-				entryPoints.push_back({ .Name = shaderModule.GetEntryPointName(i), .Stage = stage });
+				std::string entryPointName = shaderModule.GetEntryPointName(i);
+				entryPoints.push_back({ 
+					.Name = entryPointName,
+					.Stage = stage, 
+					.m_PushConstantBlock = std::move(ExtractPushConstantBlock(shaderModule, entryPointName))
+				});
 			}
 
 			return entryPoints;

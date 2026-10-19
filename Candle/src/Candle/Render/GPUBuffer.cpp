@@ -15,13 +15,15 @@ namespace Candle {
 
 		VmaAllocationCreateInfo allocInfo = {};
 		allocInfo.usage = VMA_MEMORY_USAGE_AUTO;
-		// TODO: Add support for allocInfo.flags to specify memory properties, e.g., VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT for staging buffers
+		allocInfo.flags = spec.m_Flags;
 
 		vmaCreateBuffer(m_Allocator, reinterpret_cast<VkBufferCreateInfo*>(&bufferInfo), &allocInfo, reinterpret_cast<VkBuffer*>(&m_Buffer), &m_Allocation, nullptr);
 	}
 
 	GPUBuffer::~GPUBuffer()
 	{
+		// TODO: Instead of destroying the buffer immediately, we should defer destruction until the GPU is done using it. 
+		// This can be done by adding it to a destruction queue
 		vmaDestroyBuffer(m_Allocator, m_Buffer, m_Allocation);
 	}
 
