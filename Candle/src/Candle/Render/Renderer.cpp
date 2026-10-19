@@ -3,11 +3,12 @@
 #include "Renderer.h"
 #include "RenderDevice.h"
 #include "PipelineSpecification.h"
-#include "ShaderLoader.h"
 #include "FramePacket.h"
 #include "FrameContext.h"
 #include "Image.h"
 #include "GeometryPool.h"
+
+#include "Candle/Render/Pipelines/TrianglePipeline.h"
 
 namespace Candle {
 
@@ -22,19 +23,7 @@ namespace Candle {
 	Renderer::Renderer(RenderDevice& renderDevice, GeometryPool& geometryPool, vk::Format targetFormat)
 		: m_RenderDevice(renderDevice), m_GeometryPool(geometryPool), m_TargetFormat(targetFormat)
 	{
-		// Create triangle pipeline here for now, will eventually be created on demand when a pipeline is needed
-		SharedPtr<Shader> shader = ShaderLoader::LoadShader(
-			"BasicTriangle", 
-			"C:/Development/Projects/Candle/Candle/res/shaders/bin/Triangle.spv",
-			m_RenderDevice
-		);
-		PipelineSpecification spec{
-			.Shader = shader,
-			.ColorAttachmentFormats = {m_TargetFormat}
-			// Rest are defaults for now
-		};
-
-		CreatePipeline(spec);
+		CreatePipeline(TrianglePipeline{});
 	}
 
 	void Renderer::Render(const FramePacket& packet, FrameContext& frame, Image& target)
@@ -76,12 +65,7 @@ namespace Candle {
 		frame.CommandBuffer.setViewport(0, vk::Viewport(0.0f, static_cast<float>(swapChainExtent.height), static_cast<float>(swapChainExtent.width), -static_cast<float>(swapChainExtent.height), 0.0f, 1.0f));
 		frame.CommandBuffer.setScissor(0, vk::Rect2D(vk::Offset2D(0, 0), swapChainExtent));
 
-		// Draw a triangle with 3 vertices, 1 instance, starting at vertex 0 and instance 0
-		// (Vertex data is generated in the vertex shader, so no vertex buffer is bound)
-		//frame.CommandBuffer.draw(3, 1, 0, 0);
-
 		// Push constants for the triangle shader (will eventually be set per mesh)
-		// TODO: Maybe pass the triangle mesh to the frame packet
 		MeshDrawInfo drawInfo = m_GeometryPool.GetMeshInfo(packet.Meshes[0]);
 		MeshDrawPushConstants pushConstants{.VertexBufferAddress = drawInfo.VerticesAddr };
 		frame.CommandBuffer.pushConstants<MeshDrawPushConstants>(m_Pipelines[0].GetLayout(), vk::ShaderStageFlagBits::eVertex, 0, pushConstants);
@@ -102,9 +86,9 @@ namespace Candle {
 		frame.CommandBuffer.end();
 	}
 
-	void Renderer::CreatePipeline(PipelineSpecification& spec)
+	void Renderer::CreatePipeline(const RenderPipeline& pipeline)
 	{
-		m_Pipelines.emplace_back(spec, m_RenderDevice, m_TargetFormat);
+		m_Pipelines.emplace_back(pipeline.CreateSpecification(m_RenderDevice, m_TargetFormat), m_RenderDevice, m_TargetFormat);
 	}
 
 }

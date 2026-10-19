@@ -12,8 +12,8 @@ namespace Candle {
 	class Pipeline;
 	class Image;
 	class GeometryPool;
+	class RenderPipeline;
 
-	struct PipelineSpecification;
 	struct FrameContext;
 	struct FramePacket;
 
@@ -26,7 +26,7 @@ namespace Candle {
 		void Render(const FramePacket& packet, FrameContext& frame, Image& target);   // target is imported into the graph; its owner presents it
 
 	private:
-		void CreatePipeline(PipelineSpecification& spec); // create pipelines for all known shaders
+		void CreatePipeline(const RenderPipeline& pipeline); // builds a Pipeline from the description and stores it
 
 	private:
 		RenderDevice& m_RenderDevice;
