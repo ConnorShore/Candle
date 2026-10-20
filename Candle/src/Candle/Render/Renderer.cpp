@@ -3,33 +3,39 @@
 #include "Renderer.h"
 #include "RenderDevice.h"
 #include "PipelineSpecification.h"
-#include "ShaderLoader.h"
 #include "FramePacket.h"
 #include "FrameContext.h"
 #include "Image.h"
+#include "GeometryPool.h"
+
+#include "Candle/Render/Pipelines/TrianglePipeline.h"
+#include "Candle/Render/Pipelines/TriangleInterop.h"
+
+#include <cmath>
+#include <span>
 
 namespace Candle {
 
-	Renderer::Renderer(RenderDevice& renderDevice, vk::Format targetFormat)
-		: m_RenderDevice(renderDevice), m_TargetFormat(targetFormat)
-	{
-		// Create triangle pipeline here for now, will eventually be created on demand when a pipeline is needed
-		SharedPtr<Shader> shader = ShaderLoader::LoadShader(
-			"BasicTriangle", 
-			"C:/Development/Projects/Candle/Candle/res/shaders/bin/Triangle.spv",
-			m_RenderDevice
-		);
-		PipelineSpecification spec{
-			.Shader = shader,
-			.ColorAttachmentFormats = {m_TargetFormat}
-			// Rest are defaults for now
-		};
+	namespace {
 
-		CreatePipeline(spec);
+		// A float time steps ~0.24 ms at an hour; wrapping keeps shader animation smooth for one jump per period
+		constexpr double kShaderTimeWrapSeconds = 3600.0;
+
+	}
+
+	Renderer::Renderer(RenderDevice& renderDevice, GeometryPool& geometryPool, vk::Format targetFormat)
+		: m_RenderDevice(renderDevice), m_GeometryPool(geometryPool), m_TargetFormat(targetFormat)
+	{
+		CreatePipeline(TrianglePipeline{});
 	}
 
 	void Renderer::Render(const FramePacket& packet, FrameContext& frame, Image& target)
 	{
+		// Safe to overwrite: RenderManager waited on this slot's RetireValue, and vkQueueSubmit makes host writes visible to the GPU
+		const GPU::FrameData frameData{ .Time = static_cast<float>(std::fmod(packet.Time, kShaderTimeWrapSeconds)) };
+		frame.FrameData.Write(std::as_bytes(std::span(&frameData, 1)));
+		const GPU::GlobalPushConstants global{ .Frame = frame.FrameData.GetDeviceAddress() };
+
 		// For now, just record a command buffer that draws a triangle to the target image using the first pipeline in m_Pipelines
 		// In the future, this will be more complex and involve a render graph and multiple pipelines
 		frame.CommandBuffer.begin({ .flags = vk::CommandBufferUsageFlagBits::eOneTimeSubmit });
@@ -67,9 +73,12 @@ namespace Candle {
 		frame.CommandBuffer.setViewport(0, vk::Viewport(0.0f, static_cast<float>(swapChainExtent.height), static_cast<float>(swapChainExtent.width), -static_cast<float>(swapChainExtent.height), 0.0f, 1.0f));
 		frame.CommandBuffer.setScissor(0, vk::Rect2D(vk::Offset2D(0, 0), swapChainExtent));
 
-		// Draw a triangle with 3 vertices, 1 instance, starting at vertex 0 and instance 0
-		// (Vertex data is generated in the vertex shader, so no vertex buffer is bound)
-		frame.CommandBuffer.draw(3, 1, 0, 0);
+		// Push constants for the triangle shader (will eventually be set per mesh)
+		MeshDrawInfo drawInfo = m_GeometryPool.GetMeshInfo(packet.Meshes[0]);
+		m_Pipelines[0].PushConstants(*frame.CommandBuffer, GPU::MeshDrawPushConstants{ .Global = global, .Vertices = drawInfo.VerticesAddr });
+		frame.CommandBuffer.bindIndexBuffer(drawInfo.Indices, 0, vk::IndexType::eUint32);
+
+		frame.CommandBuffer.drawIndexed(drawInfo.IndexCount, 1, 0, 0, 0);
 
 		// End the render pass.
 		frame.CommandBuffer.endRendering();
@@ -84,9 +93,9 @@ namespace Candle {
 		frame.CommandBuffer.end();
 	}
 
-	void Renderer::CreatePipeline(PipelineSpecification& spec)
+	void Renderer::CreatePipeline(const RenderPipeline& pipeline)
 	{
-		m_Pipelines.emplace_back(spec, m_RenderDevice, m_TargetFormat);
+		m_Pipelines.emplace_back(pipeline.CreateSpecification(m_RenderDevice, m_TargetFormat), m_RenderDevice, m_TargetFormat);
 	}
 
 }

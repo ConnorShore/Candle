@@ -4,8 +4,9 @@ workspace "Candle"
    cppdialect "C++23"
    startproject "Sandbox"
 
-   -- Workspace-wide: both change type definitions, so every TU including glm or vulkan.hpp must agree.
-   defines { "GLM_FORCE_CTOR_INIT", "VULKAN_HPP_NO_STRUCT_CONSTRUCTORS" }
+   -- Workspace-wide: all three change declarations, so every TU including glm or vulkan.hpp must agree.
+   -- OUT_OF_DATE_AS_SUCCESS makes acquire/present return eErrorOutOfDateKHR instead of throwing it.
+   defines { "GLM_FORCE_CTOR_INIT", "VULKAN_HPP_NO_STRUCT_CONSTRUCTORS", "VULKAN_HPP_HANDLE_ERROR_OUT_OF_DATE_AS_SUCCESS" }
 
    filter "configurations:not Dist"
       defines { "CDL_ENABLE_ASSERTS" }
@@ -23,6 +24,7 @@ group "Vendors"
    include "Candle/vendor/imgui"
    include "Candle/vendor/tracy"
    include "Candle/vendor/SPIRV-Reflect"
+   include "Candle/vendor/VMA"
 group ""
 
 include "Candle"

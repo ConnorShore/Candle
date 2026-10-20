@@ -14,6 +14,9 @@ DEFAULT_SPIRV_VERSION = "spirv_1_6"
 # slangc's "SPIR-V output contains no exported symbols", which is how a module with no [shader] entries fails.
 NO_ENTRY_POINTS_DIAGNOSTIC = "E57004"
 
+# On the include path so shaders include ShaderInterop headers by the same path the engine's C++ does.
+ENGINE_SOURCE_DIRECTORY = os.path.normpath(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", "Candle", "src"))
+
 def find_slangc():
     """Locates slangc in the SDK named by VULKAN_SDK, which the engine builds against, then falls back to PATH."""
     sdk_root = os.environ.get("VULKAN_SDK")
@@ -53,6 +56,8 @@ def compile_shaders(slangc, base_directory, spirv_version):
                 "-profile", spirv_version,
                 "-emit-spirv-directly",
                 "-fvk-use-entrypoint-name",
+                "-fvk-use-c-layout",  # C++'s struct layout rules, so an interop struct has one layout in both languages.
+                "-I", ENGINE_SOURCE_DIRECTORY,
                 "-o", output_path
             ], capture_output=True, encoding="utf-8", errors="replace")
             diagnostics = (result.stdout + result.stderr).strip()

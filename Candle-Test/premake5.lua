@@ -24,6 +24,7 @@ project "Candle-Test"
       "%{wks.location}/Candle/vendor/imgui/imgui",
       "%{wks.location}/Candle/vendor/imgui/imgui/backends",
       "%{wks.location}/Candle/vendor/tracy/tracy/public",
+      "%{wks.location}/Candle/vendor/VMA/VMA/include",
       "$(VULKAN_SDK)/Include",
    }
 

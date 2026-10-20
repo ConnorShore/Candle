@@ -5,6 +5,7 @@
 #include "Time.h"
 #include "Window.h"
 
+#include "Candle/Asset/AssetManager.h"
 #include "Candle/Core/Input/InputSystem.h"
 #include "Candle/Core/Job/JobSystem.h"
 
@@ -54,6 +55,7 @@ namespace Candle {
 		InputSystem m_InputSystem;					// Never fed when headless, since nothing is pumped
 		JobSystem m_JobSystem;
 		ScopedPtr<RenderManager> m_RenderManager;	// Empty when headless
+		AssetManager m_AssetManager;
 
 		std::atomic<bool> m_QuitRequested{ false };
 		FrameStats m_FrameStats;

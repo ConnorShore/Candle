@@ -2,8 +2,13 @@
 #include "Application.h"
 
 #include "Candle/Render/RenderManager.h"
+#include "Candle/Render/FramePacket.h"
 
 #include "Candle/Platform/Platform.h"
+
+// Temporary, until we have a better way to register asset handlers //
+#include "Candle/Render/Assets/MeshAsset.h"
+//
 
 namespace Candle {
 
@@ -24,6 +29,22 @@ namespace Candle {
 		, m_RenderManager(m_Specification.Headless ? ScopedPtr<RenderManager>() : ScopedPtr<RenderManager>::Create(m_Specification.RenderSpec, m_Specification.AppInfo, *m_Window, m_JobSystem))
 	{
 		CDL_CORE_INFO(LogChannel::Application, "Application created: {}", m_Specification.AppInfo.Name);
+
+		// Register asset handlers for various subsystems
+		if (m_RenderManager)
+			m_RenderManager->RegisterAssetHandlers(m_AssetManager);
+
+		// TEMPORARY FOR TESTING
+		MeshData testMeshData{
+			.Vertices = {
+				{ { 0.5f, -0.5f, 0.0f } },
+				{ { 0.0f, 0.5f, 0.0f } },
+				{ { -0.5f, -0.5f, 0.0f } }
+			},
+			.Indices = { 0, 1, 2 }
+		};
+		SharedPtr<MeshAsset> meshAsset = SharedPtr<MeshAsset>::Create(std::move(testMeshData));
+		m_AssetManager.LoadAsset("TestMesh", meshAsset);
 	}
 
 	Application::~Application()
@@ -33,6 +54,9 @@ namespace Candle {
 
 	void Application::Run()
 	{
+		SharedPtr<MeshAsset> meshAsset = m_AssetManager.GetAsset<MeshAsset>("TestMesh");
+		std::vector<GPUMeshHandle> meshes{ meshAsset->GetGPUHandle() };
+
 		double timeSinceLastLog = 0.0f;	// Temporary variable to track time since last log message
 		Tick startTick = Platform::GetTick();
 		while (!IsQuitRequested())
@@ -45,9 +69,15 @@ namespace Candle {
 
 			// TODO: Implement game logic
 
-			// TODO: This will be ran by the render thread, but here for now so we can get a triangle to render
-			if (m_RenderManager)
+			if (m_RenderManager) 
+			{
+				// Simulate a test packed
+				FramePacket testPacket{ .Meshes = meshes, .Time = m_FrameStats.TotalTime };
+				m_RenderManager->SubmitFrame(std::move(testPacket));
+
+				// TODO: This will be ran by the render thread, but here for now so we can get a triangle to render
 				m_RenderManager->RenderThreadMain();
+			}
 
 			// Update the frame stats
 			Tick endTick = Platform::GetTick();
@@ -80,9 +110,9 @@ namespace Candle {
 			std::visit(Overloaded{
 				[&](const QuitRequested&) { RequestQuit(); },
 				[&](const WindowCloseRequested& e) { if (e.WindowID == m_Window->GetID()) RequestQuit(); },
-				[&](const WindowResized& e) {},
+				[&](const WindowResized& e) { if (m_RenderManager && e.WindowID == m_Window->GetID()) m_RenderManager->OnSurfaceResized({ e.Width, e.Height }); },
 				[&](const WindowFocus& e) {},
-				[&](const WindowMinimized& e) {},
+				[&](const WindowMinimized& e) { if (m_RenderManager && e.WindowID == m_Window->GetID()) m_RenderManager->OnSurfaceMinimized(e.Minimized); },
 				[&](const InputEvent& e) { m_InputSystem.ConsumeEvent(e); }
 				}, evt);
 		}

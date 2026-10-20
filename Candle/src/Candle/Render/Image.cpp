@@ -8,6 +8,12 @@ namespace Candle {
 	{
 	}
 
+	// TODO: May change this so its more granular
+	// (instead of saving state as per: https://docs.vulkan.org/tutorial/latest/Synchronization/Pipeline_Barriers_Transitions/02_image_barrier.html#_the_power_of_layout_discard)
+	// but it may still be good to save state, will need to research further
+	// May also be worth having ability to create multiple barriers then have a single deps info
+	// that can contain all the barriers (i.e. for multiple mip levels or having color, depth, and stencil barriers all in one go)
+	// See: https://docs.vulkan.org/tutorial/latest/Synchronization/Anatomy_of_a_Dependency/03_sync2_advantage.html
 	void Image::Transition(const ImageTransitionParams& params, vk::raii::CommandBuffer& commandBuffer)
 	{
 		vk::ImageMemoryBarrier2 barrier = {

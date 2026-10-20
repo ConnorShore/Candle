@@ -19,6 +19,7 @@
       "vendor/imgui/imgui",
       "vendor/imgui/imgui/backends",
       "vendor/tracy/tracy/public",
+      "vendor/VMA/VMA/include",
       "$(VULKAN_SDK)/Include",
       "$(VULKAN_SDK)/Source/SPIRV-Reflect",
    }
@@ -36,6 +37,7 @@
       "imgui",
       "tracy",
       "SPIRV-Reflect",
+      "VMA",
    }
 
    defines

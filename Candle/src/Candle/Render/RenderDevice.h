@@ -71,6 +71,9 @@ namespace Candle {
 
 		inline uint32_t GetQueueFamily(QueueType queue) const { return queue == QueueType::Graphics ? m_QueueFamilies.Graphics : m_QueueFamilies.Transfer; }
 
+		// VK_EXT_memory_budget is optional, so a device without it is still used. Set at construction, readable from any thread.
+		inline bool HasMemoryBudget() const { return m_HasMemoryBudget; }
+
 	private:
 		// One per distinct VkQueue; roles aliasing one VkQueue point at the same state, sharing its lock and timeline.
 		struct QueueState
@@ -87,6 +90,7 @@ namespace Candle {
 		vk::raii::PhysicalDevice m_PhysicalDevice{ nullptr };
 		QueueFamilyIndices m_QueueFamilies{};
 		vk::raii::Device m_LogicalDevice{ nullptr };
+		bool m_HasMemoryBudget{ false };
 
 		std::array<QueueState, std::to_underlying(QueueType::Count)> m_QueueStates;	// The Transfer entry goes unused while Transfer aliases Graphics
 		std::array<QueueState*, std::to_underlying(QueueType::Count)> m_Queues{};	// Indexed by QueueType, every slot filled

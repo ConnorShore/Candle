@@ -75,6 +75,22 @@ namespace Candle {
 			return colorBlendAttachment;
 		}
 
+		// The shader half of the push-constant contract; Pipeline::PushConstants checks the C++ half
+		void ValidatePushConstants(const std::vector<ShaderEntryPoint>& entryPoints)
+		{
+			for (const ShaderEntryPoint& entryPoint : entryPoints)
+			{
+				const PushConstantBlock& block = entryPoint.m_PushConstantBlock;
+				if (block.Size == 0)
+					continue;
+
+				CDL_CORE_ASSERT(block.Size <= kPushConstantsSize, "Push-constant block exceeds the engine-wide range");
+				CDL_CORE_ASSERT(!block.Members.empty() && block.Members[0].Name == "Global" && block.Members[0].Offset == 0
+					&& block.Members[0].Size == sizeof(GPU::GlobalPushConstants),
+					"A push-constant block must start with 'GlobalPushConstants Global' (see ShaderInterop/GlobalPushConstants.h)");
+			}
+		}
+
 	}
 	
 
@@ -136,7 +152,14 @@ namespace Candle {
 
 #pragma region Pipeline Layout
 		// Create pipeline layout (descriptor set layouts, push constants)
-		vk::PipelineLayoutCreateInfo pipelineLayoutInfo{ .setLayoutCount = 0, .pushConstantRangeCount = 0 };
+		// Every layout declares the same range whatever its shader uses, so all are compatible for push constants
+		ValidatePushConstants(m_Specification.Shader->GetEntryPoints());
+		vk::PushConstantRange pushConstantRange{ .stageFlags = kPushConstantStages, .offset = 0, .size = kPushConstantsSize };
+		vk::PipelineLayoutCreateInfo pipelineLayoutInfo{
+			.setLayoutCount = 0,
+			.pushConstantRangeCount = 1,
+			.pPushConstantRanges = &pushConstantRange
+		};
 		m_Layout = vk::raii::PipelineLayout{ renderDevice.GetDevice(), pipelineLayoutInfo };
 #pragma endregion
 

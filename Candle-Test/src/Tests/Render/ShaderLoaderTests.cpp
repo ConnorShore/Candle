@@ -138,3 +138,49 @@ CDL_TEST_CASE(ShaderLoader, RejectsTruncatedSpirvBeforeTheDriverSeesIt, Gpu)
 	}
 	ExpectNoVulkanDebugMessages(logs);
 }
+
+// Pipeline's contract check skips an empty block, so an entry point with no push constants must reflect as one.
+CDL_TEST_CASE(ShaderLoader, ReflectsAnEmptyPushBlockForEntryPointsWithout, Gpu)
+{
+	ReadFixture();
+
+	LoggerFixture logs(LogLevel::Warn, kRenderChannelMask);
+	{
+		TestDevice gpu;
+		SharedPtr<Shader> shader = ShaderLoader::LoadShader("Fixture", kFixturePath, gpu.Device);
+
+		for (const ShaderEntryPoint& entryPoint : shader->GetEntryPoints())
+		{
+			CDL_EXPECT_MSG(entryPoint.m_PushConstantBlock.Size == 0, entryPoint.Name);
+			CDL_EXPECT_MSG(entryPoint.m_PushConstantBlock.Members.empty(), entryPoint.Name);
+		}
+	}
+	ExpectNoVulkanDebugMessages(logs);
+}
+
+// Reflection is per entry point, so each stage using the block reports all of it, in declaration order.
+// ShaderInteropTests checks the offsets and sizes against C++.
+CDL_TEST_CASE(ShaderLoader, ReflectsThePushBlockOfEveryEntryPointUsingIt, Gpu)
+{
+	const std::filesystem::path interopFixturePath = "Candle-Test/res/shaders/bin/ShaderInteropFixture.spv";
+	SkipUnlessCompiled(interopFixturePath);
+
+	LoggerFixture logs(LogLevel::Warn, kRenderChannelMask);
+	{
+		TestDevice gpu;
+		SharedPtr<Shader> shader = ShaderLoader::LoadShader("InteropFixture", interopFixturePath, gpu.Device);
+
+		for (std::string_view name : { "interopVertex"sv, "interopFragment"sv })
+		{
+			const ShaderEntryPoint* entryPoint = FindEntryPoint(*shader, name);
+			CDL_CHECK_MSG(entryPoint != nullptr, std::format("no entry point named {}", name));
+
+			const PushConstantBlock& block = entryPoint->m_PushConstantBlock;
+			CDL_EXPECT_NE(block.Size, 0u);
+			CDL_CHECK_EQ(block.Members.size(), 9u);
+			CDL_EXPECT_EQ(block.Members.front().Name, std::string("Global"));
+			CDL_EXPECT_EQ(block.Members.back().Name, std::string("Vertices"));
+		}
+	}
+	ExpectNoVulkanDebugMessages(logs);
+}

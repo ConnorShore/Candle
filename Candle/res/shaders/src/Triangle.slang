@@ -1,31 +1,23 @@
-static float2 positions[3] = float2[](
-    float2(0.5, -0.5),
-    float2(0.0, 0.5),
-    float2(-0.5, -0.5)
-);
+#include "Candle/Render/Pipelines/TriangleInterop.h"
 
-static float3 colors[3] = float3[](
-    float3(1.0, 0.0, 0.0),
-    float3(0.0, 1.0, 0.0),
-    float3(0.0, 0.0, 1.0)
-);
+[[vk::push_constant]] ConstantBuffer<MeshDrawPushConstants> pushConstants;
 
 struct VertexOutput {
-    float3 color;
     float4 sv_position : SV_Position;
 };
 
 [shader("vertex")]
 VertexOutput VertMain(uint vid : SV_VertexID) {
     VertexOutput output;
-    output.sv_position = float4(positions[vid], 0.0, 1.0);
-    output.color = colors[vid];
+    Vertex vertex = pushConstants->Vertices[vid];
+    output.sv_position = float4(vertex.Position, 1.0);
     return output;
 }
 
 [shader("fragment")]
 float4 FragMain(VertexOutput inVert) : SV_Target
 {
-    float3 color = inVert.color;
-    return float4(color, 1.0);
+    // Each channel cycles at the same rate, a third of a turn apart
+    float time = pushConstants->Global.Frame->Time;
+    return float4(0.5 + 0.5 * cos(time + float3(0.0, 2.0, 4.0)), 1.0);
 }
