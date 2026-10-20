@@ -11,9 +11,10 @@ namespace Candle {
 		// Create triangle pipeline here for now, will eventually be created on demand when a pipeline is needed
 		// TODO: Once asset manager is fully implemented, will see if we load the shader from the asset manager
 		//		or if this is where we add it to the asset manager
+		// Relative to the working directory, which Build.py test and the executables' debugdir set to the repo root
 		SharedPtr<Shader> shader = ShaderLoader::LoadShader(
 			m_Name,
-			"C:/Development/Projects/Candle/Candle/res/shaders/bin/Triangle.spv",
+			"Candle/res/shaders/bin/Triangle.spv",
 			renderDevice
 		);
 

@@ -150,3 +150,25 @@ CDL_TEST_CASE(SwapChain, PresentsAfterRecreate, Gpu)
 	}
 	ExpectNoVulkanDebugMessages(logs);
 }
+
+// RenderManager rebuilds whenever IsValid is false, so it must compare against the extent last asked for. The
+// surface may pick its own extent (on Windows it always does), and a disagreeing one must not force a rebuild each frame.
+CDL_TEST_CASE(SwapChain, IsValidOnlyForTheLastRequestedExtent, Gpu)
+{
+	LoggerFixture logs(LogLevel::Warn, kRenderChannelMask);
+	{
+		TestSwapChain test;
+		const glm::uvec2 windowSize = test.AppWindow.GetSize();
+		const glm::uvec2 otherSize = windowSize + glm::uvec2(100, 50);
+
+		CDL_EXPECT(test.Chain.IsValid(windowSize));
+		CDL_EXPECT_FALSE(test.Chain.IsValid(otherSize));
+
+		// The window keeps its size, so the surface overrides this request
+		test.Chain.Recreate(otherSize);
+
+		CDL_EXPECT(test.Chain.IsValid(otherSize));
+		CDL_EXPECT_FALSE(test.Chain.IsValid(windowSize));
+	}
+	ExpectNoVulkanDebugMessages(logs);
+}

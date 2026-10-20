@@ -18,6 +18,7 @@
 #include <numeric>
 #include <optional>
 #include <span>
+#include <string_view>
 #include <thread>
 #include <vector>
 
@@ -296,6 +297,23 @@ CDL_TEST_CASE(RenderDevice, ConcurrentSubmitsGetUniqueRisingValues, Gpu)
 			std::iota(expected.begin(), expected.end(), uint64_t{ 1 });
 			CDL_EXPECT_MSG(queue == expected, std::format("family {}'s {} values are not 1..{}", family, queue.size(), queue.size()));
 		}
+	}
+	ExpectNoVulkanDebugMessages(logs);
+}
+
+// VK_EXT_memory_budget is optional, and VMA trusts the flag GPUAllocator derives from this, so it must be exact.
+CDL_TEST_CASE(RenderDevice, ReportsMemoryBudgetExactlyWhenTheDeviceOffersIt, Gpu)
+{
+	LoggerFixture logs(LogLevel::Warn, kRenderChannelMask);
+	{
+		TestDevice gpu;
+		const std::vector<vk::ExtensionProperties> extensions = gpu.Device.GetPhysicalDevice().enumerateDeviceExtensionProperties();
+		const bool offered = std::ranges::any_of(extensions, [](const vk::ExtensionProperties& extension) {
+			return std::string_view(extension.extensionName.data()) == vk::EXTMemoryBudgetExtensionName;
+		});
+
+		CDL_NOTE(std::format("VK_EXT_memory_budget {}", offered ? "offered" : "not offered"));
+		CDL_EXPECT_EQ(gpu.Device.HasMemoryBudget(), offered);
 	}
 	ExpectNoVulkanDebugMessages(logs);
 }

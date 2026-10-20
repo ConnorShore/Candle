@@ -34,6 +34,9 @@ namespace Candle {
 
 		MeshDrawInfo GetMeshInfo(GPUMeshHandle handle);
 
+		// False for the default handle and for one whose mesh was destroyed, even once another mesh reuses its slot
+		bool IsAlive(GPUMeshHandle handle) const;
+
 	private:
 		struct Entry
 		{

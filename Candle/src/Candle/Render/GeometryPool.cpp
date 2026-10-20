@@ -58,6 +58,8 @@ namespace Candle {
 
 	void GeometryPool::DestroyMesh(GPUMeshHandle handle)
 	{
+		// A stale handle would free the mesh that reused its slot, and push the slot onto the free list a second time
+		CDL_CORE_ASSERT(IsAlive(handle), "DestroyMesh was given an invalid or already destroyed mesh handle");
 		Slot& slot = m_Slots[handle.Index];
 		slot.Mesh.reset();
 		++slot.Generation;
@@ -67,12 +69,20 @@ namespace Candle {
 
 	MeshDrawInfo GeometryPool::GetMeshInfo(GPUMeshHandle handle)
 	{
-		CDL_CORE_ASSERT(m_Slots[handle.Index].Mesh, "Mesh optional is empty");
+		CDL_CORE_ASSERT(IsAlive(handle), "GetMeshInfo was given an invalid or destroyed mesh handle");
 		return MeshDrawInfo{
 			.VerticesAddr = m_Slots[handle.Index].Mesh->VertexAddress,
 			.Indices = m_Slots[handle.Index].Mesh->IndexBuffer.GetBuffer(),
 			.IndexCount = m_Slots[handle.Index].Mesh->IndexCount
 		};
+	}
+
+	bool GeometryPool::IsAlive(GPUMeshHandle handle) const
+	{
+		// DestroyMesh bumps the generation, so only handles issued since the slot was last filled match it
+		return handle.Index < m_Slots.size()
+			&& m_Slots[handle.Index].Generation == handle.Generation
+			&& m_Slots[handle.Index].Mesh.has_value();
 	}
 
 }

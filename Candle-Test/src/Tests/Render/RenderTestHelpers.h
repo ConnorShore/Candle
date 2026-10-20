@@ -5,12 +5,24 @@
 #include "TestFramework.h"
 #include "TestHelpers.h"
 
+#include <Candle/Render/GeometryPool.h>
+#include <Candle/Render/GPUAllocator.h>
+#include <Candle/Render/GPUBuffer.h>
+#include <Candle/Render/GPUUploader.h>
 #include <Candle/Render/RenderDevice.h>
 #include <Candle/Render/RenderInstance.h>
 #include <Candle/Render/RenderSpecification.h>
+#include <Candle/Render/ShaderCreationInfo.h>
+#include <Candle/Render/ShaderInterop/Vertex.h>
 
+#include <vk_mem_alloc.h>
+
+#include <array>
+#include <cstddef>
+#include <cstdint>
 #include <filesystem>
 #include <format>
+#include <span>
 #include <string>
 #include <string_view>
 #include <utility>
@@ -73,6 +85,86 @@ namespace Candle::Test {
 		RenderInstance Instance{ TestInstanceSpec(Spec) };
 		RenderDevice Device{ Instance, Spec };
 	};
+
+	// A device and the VMA allocator over it. The base is destroyed last, so the allocator goes before the device.
+	struct TestAllocator : TestDevice
+	{
+		GPUAllocator Allocator{ { .VulkanVersion = Spec.VulkanVersion, .Device = &Device, .Instance = &Instance } };
+	};
+
+	// What GeometryPool needs, in dependency order: it stages through the uploader, which allocates through the allocator.
+	struct TestGeometry : TestAllocator
+	{
+		GPUUploader Uploader{ Device, Allocator };
+		GeometryPool Pool{ Allocator, Uploader };
+	};
+
+	// One triangle and its indices, for tests that need any mesh at all.
+	inline const std::array<GPU::Vertex, 3> kTriangleVertices = { {
+		{ { 0.5f, -0.5f, 0.0f } },
+		{ { 0.0f, 0.5f, 0.0f } },
+		{ { -0.5f, -0.5f, 0.0f } } } };
+	inline constexpr std::array<uint32_t, 3> kTriangleIndices = { 0, 1, 2 };
+
+	// Every allocation VMA holds right now, so a test can see a buffer freed, or leaked.
+	inline uint32_t LiveAllocations(GPUAllocator& allocator)
+	{
+		VmaTotalStatistics stats{};
+		vmaCalculateStatistics(allocator.GetAllocator(), &stats);
+		return stats.total.statistics.allocationCount;
+	}
+
+	// Host-visible with random access, since the test reads it back; a transfer destination so the GPU can fill it.
+	inline GPUBuffer CreateHostBuffer(GPUAllocator& allocator, vk::DeviceSize size)
+	{
+		return allocator.CreateBuffer({
+			.m_Size = size,
+			.m_Usage = vk::BufferUsageFlagBits::eTransferDst,
+			.m_Flags = VMA_ALLOCATION_CREATE_HOST_ACCESS_RANDOM_BIT });
+	}
+
+	// Invalidates first, in case the memory is not host-coherent.
+	inline std::vector<std::byte> ReadBack(GPUAllocator& allocator, const GPUBuffer& buffer)
+	{
+		std::vector<std::byte> bytes(buffer.GetSize());
+		CDL_CHECK(vmaCopyAllocationToMemory(allocator.GetAllocator(), buffer.GetAllocation(), 0, bytes.data(), bytes.size()) == VK_SUCCESS);
+		return bytes;
+	}
+
+	// Distinct, recognisable bytes: seed, seed + 1, ... wrapping at 256.
+	inline std::vector<std::byte> BytePattern(size_t count, uint8_t seed)
+	{
+		std::vector<std::byte> bytes(count);
+		for (size_t i = 0; i < count; ++i)
+			bytes[i] = static_cast<std::byte>(static_cast<uint8_t>(seed + i));
+		return bytes;
+	}
+
+	// One member of an interop struct as C++ lays it out, to compare against a shader's reflection.
+	struct InteropMember
+	{
+		std::string_view Name;
+		uint32_t Offset;
+		uint32_t Size;
+	};
+#define CDL_INTEROP_MEMBER(Type, Member) \
+	::Candle::Test::InteropMember{ #Member, static_cast<uint32_t>(offsetof(Type, Member)), static_cast<uint32_t>(sizeof(Type::Member)) }
+
+	// Fails unless the reflected block holds exactly these members, at the offsets and sizes C++ gives them.
+	inline void ExpectPushBlockMatches(const PushConstantBlock& block, size_t cppSize, std::span<const InteropMember> members)
+	{
+		CDL_EXPECT_EQ(block.Size, cppSize);
+		CDL_CHECK_EQ(block.Members.size(), members.size());
+		for (size_t i = 0; i < members.size(); ++i)
+		{
+			const PushConstantMember& reflected = block.Members[i];
+			CDL_EXPECT_MSG(reflected.Name == members[i].Name, std::format("member {} is '{}', expected '{}'", i, reflected.Name, members[i].Name));
+			CDL_EXPECT_MSG(reflected.Offset == members[i].Offset,
+				std::format("{} is at {} in the shader, {} in C++", members[i].Name, reflected.Offset, members[i].Offset));
+			CDL_EXPECT_MSG(reflected.Size == members[i].Size,
+				std::format("{} is {} bytes in the shader, {} in C++", members[i].Name, reflected.Size, members[i].Size));
+		}
+	}
 
 	// One pool and primary buffer on the graphics family, for tests that record their own commands.
 	// Reset the pool only once the GPU has finished with the buffer.

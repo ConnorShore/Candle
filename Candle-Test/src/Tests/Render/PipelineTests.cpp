@@ -4,9 +4,11 @@
 #include "TestFramework.h"
 #include "TestHelpers.h"
 #include "RenderTestHelpers.h"
+#include "ShaderInteropFixture.h"
 
 #include <Candle/Render/Pipeline.h>
 #include <Candle/Render/PipelineSpecification.h>
+#include <Candle/Render/Pipelines/TriangleInterop.h>
 #include <Candle/Render/RenderDevice.h>
 #include <Candle/Render/ShaderLoader.h>
 
@@ -31,9 +33,71 @@ namespace {
 	// Relative to the repo root, which is where Build.py test and the Visual Studio debugger both run from.
 	const std::filesystem::path kFixturePath = "Candle-Test/res/shaders/bin/PipelineFixture.spv";
 
+	// A vertex and fragment pair whose push block follows the engine contract (see ShaderInteropFixture.h).
+	const std::filesystem::path kInteropFixturePath = "Candle-Test/res/shaders/bin/ShaderInteropFixture.spv";
+
 	// The spec requires every implementation to support it as a blendable color attachment.
 	constexpr vk::Format kColorFormat = vk::Format::eR8G8B8A8Unorm;
 
+	Pipeline CreatePipeline(RenderDevice& device, const std::filesystem::path& shaderPath)
+	{
+		PipelineSpecification spec{
+			.Shader = ShaderLoader::LoadShader(shaderPath.stem().string(), shaderPath, device),
+			.ColorAttachmentFormats = { kColorFormat } };
+		return Pipeline(spec, device, kColorFormat);
+	}
+
+}
+
+// 128 bytes is the spec's guaranteed minimum, so every device must accept the engine-wide range.
+CDL_TEST_CASE(Pipeline, SharedPushConstantRangeFitsTheDevice, Gpu)
+{
+	LoggerFixture logs(LogLevel::Warn, kRenderChannelMask);
+	{
+		TestDevice gpu;
+		CDL_EXPECT_LE(kPushConstantsSize, gpu.Device.GetPhysicalDevice().getProperties().limits.maxPushConstantsSize);
+	}
+	ExpectNoVulkanDebugMessages(logs);
+}
+
+// Validation checks the layout's range covers the shader's block in each stage using it. The fixture's C layout
+// offsets are invalid std430, so this also fails if the device stops enabling scalarBlockLayout.
+CDL_TEST_CASE(Pipeline, CreatesFromAShaderFollowingThePushConstantContract, Gpu)
+{
+	SkipUnlessCompiled(kInteropFixturePath);
+
+	LoggerFixture logs(LogLevel::Warn, kRenderChannelMask);
+	{
+		TestDevice gpu;
+		Pipeline pipeline = CreatePipeline(gpu.Device, kInteropFixturePath);
+
+		CDL_EXPECT(*pipeline.GetPipeline());
+		CDL_EXPECT(*pipeline.GetLayout());
+	}
+	ExpectNoVulkanDebugMessages(logs);
+}
+
+// Every layout declares the same range, so a pipeline whose shader has no push constants still takes a push.
+// Validation checks each against the layout's range and stages as it is recorded.
+CDL_TEST_CASE(Pipeline, PushConstantsRecordAgainstTheSharedRange, Gpu)
+{
+	SkipUnlessCompiled(kFixturePath);
+	SkipUnlessCompiled(kInteropFixturePath);
+
+	LoggerFixture logs(LogLevel::Warn, kRenderChannelMask);
+	{
+		TestDevice gpu;
+		Pipeline withPushBlock = CreatePipeline(gpu.Device, kInteropFixturePath);
+		Pipeline withoutPushBlock = CreatePipeline(gpu.Device, kFixturePath);
+		TestCommands commands(gpu.Device);
+
+		commands.Buffer.begin({ .flags = vk::CommandBufferUsageFlagBits::eOneTimeSubmit });
+		withPushBlock.PushConstants(*commands.Buffer, GPU::InteropFixturePushConstants{});
+		withoutPushBlock.PushConstants(*commands.Buffer, GPU::MeshDrawPushConstants{});
+		commands.Buffer.end();
+		SubmitAndWait(gpu.Device, commands.Buffer);
+	}
+	ExpectNoVulkanDebugMessages(logs);
 }
 
 // Every blend mode Pipeline implements, with and without culling. DstAlpha and OneMinusDstAlpha hit its

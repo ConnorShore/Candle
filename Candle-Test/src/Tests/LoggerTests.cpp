@@ -53,6 +53,8 @@ CDL_TEST_CASE(Logger, LevelChannelAndTypeNames, Unit)
 	CDL_EXPECT_EQ(std::string_view(LogChannelName(LogChannel::None)), "None");
 	CDL_EXPECT_EQ(std::string_view(LogChannelName(LogChannel::Application)), "App");
 	CDL_EXPECT_EQ(std::string_view(LogChannelName(LogChannel::Math)), "Math");
+	// The last channel, so a channel added without a name fails here rather than asserting in a sink
+	CDL_EXPECT_EQ(std::string_view(LogChannelName(LogChannel::Asset)), "Asset");
 	// A combined mask is named after its lowest set bit.
 	CDL_EXPECT_EQ(std::string_view(LogChannelName(LogChannel::Render | LogChannel::Input)), "Render");
 
