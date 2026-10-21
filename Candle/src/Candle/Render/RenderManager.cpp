@@ -9,6 +9,7 @@
 #include "Candle/Core/Memory/ScopedPtr.h"
 #include "Candle/Platform/Platform.h"
 #include "Candle/Asset/AssetManager.h"
+#include "Candle/Render/FramePump.h"
 
 #include "Candle/Render/Assets/MeshAssetHandler.h"
 #include "Candle/Render/ShaderInterop/FrameData.h"
@@ -29,10 +30,11 @@ namespace Candle {
 
 	}
 
-	RenderManager::RenderManager(const RenderSpecification& renderSpec, const ApplicationInfo& appInfo, Window& window, JobSystem& jobSystem) 
+	RenderManager::RenderManager(const RenderSpecification& renderSpec, const ApplicationInfo& appInfo, Window& window, JobSystem& jobSystem, FramePump& framePump) 
 		: m_Specification(renderSpec)
 		, m_Window(window)
 		, m_JobSystem(jobSystem)
+		, m_FramePump(framePump)
 		, m_RenderInstance(CreateRenderInstanceSpec(renderSpec, appInfo))
 		, m_RenderDevice(m_RenderInstance, m_Specification)
 		, m_SwapChain(m_RenderInstance, m_RenderDevice, window)
@@ -52,14 +54,43 @@ namespace Candle {
 		m_RenderDevice.WaitIdle();
 	}
 
+	void RenderManager::SpawnRenderThread()
+	{
+		m_RenderThread = std::thread([this] { 
+			Platform::SetCurrentThreadName("RenderThread");
+			Platform::SetCurrentThreadPriority(ThreadPriority::High);
+
+			m_RenderThreadRunning = true;
+			while (m_RenderThreadRunning) {
+				RenderThreadMain();
+			}
+
+			m_JoinRenderThreadCV.notify_one();
+		});
+	}
+
+	void RenderManager::JoinRenderThread()
+	{
+		CDL_CORE_INFO(LogChannel::Render, "Render Thread Join Requested");
+
+		// Stop render thread from running, then wait till it finishes before joining
+		m_RenderThreadRunning = false;
+
+		std::unique_lock lock(m_JoinRenderThreadMutex);
+		m_JoinRenderThreadCV.wait(lock);
+
+		// Wait for render related GPU work to finish
+		m_RenderDevice.WaitIdle();
+
+		// Join the render thread
+		m_RenderThread.join();
+
+		CDL_CORE_INFO(LogChannel::Render, "Render Thread Joined");
+	}
+
 	void RenderManager::RegisterAssetHandlers(AssetManager& assetManager)
 	{
 		assetManager.RegisterAssetHandler(ScopedPtr<MeshAssetHandler>::Create(m_GeometryPool));
-	}
-
-	void RenderManager::SubmitFrame(FramePacket&& packet)
-	{
-		m_FrameQueue.push_back(std::move(packet));
 	}
 
 	void RenderManager::OnSurfaceResized(const glm::uvec2& pixelExtent)
@@ -109,12 +140,12 @@ namespace Candle {
 
 		// IN FUTURE: Kick of compute jobs async from rendering (usually for frame N+1) while gpu renders frame N
 
-		// Get the next frame packet to render (this will be replaced with a more sophisticated frame pumping system in the future)
-		FramePacket packet = m_FrameQueue.front();
-		m_FrameQueue.erase(m_FrameQueue.begin());
-
 		// Record command buffers for rendering
+		FramePacket& packet = m_FramePump.AquireForReading();
 		m_Renderer.Render(packet, frameContext, m_SwapChain.GetImage(imageIndex));
+
+		// Releaes frame packet back to the pump so the main thread can write into it again
+		m_FramePump.Release(packet);
 
 		// Submit the command buffer to the graphics queue, waiting on the acquire semaphore and signaling the present semaphore
 		vk::CommandBufferSubmitInfo commandBufferInfo{ .commandBuffer = *frameContext.CommandBuffer };

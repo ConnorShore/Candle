@@ -14,6 +14,10 @@
 
 #include "Candle/Core/ApplicationSpecification.h"
 
+#include <thread>
+#include <mutex>
+#include <condition_variable>
+
 namespace Candle {
 
 	// TODO: Figure out FrameContext for command buffer recording and submission
@@ -29,6 +33,7 @@ namespace Candle {
 
 	class Window;
 	class JobSystem;
+	class FramePump;
 	class RenderCommandPoolManager;
 	class AssetManager;
 
@@ -38,26 +43,24 @@ namespace Candle {
 	class RenderManager
 	{
 	public:
-		RenderManager(const RenderSpecification& renderSpec, const ApplicationInfo& appInfo, Window& window, JobSystem& jobSystem);
+		RenderManager(const RenderSpecification& renderSpec, const ApplicationInfo& appInfo, Window& window, JobSystem& jobSystem, FramePump& framePump);
 		~RenderManager(); // Join render thread, wait for GPU idle (shutdown only), reverse teardown
 
-		void RegisterAssetHandlers(AssetManager& assetManager);
+		void SpawnRenderThread();	// Spawns the render thread, which will run RenderThreadMain() until the application exits (called from the main thread on application startup)
+		void JoinRenderThread();	// Joins the render thread, waiting for it to finish (called from the main thread on application shutdown)
 
-		// Submits a frame packet to the render thread for processing
-		void SubmitFrame(FramePacket&& packet);
+		void RegisterAssetHandlers(AssetManager& assetManager);
 
 		// Main thread only. Report what happened to the surface; RenderManager decides whether that means a rebuild
 		void OnSurfaceResized(const glm::uvec2& pixelExtent);
 		void OnSurfaceMinimized(bool minimized);
 
-		// TODO: This will be ran by the render thread in here once its implemented. will become private but its public for now so
-		// we can call it from application directly to get the triangle to render
-		void RenderThreadMain();   // Wait for a frame slot → acquire → Renderer::Render → submit → present
-
 		inline RenderDevice& GetRenderDevice() { return m_RenderDevice; }
 		inline GeometryPool& GetGeometryPool() { return m_GeometryPool; }	// Temporary (applicaiton shouldn't see geometry pool)
 
 	private:
+		void RenderThreadMain();   // Wait for a frame slot → acquire → Renderer::Render → submit → present
+
 		void CreateFrameContexts();
 		void RecreateResources();
 
@@ -65,6 +68,7 @@ namespace Candle {
 		RenderSpecification m_Specification;
 		Window& m_Window;
 		JobSystem& m_JobSystem;
+		FramePump& m_FramePump;
 		RenderInstance m_RenderInstance;
 		RenderDevice m_RenderDevice;
 		SwapChain m_SwapChain;
@@ -78,9 +82,12 @@ namespace Candle {
 		uint32_t m_FrameIndex{ 0 };
 
 		glm::uvec2 m_SurfaceExtent;
-		bool m_SurfaceMinimized{ false };
+		bool m_SurfaceMinimized{ false };	// Moved to Framepacket, need to handle this
 
-		std::vector<FramePacket> m_FrameQueue; // Queue of frame packets to be processed by the render thread (tem
+		std::thread m_RenderThread;
+		std::atomic<bool> m_RenderThreadRunning{ false };
+		std::mutex m_JoinRenderThreadMutex;
+		std::condition_variable m_JoinRenderThreadCV;
 	};
 
 }

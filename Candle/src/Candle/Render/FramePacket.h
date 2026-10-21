@@ -13,6 +13,9 @@ namespace Candle {
 		// Vector not span as data is copied to the render thread, and the simulation thread may modify its own copy of the vector after sending it to the render thread
 		std::vector<GPUMeshHandle> Meshes;
 		double Time{ 0.0 };		// Simulation time in seconds at extraction; the renderer never reads a clock of its own
+
+		bool Minimized{ false };	// Whether the surface is minimized; the renderer may skip rendering if true
+		bool SurfaceResized{ false };	// Whether the surface was resized; the renderer may need to recreate the swapchain if true
 	};
 
 }

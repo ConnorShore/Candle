@@ -26,7 +26,7 @@ namespace Candle {
 		, m_LoggerScope(m_Specification.LoggerSpec)
 		, m_WindowingScope(!m_Specification.Headless)
 		, m_Window(m_Specification.Headless ? ScopedPtr<Window>() : ScopedPtr<Window>::Create(m_Specification.WindowSpec))
-		, m_RenderManager(m_Specification.Headless ? ScopedPtr<RenderManager>() : ScopedPtr<RenderManager>::Create(m_Specification.RenderSpec, m_Specification.AppInfo, *m_Window, m_JobSystem))
+		, m_RenderManager(m_Specification.Headless ? ScopedPtr<RenderManager>() : ScopedPtr<RenderManager>::Create(m_Specification.RenderSpec, m_Specification.AppInfo, *m_Window, m_JobSystem, m_FramePump))
 	{
 		CDL_CORE_INFO(LogChannel::Application, "Application created: {}", m_Specification.AppInfo.Name);
 
@@ -57,8 +57,13 @@ namespace Candle {
 		SharedPtr<MeshAsset> meshAsset = m_AssetManager.GetAsset<MeshAsset>("TestMesh");
 		std::vector<GPUMeshHandle> meshes{ meshAsset->GetGPUHandle() };
 
+		// Spawn the render thread if we have a render manager
+		if (m_RenderManager)
+			m_RenderManager->SpawnRenderThread();
+
 		double timeSinceLastLog = 0.0f;	// Temporary variable to track time since last log message
 		Tick startTick = Platform::GetTick();
+
 		while (!IsQuitRequested())
 		{
 			// Process events
@@ -68,16 +73,12 @@ namespace Candle {
 			InputSnapshot inputSnapshot = m_InputSystem.CaptureSnapshot();
 
 			// TODO: Implement game logic
-
-			if (m_RenderManager) 
-			{
-				// Simulate a test packed
-				FramePacket testPacket{ .Meshes = meshes, .Time = m_FrameStats.TotalTime };
-				m_RenderManager->SubmitFrame(std::move(testPacket));
-
-				// TODO: This will be ran by the render thread, but here for now so we can get a triangle to render
-				m_RenderManager->RenderThreadMain();
-			}
+			FramePacket& packet = m_FramePump.AquireForWriting();
+			packet.Meshes = meshes;
+			packet.Time = m_FrameStats.TotalTime;
+			packet.Minimized = false;	// TODO: Will need to actually capture this
+			packet.SurfaceResized = false;	// TODO: Need to actually capture this
+			m_FramePump.Submit(packet);
 
 			// Update the frame stats
 			Tick endTick = Platform::GetTick();
@@ -96,6 +97,10 @@ namespace Candle {
 				timeSinceLastLog = 0.0f;
 			}
 		}
+
+		// Wait for the render thread to finish before exiting
+		if (m_RenderManager)
+			m_RenderManager->JoinRenderThread();
 	}
 
 	void Application::HandlePlatformEvents()

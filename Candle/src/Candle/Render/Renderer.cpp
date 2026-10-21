@@ -34,6 +34,7 @@ namespace Candle {
 		// Safe to overwrite: RenderManager waited on this slot's RetireValue, and vkQueueSubmit makes host writes visible to the GPU
 		const GPU::FrameData frameData{ .Time = static_cast<float>(std::fmod(packet.Time, kShaderTimeWrapSeconds)) };
 		frame.FrameData.Write(std::as_bytes(std::span(&frameData, 1)));
+
 		const GPU::GlobalPushConstants global{ .Frame = frame.FrameData.GetDeviceAddress() };
 
 		// For now, just record a command buffer that draws a triangle to the target image using the first pipeline in m_Pipelines
