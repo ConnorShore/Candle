@@ -5,6 +5,7 @@
 #include "FramePacket.h"
 
 #include "Candle/Core/Window.h"
+#include "Candle/Core/Profiler.h"
 #include "Candle/Core/Job/JobSystem.h"
 #include "Candle/Core/Memory/ScopedPtr.h"
 #include "Candle/Platform/Platform.h"
@@ -61,6 +62,7 @@ namespace Candle {
 			m_RenderThreadRunning.store(true);
 			while (m_RenderThreadRunning) {
 				RenderThreadMain();
+				CDL_PROFILE_FRAME_NAMED("RenderFrame");
 			}
 		});
 	}
@@ -104,10 +106,13 @@ namespace Candle {
 
 	void RenderManager::RenderThreadMain()
 	{
+		CDL_PROFILE_SCOPE("RenderManager::RenderThreadMain");
 		// A minimized surface reports a zero extent, and a swapchain can't be created at that size
 		FramePacket* packet = m_FramePump.AquireForReading();
 		if (!packet)
 			return;	// Closed by JoinRenderThread
+
+		CDL_PROFILE_SCOPE_METADATA(packet->FrameIndex);
 
 		// A minimized surface reports a zero extent, and a swapchain can't be created at that size
 		if (packet->Minimized || packet->SurfaceSize.x == 0 || packet->SurfaceSize.y == 0)

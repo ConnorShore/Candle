@@ -20,6 +20,8 @@ namespace Candle {
 
 		std::vector<GPUSlotRef> ReleasedSlots;	// Released by the main thread; no later packet may reference them
 		std::vector<GPUSlotRef> RecycledSlots;	// The one field the render thread writes: freed slots, read when the packet is next acquired for writing
+
+		uint64_t FrameIndex{ 0 };	// The index of the frame for this packet; used for debugging and profiling
 	};
 
 }

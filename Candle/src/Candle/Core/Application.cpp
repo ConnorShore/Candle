@@ -62,11 +62,12 @@ namespace Candle {
 		if (m_RenderManager)
 			m_RenderManager->SpawnRenderThread();
 
-		double timeSinceLastLog = 0.0f;	// Temporary variable to track time since last log message
 		Tick startTick = Platform::GetTick();
 
 		while (!IsQuitRequested())
 		{
+			CDL_PROFILE_SCOPE("Application::Run");
+
 			// Process events
 			HandlePlatformEvents();
 
@@ -76,7 +77,9 @@ namespace Candle {
 			// TODO: Implement game logic
 			if (m_RenderManager)
 			{
+				CDL_PROFILE_SCOPE("Application::Run::FramePacket");
 				FramePacket& packet = m_RenderManager->BeginFramePacket();
+				CDL_PROFILE_SCOPE_METADATA(packet.FrameIndex);
 				packet.Meshes = meshes;
 				packet.Time = m_FrameStats.TotalTime;
 				packet.Minimized = m_Window->IsMinimized();
@@ -91,15 +94,24 @@ namespace Candle {
 			m_FrameStats.FrameCount++;
 			startTick = endTick;
 
-			// Display log every 1/2 second
-			timeSinceLastLog += m_FrameStats.DeltaTime;
-			if (timeSinceLastLog >= 0.5f)
+			// Display log every 1/2 second, averaged over the window: one frame's 1/dt depends on where it lands in the present cycle
+			m_FrameStats.TimeSinceLastLog += m_FrameStats.DeltaTime;
+			m_FrameStats.FramesSinceLastLog++;
+			m_FrameStats.WorstFrameTime = std::max(m_FrameStats.WorstFrameTime, m_FrameStats.DeltaTime.GetMilliseconds());
+			if (m_FrameStats.TimeSinceLastLog >= 0.5f)
 			{
-				CDL_CORE_INFO(LogChannel::Application, "Application running: {}; Frame FPS: {}", 
-					m_Specification.AppInfo.Name, (1.0f / m_FrameStats.DeltaTime));
+				CDL_CORE_INFO(LogChannel::Application, "Application running: {}; Avg FPS: {:.0f} ({:.2f} ms), worst frame: {:.2f} ms",
+					m_Specification.AppInfo.Name,
+					m_FrameStats.FramesSinceLastLog / m_FrameStats.TimeSinceLastLog,
+					m_FrameStats.TimeSinceLastLog * 1000.0 / m_FrameStats.FramesSinceLastLog,
+					m_FrameStats.WorstFrameTime);
 
-				timeSinceLastLog = 0.0f;
+				m_FrameStats.TimeSinceLastLog = 0.0f;
+				m_FrameStats.FramesSinceLastLog = 0;
+				m_FrameStats.WorstFrameTime = 0.0f;
 			}
+
+			CDL_PROFILE_FRAME_NAMED("SimFrame");
 		}
 
 		// Wait for the render thread to finish before exiting

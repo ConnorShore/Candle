@@ -5,6 +5,8 @@ namespace Candle {
 
 	FramePacket& FramePump::AquireForWriting()
 	{
+		CDL_PROFILE_WAIT("FramePump::AquireForWriting");
+
 		std::unique_lock<std::mutex> lock(m_Mutex);
 		CDL_CORE_ASSERT(!m_Closed, "FramePump::AquireForWriting after Close; nothing will read the packet");
 		m_FreeCV.wait(lock, [this] {
@@ -12,12 +14,16 @@ namespace Candle {
 					m_Released.load(std::memory_order_acquire)) < kFramePacketCount;
 		});
 
-		const uint64_t writeIndex = m_Published.load(std::memory_order_relaxed) % kFramePacketCount;
+		const uint64_t frameIndex = m_Published.load(std::memory_order_relaxed);
+		const uint64_t writeIndex = frameIndex % kFramePacketCount;
+		m_FramePackets[writeIndex].FrameIndex = frameIndex;
 		return m_FramePackets[writeIndex];
 	}
 
 	FramePacket* FramePump::AquireForReading()
 	{
+		CDL_PROFILE_WAIT("FramePump::AquireForReading");
+
 		std::unique_lock<std::mutex> lock(m_Mutex);
 		m_ReadyCV.wait(lock, [this] {
 			return m_Closed || m_Published.load(std::memory_order_acquire) >

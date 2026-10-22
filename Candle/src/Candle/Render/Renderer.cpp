@@ -31,6 +31,8 @@ namespace Candle {
 
 	void Renderer::Render(const FramePacket& packet, FrameContext& frame, Image& target)
 	{
+		CDL_PROFILE_SCOPE("Renderer::Render");
+
 		// Safe to overwrite: RenderManager waited on this slot's RetireValue, and vkQueueSubmit makes host writes visible to the GPU
 		const GPU::FrameData frameData{ .Time = static_cast<float>(std::fmod(packet.Time, kShaderTimeWrapSeconds)) };
 		frame.FrameData.Write(std::as_bytes(std::span(&frameData, 1)));

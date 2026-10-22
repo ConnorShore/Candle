@@ -89,6 +89,8 @@ namespace Candle {
 
 	ImageResult SwapChain::AquireNextImage(uint32_t frameIndex, uint64_t timeout /*= UINT64_MAX*/)
 	{
+		CDL_PROFILE_WAIT("SwapChain::AquireNextImage");
+
 		auto [result, index] = m_SwapChain.acquireNextImage(timeout, *m_AcquireSemaphores[frameIndex], nullptr);
 
 		// Presentation leaves no barrier of ours to chain from; Undefined discards contents every frame overwrites
@@ -100,6 +102,8 @@ namespace Candle {
 
 	vk::Result SwapChain::Present(uint32_t imageIndex)
 	{
+		CDL_PROFILE_WAIT("SwapChain::Present");
+
 		vk::PresentInfoKHR presentInfo{
 			.waitSemaphoreCount = 1,
 			.pWaitSemaphores = &*m_PresentSemaphores[imageIndex],

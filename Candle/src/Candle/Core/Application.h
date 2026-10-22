@@ -40,6 +40,11 @@ namespace Candle {
 			uint64_t FrameCount = 0;
 			TimeStep DeltaTime = 0.0f;
 			double TotalTime = 0.0f;
+
+			// Accumulated since the last FPS log, then reset
+			double TimeSinceLastLog = 0.0f;
+			uint32_t FramesSinceLastLog = 0;
+			float WorstFrameTime = 0.0f;	// Milliseconds
 		};
 
 		struct PlatformScope { PlatformScope(); ~PlatformScope(); };
