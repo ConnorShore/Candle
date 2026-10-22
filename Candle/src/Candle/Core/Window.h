@@ -30,6 +30,7 @@ namespace Candle {
 
 		void Destroy();
 
+		bool IsMinimized() const;
 		glm::uvec2 GetSize() const;
 		uint32_t GetID() const;
 

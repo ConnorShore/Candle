@@ -26,9 +26,10 @@ namespace Candle {
 		, m_LoggerScope(m_Specification.LoggerSpec)
 		, m_WindowingScope(!m_Specification.Headless)
 		, m_Window(m_Specification.Headless ? ScopedPtr<Window>() : ScopedPtr<Window>::Create(m_Specification.WindowSpec))
-		, m_RenderManager(m_Specification.Headless ? ScopedPtr<RenderManager>() : ScopedPtr<RenderManager>::Create(m_Specification.RenderSpec, m_Specification.AppInfo, *m_Window, m_JobSystem, m_FramePump))
+		, m_RenderManager(m_Specification.Headless ? ScopedPtr<RenderManager>() : ScopedPtr<RenderManager>::Create(m_Specification.RenderSpec, m_Specification.AppInfo, *m_Window, m_JobSystem))
 	{
 		CDL_CORE_INFO(LogChannel::Application, "Application created: {}", m_Specification.AppInfo.Name);
+		Platform::SetCurrentThreadName("Candle-MainThread");
 
 		// Register asset handlers for various subsystems
 		if (m_RenderManager)
@@ -73,12 +74,15 @@ namespace Candle {
 			InputSnapshot inputSnapshot = m_InputSystem.CaptureSnapshot();
 
 			// TODO: Implement game logic
-			FramePacket& packet = m_FramePump.AquireForWriting();
-			packet.Meshes = meshes;
-			packet.Time = m_FrameStats.TotalTime;
-			packet.Minimized = false;	// TODO: Will need to actually capture this
-			packet.SurfaceResized = false;	// TODO: Need to actually capture this
-			m_FramePump.Submit(packet);
+			if (m_RenderManager)
+			{
+				FramePacket& packet = m_RenderManager->BeginFramePacket();
+				packet.Meshes = meshes;
+				packet.Time = m_FrameStats.TotalTime;
+				packet.Minimized = m_Window->IsMinimized();
+				packet.SurfaceSize = m_Window->GetSize();
+				m_RenderManager->SubmitFramePacket(packet);
+			}
 
 			// Update the frame stats
 			Tick endTick = Platform::GetTick();
@@ -115,9 +119,9 @@ namespace Candle {
 			std::visit(Overloaded{
 				[&](const QuitRequested&) { RequestQuit(); },
 				[&](const WindowCloseRequested& e) { if (e.WindowID == m_Window->GetID()) RequestQuit(); },
-				[&](const WindowResized& e) { if (m_RenderManager && e.WindowID == m_Window->GetID()) m_RenderManager->OnSurfaceResized({ e.Width, e.Height }); },
+				[&](const WindowResized& e) {},
 				[&](const WindowFocus& e) {},
-				[&](const WindowMinimized& e) { if (m_RenderManager && e.WindowID == m_Window->GetID()) m_RenderManager->OnSurfaceMinimized(e.Minimized); },
+				[&](const WindowMinimized& e) {},
 				[&](const InputEvent& e) { m_InputSystem.ConsumeEvent(e); }
 				}, evt);
 		}

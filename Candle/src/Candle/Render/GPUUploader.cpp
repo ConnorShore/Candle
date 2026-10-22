@@ -27,6 +27,11 @@ namespace Candle {
 		m_CommandBuffer = std::move(vk::raii::CommandBuffers(device, allocInfo).front());
 	}
 
+	GPUUploader::~GPUUploader()
+	{
+		m_RenderDevice.WaitFor(QueueType::Graphics, m_LastUploadValue);
+	}
+
 	void GPUUploader::UploadBuffers(std::span<const BufferUpload> uploads, vk::PipelineStageFlags2 dstStages, vk::AccessFlags2 dstAccess)
 	{
 		CDL_CORE_ASSERT(Platform::IsMainThread(), "GPUUploader owns its command pool, so it is main thread only");
@@ -44,7 +49,9 @@ namespace Candle {
 			.m_Flags = VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT
 			});
 
-		// The previous upload was waited on, so nothing recorded from this pool is still executing
+		// The pool can't be reset while the previous upload may still be executing
+		m_RenderDevice.WaitFor(QueueType::Graphics, m_LastUploadValue);
+		m_StagingDeletions.Drain(QueueType::Graphics, m_LastUploadValue);
 		m_CommandPool.reset();
 		m_CommandBuffer.begin({ .flags = vk::CommandBufferUsageFlagBits::eOneTimeSubmit });
 
@@ -74,10 +81,14 @@ namespace Candle {
 
 		// Graphics queue: frames submitted after this are ordered behind the barrier, so they need no semaphore wait
 		vk::CommandBufferSubmitInfo commandBufferInfo{ .commandBuffer = *m_CommandBuffer };
-		uint64_t uploadValue = m_RenderDevice.Submit(QueueType::Graphics, { .CommandBuffers = { &commandBufferInfo, 1 } });
+		m_LastUploadValue = m_RenderDevice.Submit(QueueType::Graphics, { .CommandBuffers = { &commandBufferInfo, 1 } });
+		m_StagingDeletions.Enqueue(QueueType::Graphics, m_LastUploadValue, std::move(stagingBuffer));
+	}
 
-		// The copy reads the staging buffer, which is destroyed on return; the deletion queue will replace this wait
-		m_RenderDevice.WaitFor(QueueType::Graphics, uploadValue);
+	void GPUUploader::FreeCompletedStagingBuffers()
+	{
+		CDL_CORE_ASSERT(Platform::IsMainThread(), "GPUUploader is main thread only");
+		m_StagingDeletions.Drain(QueueType::Graphics, m_RenderDevice.GetCompletedTimelineValue(QueueType::Graphics));
 	}
 
 }

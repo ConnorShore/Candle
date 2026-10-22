@@ -19,7 +19,7 @@ namespace Candle {
 
 	void MeshAssetHandler::Unload(MeshAsset& asset)
 	{
-		m_GeometryPool.DestroyMesh(asset.GetGPUHandle());
+		m_GeometryPool.ReleaseMesh(asset.GetGPUHandle());
 		asset.m_GPUHandle = GPUMeshHandle{}; // Reset the handle to an invalid state
 	}
 

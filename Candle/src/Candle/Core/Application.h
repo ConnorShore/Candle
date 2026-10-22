@@ -8,13 +8,13 @@
 #include "Candle/Asset/AssetManager.h"
 #include "Candle/Core/Input/InputSystem.h"
 #include "Candle/Core/Job/JobSystem.h"
-#include "Candle/Render/FramePump.h"
 
 #include <atomic>
 
 namespace Candle {
 
 	class RenderManager;
+	class FramePacket;
 
     class Application
     {
@@ -57,7 +57,6 @@ namespace Candle {
 		JobSystem m_JobSystem;
 		ScopedPtr<RenderManager> m_RenderManager;	// Empty when headless
 		AssetManager m_AssetManager;
-		FramePump m_FramePump;						// FramePump is always present, even when headless, so that the simulation can run at a fixed timestep
 
 		std::atomic<bool> m_QuitRequested{ false };
 		FrameStats m_FrameStats;

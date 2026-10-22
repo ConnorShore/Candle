@@ -30,20 +30,18 @@ namespace Candle {
 
 	}
 
-	RenderManager::RenderManager(const RenderSpecification& renderSpec, const ApplicationInfo& appInfo, Window& window, JobSystem& jobSystem, FramePump& framePump) 
+	RenderManager::RenderManager(const RenderSpecification& renderSpec, const ApplicationInfo& appInfo, Window& window, JobSystem& jobSystem)
 		: m_Specification(renderSpec)
 		, m_Window(window)
 		, m_JobSystem(jobSystem)
-		, m_FramePump(framePump)
 		, m_RenderInstance(CreateRenderInstanceSpec(renderSpec, appInfo))
 		, m_RenderDevice(m_RenderInstance, m_Specification)
 		, m_SwapChain(m_RenderInstance, m_RenderDevice, window)
 		, m_GPUAllocator({ renderSpec.VulkanVersion, &m_RenderDevice, &m_RenderInstance })
 		, m_GPUUploader(m_RenderDevice, m_GPUAllocator)
-		, m_GeometryPool(m_GPUAllocator, m_GPUUploader)
+		, m_GeometryPool(m_GPUAllocator, m_GPUUploader, m_ResourceRegistry)
 		, m_Renderer(m_RenderDevice, m_GeometryPool, m_SwapChain.GetSurfaceFormat().format)
 		, m_CommandPoolManager(m_RenderDevice, m_JobSystem.GetNumWorkers())
-		, m_SurfaceExtent(window.GetSize())
 	{
 		CreateFrameContexts();
 	}
@@ -56,16 +54,14 @@ namespace Candle {
 
 	void RenderManager::SpawnRenderThread()
 	{
-		m_RenderThread = std::thread([this] { 
-			Platform::SetCurrentThreadName("RenderThread");
+		m_RenderThread = std::thread([this] {
+			Platform::SetCurrentThreadName("Candle-RenderThread");
 			Platform::SetCurrentThreadPriority(ThreadPriority::High);
 
-			m_RenderThreadRunning = true;
+			m_RenderThreadRunning.store(true);
 			while (m_RenderThreadRunning) {
 				RenderThreadMain();
 			}
-
-			m_JoinRenderThreadCV.notify_one();
 		});
 	}
 
@@ -73,17 +69,13 @@ namespace Candle {
 	{
 		CDL_CORE_INFO(LogChannel::Render, "Render Thread Join Requested");
 
-		// Stop render thread from running, then wait till it finishes before joining
-		m_RenderThreadRunning = false;
-
-		std::unique_lock lock(m_JoinRenderThreadMutex);
-		m_JoinRenderThreadCV.wait(lock);
+		// The main thread has stopped submitting packets, so wake the render thread if it is waiting for one
+		m_RenderThreadRunning.store(false);
+		m_FramePump.Close();
+		m_RenderThread.join();
 
 		// Wait for render related GPU work to finish
 		m_RenderDevice.WaitIdle();
-
-		// Join the render thread
-		m_RenderThread.join();
 
 		CDL_CORE_INFO(LogChannel::Render, "Render Thread Joined");
 	}
@@ -93,23 +85,36 @@ namespace Candle {
 		assetManager.RegisterAssetHandler(ScopedPtr<MeshAssetHandler>::Create(m_GeometryPool));
 	}
 
-	void RenderManager::OnSurfaceResized(const glm::uvec2& pixelExtent)
+	FramePacket& RenderManager::BeginFramePacket()
 	{
-		CDL_CORE_ASSERT(Platform::IsMainThread(), "RenderManager::OnSurfaceResized() must be called from the main thread.");
-		m_SurfaceExtent = pixelExtent;
+		CDL_CORE_ASSERT(Platform::IsMainThread(), "RenderManager::BeginFramePacket() must be called from the main thread.");
+
+		FramePacket& packet = m_FramePump.AquireForWriting();
+		m_GPUUploader.FreeCompletedStagingBuffers();
+		m_ResourceRegistry.ReturnRecycledSlotsToPools(packet);
+		m_ResourceRegistry.MoveReleasedSlotsIntoPacket(packet);
+		return packet;
 	}
 
-	void RenderManager::OnSurfaceMinimized(bool minimized)
+	void RenderManager::SubmitFramePacket(FramePacket& packet)
 	{
-		CDL_CORE_ASSERT(Platform::IsMainThread(), "RenderManager::OnSurfaceMinimized() must be called from the main thread.");
-		m_SurfaceMinimized = minimized;
+		CDL_CORE_ASSERT(Platform::IsMainThread(), "RenderManager::SubmitFramePacket() must be called from the main thread.");
+		m_FramePump.Submit(packet);
 	}
 
 	void RenderManager::RenderThreadMain()
 	{
 		// A minimized surface reports a zero extent, and a swapchain can't be created at that size
-		if (m_SurfaceMinimized || m_SurfaceExtent.x == 0 || m_SurfaceExtent.y == 0)
+		FramePacket* packet = m_FramePump.AquireForReading();
+		if (!packet)
+			return;	// Closed by JoinRenderThread
+
+		// A minimized surface reports a zero extent, and a swapchain can't be created at that size
+		if (packet->Minimized || packet->SurfaceSize.x == 0 || packet->SurfaceSize.y == 0)
+		{
+			RetireAndReleasePacket(*packet, m_RenderDevice.Submit(QueueType::Graphics, {}));
 			return;
+		}
 
 		// Wait for a frame slot → acquire → Renderer::Render → submit → present
 		FrameContext& frameContext = m_FrameContexts[m_FrameIndex];
@@ -120,14 +125,17 @@ namespace Candle {
 		m_CommandPoolManager.BeginFrame(m_FrameIndex);
 
 		// Rebuild before acquiring: an image acquired and then abandoned leaves its acquire semaphore signaled
-		if (!m_SwapChain.IsValid(m_SurfaceExtent))
-			RecreateResources();
+		if (!m_SwapChain.IsValid(packet->SurfaceSize))
+			RecreateResources(packet->SurfaceSize);
 
 		// Acquire the next image from the swapchain; out of date signals nothing, so returning leaves the semaphore reusable
 		auto [result, imageIndex] = m_SwapChain.AquireNextImage(m_FrameIndex);
 		if (result == vk::Result::eErrorOutOfDateKHR)
 		{
-			RecreateResources();
+			RecreateResources(packet->SurfaceSize);
+
+			// Nothing drew the packet, but its releases must still retire; an empty submit orders after all earlier work
+			RetireAndReleasePacket(*packet, m_RenderDevice.Submit(QueueType::Graphics, {}));
 			return;
 		}
 		else if (result != vk::Result::eSuccess && result != vk::Result::eSuboptimalKHR)
@@ -141,11 +149,7 @@ namespace Candle {
 		// IN FUTURE: Kick of compute jobs async from rendering (usually for frame N+1) while gpu renders frame N
 
 		// Record command buffers for rendering
-		FramePacket& packet = m_FramePump.AquireForReading();
-		m_Renderer.Render(packet, frameContext, m_SwapChain.GetImage(imageIndex));
-
-		// Releaes frame packet back to the pump so the main thread can write into it again
-		m_FramePump.Release(packet);
+		m_Renderer.Render(*packet, frameContext, m_SwapChain.GetImage(imageIndex));
 
 		// Submit the command buffer to the graphics queue, waiting on the acquire semaphore and signaling the present semaphore
 		vk::CommandBufferSubmitInfo commandBufferInfo{ .commandBuffer = *frameContext.CommandBuffer };
@@ -156,17 +160,29 @@ namespace Candle {
 			.Waits = { &acquireWait, 1 },
 			.Signals = { &presentSignal, 1 } });
 
+		// The packet's releases retire with the submit that recorded it, which covers every earlier packet too
+		RetireAndReleasePacket(*packet, frameContext.RetireValue);
+
 		// Present the image on the swapchain
 		result = m_SwapChain.Present(imageIndex);
 		if (result == vk::Result::eSuboptimalKHR || result == vk::Result::eErrorOutOfDateKHR)
 		{
-			RecreateResources();
+			RecreateResources(packet->SurfaceSize);
 			return;
 		}
 		else
 			CDL_CORE_ASSERT(result == vk::Result::eSuccess, "Should be no other codes than eSuccess");
 
 		m_FrameIndex = (m_FrameIndex + 1) % kMaxFramesInFlight;
+	}
+
+	void RenderManager::RetireAndReleasePacket(FramePacket& packet, uint64_t retireValue)
+	{
+		m_ResourceRegistry.RetireReleasedSlots(packet, retireValue);
+		m_ResourceRegistry.FreeRetiredSlots(m_RenderDevice.GetCompletedTimelineValue(QueueType::Graphics), packet);
+
+		// The main thread can write into it again
+		m_FramePump.Release(packet);
 	}
 
 	void RenderManager::CreateFrameContexts()
@@ -193,12 +209,12 @@ namespace Candle {
 		}
 	}
 
-	void RenderManager::RecreateResources()
+	void RenderManager::RecreateResources(const glm::uvec2& surfaceExtent)
 	{
 		m_RenderDevice.WaitIdle();
 
 		// The reported extent, not Window::GetSize(): Window is main thread only, and this will run on the render thread
-		m_SwapChain.Recreate(m_SurfaceExtent);
+		m_SwapChain.Recreate(surfaceExtent);
 	}
 
 }

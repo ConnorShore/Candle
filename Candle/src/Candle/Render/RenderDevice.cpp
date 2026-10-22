@@ -185,6 +185,11 @@ namespace Candle {
 		CDL_CORE_ASSERT(result == vk::Result::eSuccess, "Untimed timeline wait returned early");
 	}
 
+	uint64_t RenderDevice::GetCompletedTimelineValue(QueueType queue) const
+	{
+		return m_Queues[std::to_underlying(queue)]->Timeline.getCounterValue();
+	}
+
 	void RenderDevice::WaitIdle()
 	{
 		// Locks the storage, not m_Queues, so an aliased queue's lock isn't taken twice

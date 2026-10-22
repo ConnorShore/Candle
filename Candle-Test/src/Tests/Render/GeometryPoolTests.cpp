@@ -1,5 +1,5 @@
 // GeometryPool on a real device: mesh creation, its draw info, slot reuse through the free list, and the buffers a
-// destroyed mesh gives back. Each test fails on any validation message.
+// released mesh gives back once its frame retires. Each test fails on any validation message.
 
 #include "TestFramework.h"
 #include "TestHelpers.h"
@@ -37,7 +37,9 @@ CDL_TEST_CASE(GeometryPool, CreateMeshReturnsAValidHandleAndItsDrawInfo, Gpu)
 		CDL_EXPECT_EQ(info.IndexCount, static_cast<uint32_t>(kTriangleIndices.size()));
 		CDL_EXPECT_NE(info.VerticesAddr, 0u);
 		CDL_EXPECT(info.Indices);
-		CDL_EXPECT_EQ(LiveAllocations(gpu.Allocator), 2u);	// Vertices and indices; the upload's staging is already freed
+
+		RunReleaseFrame(gpu);
+		CDL_EXPECT_EQ(LiveAllocations(gpu.Allocator), 2u);	// Vertices and indices, once the upload's staging is drained
 	}
 	ExpectNoVulkanDebugMessages(logs);
 }
@@ -56,41 +58,62 @@ CDL_TEST_CASE(GeometryPool, LiveMeshesGetDistinctSlotsAndAddresses, Gpu)
 	ExpectNoVulkanDebugMessages(logs);
 }
 
-CDL_TEST_CASE(GeometryPool, DestroyMeshFreesItsBuffers, Gpu)
+// A frame still in flight may draw a released mesh, so its buffers outlive the release until that frame retires.
+CDL_TEST_CASE(GeometryPool, ReleaseFreesBuffersOnlyOnceTheFrameRetires, Gpu)
 {
 	LoggerFixture logs(LogLevel::Warn, kRenderChannelMask);
 	{
 		TestGeometry gpu;
 		const GPUMeshHandle mesh = CreateTriangle(gpu.Pool);
+		RunReleaseFrame(gpu);
 		CDL_CHECK_EQ(LiveAllocations(gpu.Allocator), 2u);
 
-		gpu.Pool.DestroyMesh(mesh);
+		gpu.Pool.ReleaseMesh(mesh);
+		CDL_EXPECT_EQ(LiveAllocations(gpu.Allocator), 2u);
 
+		RunReleaseFrame(gpu);
 		CDL_EXPECT_EQ(LiveAllocations(gpu.Allocator), 0u);
 	}
 	ExpectNoVulkanDebugMessages(logs);
 }
 
 // The generation is what tells a stale handle from the mesh that reused its slot.
-CDL_TEST_CASE(GeometryPool, ReusesADestroyedSlotWithTheNextGeneration, Gpu)
+CDL_TEST_CASE(GeometryPool, ReusesAReleasedSlotWithTheNextGeneration, Gpu)
 {
 	LoggerFixture logs(LogLevel::Warn, kRenderChannelMask);
 	{
 		TestGeometry gpu;
-		const GPUMeshHandle destroyed = CreateTriangle(gpu.Pool);
-		gpu.Pool.DestroyMesh(destroyed);
+		const GPUMeshHandle released = CreateTriangle(gpu.Pool);
+		gpu.Pool.ReleaseMesh(released);
+		RunReleaseFrame(gpu);
 
 		constexpr std::array<uint32_t, 6> quadIndices = { 0, 1, 2, 2, 1, 0 };
 		const GPUMeshHandle reused = gpu.Pool.CreateMesh(kTriangleVertices, quadIndices);
 
-		CDL_EXPECT_EQ(reused.Index, destroyed.Index);
-		CDL_EXPECT_EQ(reused.Generation, destroyed.Generation + 1);
+		CDL_EXPECT_EQ(reused.Index, released.Index);
+		CDL_EXPECT_EQ(reused.Generation, released.Generation + 1);
 		CDL_EXPECT_EQ(gpu.Pool.GetMeshInfo(reused).IndexCount, 6u);
 	}
 	ExpectNoVulkanDebugMessages(logs);
 }
 
-// The generation check: a handle dies with its mesh and stays dead once another mesh takes its slot.
+// Until the render thread hands the slot back, it still holds the released mesh, so a new mesh takes another one.
+CDL_TEST_CASE(GeometryPool, ReleasedSlotIsNotReusedBeforeItRetires, Gpu)
+{
+	LoggerFixture logs(LogLevel::Warn, kRenderChannelMask);
+	{
+		TestGeometry gpu;
+		const GPUMeshHandle released = CreateTriangle(gpu.Pool);
+		gpu.Pool.ReleaseMesh(released);
+
+		const GPUMeshHandle created = CreateTriangle(gpu.Pool);
+		CDL_EXPECT_NE(created.Index, released.Index);
+	}
+	ExpectNoVulkanDebugMessages(logs);
+}
+
+// The generation check: a handle dies when its mesh is released, before the GPU is done with it, and stays dead once
+// another mesh takes its slot.
 CDL_TEST_CASE(GeometryPool, HandlesDieWithTheirMesh, Gpu)
 {
 	LoggerFixture logs(LogLevel::Warn, kRenderChannelMask);
@@ -99,9 +122,10 @@ CDL_TEST_CASE(GeometryPool, HandlesDieWithTheirMesh, Gpu)
 		const GPUMeshHandle mesh = CreateTriangle(gpu.Pool);
 		CDL_EXPECT(gpu.Pool.IsAlive(mesh));
 
-		gpu.Pool.DestroyMesh(mesh);
+		gpu.Pool.ReleaseMesh(mesh);
 		CDL_EXPECT_FALSE(gpu.Pool.IsAlive(mesh));
 
+		RunReleaseFrame(gpu);
 		const GPUMeshHandle reused = CreateTriangle(gpu.Pool);
 		CDL_CHECK_EQ(reused.Index, mesh.Index);
 		CDL_EXPECT(gpu.Pool.IsAlive(reused));
@@ -125,7 +149,7 @@ CDL_TEST_CASE(GeometryPool, HandlesItNeverIssuedAreNotAlive, Gpu)
 	ExpectNoVulkanDebugMessages(logs);
 }
 
-// The free list is a stack: the slot freed last is handed out first, and the pool only grows once it is empty.
+// The free list is a stack: the slot recycled last is handed out first, and an unused slot is only taken once it is empty.
 CDL_TEST_CASE(GeometryPool, HandsOutTheMostRecentlyFreedSlotFirst, Gpu)
 {
 	LoggerFixture logs(LogLevel::Warn, kRenderChannelMask);
@@ -134,8 +158,9 @@ CDL_TEST_CASE(GeometryPool, HandsOutTheMostRecentlyFreedSlotFirst, Gpu)
 		const GPUMeshHandle first = CreateTriangle(gpu.Pool);
 		const GPUMeshHandle second = CreateTriangle(gpu.Pool);
 		const GPUMeshHandle third = CreateTriangle(gpu.Pool);
-		gpu.Pool.DestroyMesh(first);
-		gpu.Pool.DestroyMesh(third);
+		gpu.Pool.ReleaseMesh(first);
+		gpu.Pool.ReleaseMesh(third);
+		RunReleaseFrame(gpu);
 
 		CDL_EXPECT_EQ(CreateTriangle(gpu.Pool).Index, third.Index);
 		CDL_EXPECT_EQ(CreateTriangle(gpu.Pool).Index, first.Index);

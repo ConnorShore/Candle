@@ -74,6 +74,12 @@ namespace Candle {
 		}
 	}
 
+	bool Window::IsMinimized() const
+	{
+		CDL_CORE_ASSERT(Platform::IsMainThread(), "Windows must be queried for minimized state on the main thread");
+		return SDL_GetWindowFlags(ToSDL(m_NativeHandle)) & SDL_WINDOW_MINIMIZED;
+	}
+
 	glm::uvec2 Window::GetSize() const
 	{
 		CDL_CORE_ASSERT(Platform::IsMainThread(), "Windows must be queried for size on the main thread");

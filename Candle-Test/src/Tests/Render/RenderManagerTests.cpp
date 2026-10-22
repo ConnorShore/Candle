@@ -11,7 +11,6 @@
 #include <Candle/Render/Assets/MeshAsset.h>
 #include <Candle/Render/FramePacket.h>
 #include <Candle/Render/RenderManager.h>
-#include <Candle/Render/FramePump.h>
 
 #include <cstdint>
 #include <filesystem>
@@ -32,8 +31,7 @@ namespace {
 		WindowingBackend Backend;
 		Window AppWindow{ TestWindowSpec() };
 		JobSystem Jobs;	// Never started; RenderManager only reads its worker count
-		FramePump Frames;
-		RenderManager Manager{ StrictRenderSpec(), ApplicationInfo{ .Name = "Candle-Test" }, AppWindow, Jobs, Frames };
+		RenderManager Manager{ StrictRenderSpec(), ApplicationInfo{ .Name = "Candle-Test" }, AppWindow, Jobs };
 
 		GPUMeshHandle CreateTriangle() { return Manager.GetGeometryPool().CreateMesh(kTriangleVertices, kTriangleIndices); }
 	};
