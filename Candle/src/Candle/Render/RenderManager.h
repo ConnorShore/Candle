@@ -15,6 +15,7 @@
 #include "FramePump.h"
 
 #include "Candle/Core/ApplicationSpecification.h"
+#include "Candle/Core/Threading/Thread.h"
 
 #include <atomic>
 #include <thread>
@@ -80,12 +81,10 @@ namespace Candle {
 		GeometryPool m_GeometryPool;
 		Renderer m_Renderer;
 		RenderCommandPoolManager m_CommandPoolManager;
+		Thread m_RenderThread;
 
 		std::array<FrameContext, kMaxFramesInFlight> m_FrameContexts;
 		uint32_t m_FrameIndex{ 0 };
-
-		std::thread m_RenderThread;
-		std::atomic<bool> m_RenderThreadRunning{ false };
 	};
 
 }

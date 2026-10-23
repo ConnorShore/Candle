@@ -127,6 +127,9 @@ namespace Candle {
 
 	void SwapChain::Recreate(const glm::uvec2& extent)
 	{
+		if (extent.x == 0 || extent.y == 0)
+			return;
+
 		auto physicalDevice = m_RenderDevice.GetPhysicalDevice();
 		vk::SurfaceCapabilitiesKHR surfaceCapabilities = physicalDevice.getSurfaceCapabilitiesKHR(*m_Surface);
 		vk::Extent2D swapChainExtent = ChooseSwapExtent(surfaceCapabilities, extent);

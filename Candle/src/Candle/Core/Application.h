@@ -14,7 +14,7 @@
 namespace Candle {
 
 	class RenderManager;
-	class FramePacket;
+	struct FramePacket;
 
     class Application
     {

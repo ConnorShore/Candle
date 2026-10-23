@@ -43,6 +43,7 @@ namespace Candle {
 		, m_GeometryPool(m_GPUAllocator, m_GPUUploader, m_ResourceRegistry)
 		, m_Renderer(m_RenderDevice, m_GeometryPool, m_SwapChain.GetSurfaceFormat().format)
 		, m_CommandPoolManager(m_RenderDevice, m_JobSystem.GetNumWorkers())
+		, m_RenderThread({ .Name = "Candle-RenderThread", .Priority = ThreadPriority::High })
 	{
 		CreateFrameContexts();
 	}
@@ -51,34 +52,38 @@ namespace Candle {
 	{
 		// Members are destroyed after this body returns, and the GPU may still be using them
 		m_RenderDevice.WaitIdle();
+
+		JoinRenderThread();
 	}
 
 	void RenderManager::SpawnRenderThread()
 	{
-		m_RenderThread = std::thread([this] {
-			Platform::SetCurrentThreadName("Candle-RenderThread");
-			Platform::SetCurrentThreadPriority(ThreadPriority::High);
-
-			m_RenderThreadRunning.store(true);
-			while (m_RenderThreadRunning) {
+		m_RenderThread.Start([this](std::stop_token stoken){
+			while (!stoken.stop_requested()) {
 				RenderThreadMain();
 				CDL_PROFILE_FRAME_NAMED("RenderFrame");
 			}
+
+			CDL_CORE_INFO(LogChannel::Render, "Render Thread Ending");
 		});
 	}
 
 	void RenderManager::JoinRenderThread()
 	{
+		// If render thread already joined, don't try to join again
+		if (!m_RenderThread.IsJoinable())
+			return;
+		
+		m_RenderThread.RequestStop();
 		CDL_CORE_INFO(LogChannel::Render, "Render Thread Join Requested");
 
 		// The main thread has stopped submitting packets, so wake the render thread if it is waiting for one
-		m_RenderThreadRunning.store(false);
 		m_FramePump.Close();
-		m_RenderThread.join();
 
 		// Wait for render related GPU work to finish
 		m_RenderDevice.WaitIdle();
 
+		m_RenderThread.Join();
 		CDL_CORE_INFO(LogChannel::Render, "Render Thread Joined");
 	}
 
@@ -115,7 +120,8 @@ namespace Candle {
 		CDL_PROFILE_SCOPE_METADATA(packet->FrameIndex);
 
 		// A minimized surface reports a zero extent, and a swapchain can't be created at that size
-		if (packet->Minimized || packet->SurfaceSize.x == 0 || packet->SurfaceSize.y == 0)
+		glm::uvec2 surfaceSize = packet->SurfaceSize;
+		if (packet->Minimized || surfaceSize.x == 0 || surfaceSize.y == 0)
 		{
 			RetireAndReleasePacket(*packet, m_RenderDevice.Submit(QueueType::Graphics, {}));
 			return;
@@ -130,14 +136,14 @@ namespace Candle {
 		m_CommandPoolManager.BeginFrame(m_FrameIndex);
 
 		// Rebuild before acquiring: an image acquired and then abandoned leaves its acquire semaphore signaled
-		if (!m_SwapChain.IsValid(packet->SurfaceSize))
-			RecreateResources(packet->SurfaceSize);
+		if (!m_SwapChain.IsValid(surfaceSize))
+			RecreateResources(surfaceSize);
 
 		// Acquire the next image from the swapchain; out of date signals nothing, so returning leaves the semaphore reusable
 		auto [result, imageIndex] = m_SwapChain.AquireNextImage(m_FrameIndex);
 		if (result == vk::Result::eErrorOutOfDateKHR)
 		{
-			RecreateResources(packet->SurfaceSize);
+			RecreateResources(surfaceSize);
 
 			// Nothing drew the packet, but its releases must still retire; an empty submit orders after all earlier work
 			RetireAndReleasePacket(*packet, m_RenderDevice.Submit(QueueType::Graphics, {}));
@@ -172,7 +178,7 @@ namespace Candle {
 		result = m_SwapChain.Present(imageIndex);
 		if (result == vk::Result::eSuboptimalKHR || result == vk::Result::eErrorOutOfDateKHR)
 		{
-			RecreateResources(packet->SurfaceSize);
+			RecreateResources(surfaceSize);
 			return;
 		}
 		else

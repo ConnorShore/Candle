@@ -122,3 +122,116 @@ CDL_TEST_CASE(GPUResourcePool, PoolsShareOnePacketWithoutMixingSlots, Unit)
 	CDL_EXPECT_EQ(other.Insert(Payload(4)).Index, theirs.Index);
 	CDL_EXPECT_NE(pool.Insert(Payload(5)).Index, mine.Index);
 }
+
+CDL_TEST_CASE(GPUResourcePool, HandlesItNeverIssuedAreNotAlive, Unit)
+{
+	GPUResourceRegistry registry;
+	TestPool pool(registry, kCapacity);
+
+	CDL_EXPECT_FALSE(pool.IsAlive(TestPool::Handle{}));
+	CDL_EXPECT_FALSE(pool.IsAlive(TestPool::Handle{ .Index = 0, .Generation = 0 }));	// In range, but never filled
+}
+
+// A packet carries the releases made before it was begun; one made after waits for the next packet.
+CDL_TEST_CASE(GPUResourcePool, AReleaseRidesTheNextPacketBuilt, Unit)
+{
+	GPUResourceRegistry registry;
+	TestPool pool(registry, kCapacity);
+	const TestPool::Handle handle = pool.Insert(Payload(1));
+
+	FramePacket current;
+	registry.MoveReleasedSlotsIntoPacket(current);
+	pool.Release(handle);
+	CDL_EXPECT(current.ReleasedSlots.empty());
+
+	FramePacket next;
+	registry.MoveReleasedSlotsIntoPacket(next);
+	CDL_CHECK_EQ(next.ReleasedSlots.size(), 1u);
+	CDL_EXPECT_EQ(next.ReleasedSlots[0].Index, handle.Index);
+	CDL_EXPECT_EQ(next.ReleasedSlots[0].Generation, handle.Generation);
+}
+
+// Packets are reused, so one comes back still holding what it carried last time. That must ride neither it nor a later
+// packet, or the slot would retire twice.
+CDL_TEST_CASE(GPUResourcePool, BuildingAPacketDropsTheReleasesItCarriedLastTime, Unit)
+{
+	GPUResourceRegistry registry;
+	TestPool pool(registry, kCapacity);
+	pool.Release(pool.Insert(Payload(1)));
+
+	FramePacket packet;
+	registry.MoveReleasedSlotsIntoPacket(packet);
+	CDL_CHECK_EQ(packet.ReleasedSlots.size(), 1u);
+
+	registry.MoveReleasedSlotsIntoPacket(packet);
+	CDL_EXPECT(packet.ReleasedSlots.empty());
+
+	FramePacket later;
+	registry.MoveReleasedSlotsIntoPacket(later);
+	CDL_EXPECT(later.ReleasedSlots.empty());
+}
+
+// A slot returned twice would sit on the free list twice, and two live handles would share it.
+CDL_TEST_CASE(GPUResourcePool, ReturningRecycledSlotsEmptiesThePacket, Unit)
+{
+	GPUResourceRegistry registry;
+	TestPool pool(registry, kCapacity);
+	pool.Release(pool.Insert(Payload(1)));
+
+	FramePacket packet;
+	registry.MoveReleasedSlotsIntoPacket(packet);
+	registry.RetireReleasedSlots(packet, 1);
+	registry.FreeRetiredSlots(1, packet);
+	CDL_CHECK_EQ(packet.RecycledSlots.size(), 1u);
+
+	registry.ReturnRecycledSlotsToPools(packet);
+	CDL_EXPECT(packet.RecycledSlots.empty());
+	registry.ReturnRecycledSlotsToPools(packet);	// The packet comes round again
+
+	const TestPool::Handle first = pool.Insert(Payload(2));
+	const TestPool::Handle second = pool.Insert(Payload(3));
+	CDL_EXPECT_NE(first.Index, second.Index);
+}
+
+// Retire values rise, so freeing stops at the first slot the GPU hasn't reached, and a slot freed once is gone.
+CDL_TEST_CASE(GPUResourcePool, FreesExactlyTheSlotsTheGPUHasReached, Unit)
+{
+	Payload::s_Alive = 0;
+	GPUResourceRegistry registry;
+	TestPool pool(registry, kCapacity);
+	FramePacket packet;
+	for (uint64_t retireValue = 1; retireValue <= 3; ++retireValue)
+	{
+		pool.Release(pool.Insert(Payload(static_cast<int>(retireValue))));
+		registry.MoveReleasedSlotsIntoPacket(packet);
+		registry.RetireReleasedSlots(packet, retireValue);
+	}
+
+	registry.FreeRetiredSlots(2, packet);
+	CDL_EXPECT_EQ(packet.RecycledSlots.size(), 2u);
+	CDL_EXPECT_EQ(Payload::s_Alive, 1);
+
+	registry.FreeRetiredSlots(2, packet);
+	CDL_EXPECT_EQ(packet.RecycledSlots.size(), 2u);
+	CDL_EXPECT_EQ(Payload::s_Alive, 1);
+}
+
+// The GPU is idle by the time a pool is destroyed, so it frees whatever it still holds: live, retiring or just released.
+CDL_TEST_CASE(GPUResourcePool, DestroyingThePoolFreesEveryPayloadItHolds, Unit)
+{
+	Payload::s_Alive = 0;
+	GPUResourceRegistry registry;
+	{
+		TestPool pool(registry, kCapacity);
+		pool.Insert(Payload(1));
+
+		pool.Release(pool.Insert(Payload(2)));
+		FramePacket packet;
+		registry.MoveReleasedSlotsIntoPacket(packet);
+		registry.RetireReleasedSlots(packet, 1);
+
+		pool.Release(pool.Insert(Payload(3)));
+		CDL_CHECK_EQ(Payload::s_Alive, 3);
+	}
+	CDL_EXPECT_EQ(Payload::s_Alive, 0);
+}

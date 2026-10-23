@@ -146,3 +146,23 @@ CDL_TEST_CASE(GPUUploader, SubmitsNothingWhenEveryRegionIsEmpty, Gpu)
 	}
 	ExpectNoVulkanDebugMessages(logs);
 }
+
+// With uploads no longer blocking, the destructor is the only wait left: without it, the copy still in flight would
+// have its staging buffer and command pool destroyed under it, which validation reports.
+CDL_TEST_CASE(GPUUploader, DestroyingItWithAnUploadInFlightIsClean, Gpu)
+{
+	LoggerFixture logs(LogLevel::Warn, kRenderChannelMask);
+	{
+		TestAllocator gpu;
+		const std::vector<std::byte> data = BytePattern(4096, 11);
+		GPUBuffer destination = CreateHostBuffer(gpu.Allocator, data.size());
+		{
+			GPUUploader uploader(gpu.Device, gpu.Allocator);
+			Upload(uploader, std::array{ BufferUpload{ .Data = data, .Destination = destination.GetBuffer() } });
+		}
+
+		CDL_EXPECT_EQ(LiveAllocations(gpu.Allocator), 1u);	// The staging went with the uploader
+		CDL_EXPECT(ReadBack(gpu.Allocator, destination) == data);
+	}
+	ExpectNoVulkanDebugMessages(logs);
+}

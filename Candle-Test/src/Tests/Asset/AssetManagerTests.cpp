@@ -130,6 +130,77 @@ CDL_TEST_CASE(AssetManager, KeepsALoadedAssetAlive, Unit)
 	CDL_EXPECT_EQ(found->Id, 7);
 }
 
+CDL_TEST_CASE(AssetManager, UnloadPassesTheAssetToItsHandlerAndLetsGoOfIt, Unit)
+{
+	RecordingManager test;
+	SharedPtr<TextureStub> texture = SharedPtr<TextureStub>::Create();
+	test.Manager.LoadAsset("Brick", texture);
+
+	test.Manager.UnloadAsset("Brick", AssetType::Texture);
+
+	CDL_CHECK_EQ(test.Unloaded.size(), 1u);
+	CDL_EXPECT(test.Unloaded[0] == texture.Get());
+	CDL_EXPECT(!test.Manager.GetAsset<TextureStub>("Brick"));
+	CDL_EXPECT_EQ(texture->GetRefCount(), 1u);
+}
+
+// The type is part of the id, so unloading the texture leaves a material of the same name loaded.
+CDL_TEST_CASE(AssetManager, UnloadLeavesTheSameNameUnderAnotherType, Unit)
+{
+	RecordingManager test;
+	SharedPtr<MaterialStub> material = SharedPtr<MaterialStub>::Create();
+	test.Manager.LoadAsset("Brick", SharedPtr<TextureStub>::Create());
+	test.Manager.LoadAsset("Brick", material);
+
+	test.Manager.UnloadAsset("Brick", AssetType::Texture);
+
+	CDL_EXPECT(!test.Manager.GetAsset<TextureStub>("Brick"));
+	CDL_EXPECT(test.Manager.GetAsset<MaterialStub>("Brick") == material);
+}
+
+// Unloading what was never loaded is a caller mistake worth a warning; no handler sees it and nothing else is touched.
+CDL_TEST_CASE(AssetManager, UnloadingAnUnknownNameWarnsAndChangesNothing, Unit)
+{
+	LoggerFixture logs(LogLevel::Warn, static_cast<uint16_t>(LogChannel::Asset));
+	{
+		RecordingManager test;
+		SharedPtr<TextureStub> texture = SharedPtr<TextureStub>::Create();
+		test.Manager.LoadAsset("Brick", texture);
+
+		test.Manager.UnloadAsset("Stone", AssetType::Texture);
+
+		CDL_EXPECT(test.Unloaded.empty());
+		CDL_EXPECT(test.Manager.GetAsset<TextureStub>("Brick") == texture);
+		CDL_CHECK(Logger::Flush());
+	}
+
+	const bool warned = std::ranges::any_of(logs.Records, [](const LogRecord& record) {
+		return record.Level == LogLevel::Warn && record.Channel == LogChannel::Asset
+			&& std::string_view(record.Message).contains("No loaded asset");
+	});
+	CDL_EXPECT(warned);
+}
+
+// The mirror of loading without a handler: a warning, but the manager still lets go of the asset.
+CDL_TEST_CASE(AssetManager, UnloadWithoutAHandlerStillForgetsTheAssetAndWarns, Unit)
+{
+	LoggerFixture logs(LogLevel::Warn, static_cast<uint16_t>(LogChannel::Asset));
+	{
+		AssetManager manager;
+		manager.LoadAsset("Brick", SharedPtr<TextureStub>::Create());
+
+		manager.UnloadAsset("Brick", AssetType::Texture);
+
+		CDL_EXPECT(!manager.GetAsset<TextureStub>("Brick"));
+		CDL_CHECK(Logger::Flush());
+	}
+
+	const auto handlerWarnings = std::ranges::count_if(logs.Records, [](const LogRecord& record) {
+		return record.Level == LogLevel::Warn && std::string_view(record.Message).contains("No asset handler");
+	});
+	CDL_EXPECT_EQ(handlerWarnings, 2);	// One for the load, one for the unload
+}
+
 CDL_TEST_CASE(AssetManager, ASecondHandlerForATypeReplacesTheFirst, Unit)
 {
 	std::vector<TextureStub*> firstLoaded, secondLoaded, unloaded;
