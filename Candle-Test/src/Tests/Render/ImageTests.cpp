@@ -1,6 +1,4 @@
-// Image tracks one VkImage's layout across the barriers it records. Validation checks every barrier's oldLayout
-// against the layout the image is really in, so a tracking mistake fails these as a validation message. An oldLayout
-// of Undefined is always legal, so each test first moves the image out of it to give a mistake something to contradict.
+// MakeImageBarrier turns two ImageStates and a subresource range into one barrier, without recording it.
 
 #include "TestFramework.h"
 #include "TestHelpers.h"
@@ -9,158 +7,72 @@
 #include <Candle/Render/Image.h>
 #include <Candle/Render/RenderDevice.h>
 
-#include <type_traits>
-#include <utility>
+#include <cstdint>
 
 using namespace Candle;
 using namespace Candle::Test;
 using Candle::Test::Type::Gpu;
-
-// A copy would be a second owner destroying the same VkImageView.
-CDL_STATIC_ASSERT(!std::is_copy_constructible_v<Image>);
-CDL_STATIC_ASSERT(!std::is_copy_assignable_v<Image>);
-CDL_STATIC_ASSERT(std::is_move_constructible_v<Image>);
-CDL_STATIC_ASSERT(std::is_move_assignable_v<Image>);
+using Candle::Test::Type::Unit;
 
 namespace {
 
-	constexpr vk::Format kFormat = vk::Format::eR8G8B8A8Unorm;
-	constexpr vk::Extent2D kExtent{ .width = 4, .height = 4 };
-	constexpr vk::ImageSubresourceRange kColorRange{ .aspectMask = vk::ImageAspectFlagBits::eColor, .levelCount = 1, .layerCount = 1 };
-
-	constexpr ImageTransitionParams kToTransferDst{
+	constexpr ImageState kTransferDst{
 		.Layout = vk::ImageLayout::eTransferDstOptimal,
-		.AccessMask = vk::AccessFlagBits2::eTransferWrite,
-		.StageMask = vk::PipelineStageFlagBits2::eClear,
-		.AspectMask = vk::ImageAspectFlagBits::eColor };
+		.Access = vk::AccessFlagBits2::eTransferWrite,
+		.Stage = vk::PipelineStageFlagBits2::eClear };
 
-	constexpr ImageTransitionParams kToColorAttachment{
-		.Layout = vk::ImageLayout::eColorAttachmentOptimal,
-		.AccessMask = vk::AccessFlagBits2::eColorAttachmentWrite,
-		.StageMask = vk::PipelineStageFlagBits2::eColorAttachmentOutput,
-		.AspectMask = vk::ImageAspectFlagBits::eColor };
-
-	// Image wraps a VkImage it doesn't own, as with swapchain images, so the test owns the image and its memory.
-	// Memory is declared first so the image is destroyed before the memory it is bound to.
-	struct OwnedImage
-	{
-		vk::raii::DeviceMemory Memory{ nullptr };
-		vk::raii::Image Handle{ nullptr };
-	};
-
-	uint32_t FindDeviceLocalMemoryType(RenderDevice& device, uint32_t allowedTypes)
-	{
-		const vk::PhysicalDeviceMemoryProperties properties = device.GetPhysicalDevice().getMemoryProperties();
-		for (uint32_t i = 0; i < properties.memoryTypeCount; ++i)
-		{
-			if ((allowedTypes & (1u << i)) && (properties.memoryTypes[i].propertyFlags & vk::MemoryPropertyFlagBits::eDeviceLocal))
-				return i;
-		}
-
-		CDL_CHECK_MSG(false, "no device-local memory type fits the image");
-		return 0;
-	}
-
-	OwnedImage CreateOwnedImage(RenderDevice& device)
-	{
-		OwnedImage image;
-		image.Handle = vk::raii::Image(device.GetDevice(), vk::ImageCreateInfo{
-			.imageType = vk::ImageType::e2D,
-			.format = kFormat,
-			.extent = { kExtent.width, kExtent.height, 1 },
-			.mipLevels = 1,
-			.arrayLayers = 1,
-			.samples = vk::SampleCountFlagBits::e1,
-			.tiling = vk::ImageTiling::eOptimal,
-			.usage = vk::ImageUsageFlagBits::eColorAttachment | vk::ImageUsageFlagBits::eTransferDst,
-			.initialLayout = vk::ImageLayout::eUndefined });
-
-		const vk::MemoryRequirements requirements = image.Handle.getMemoryRequirements();
-		image.Memory = vk::raii::DeviceMemory(device.GetDevice(), vk::MemoryAllocateInfo{
-			.allocationSize = requirements.size,
-			.memoryTypeIndex = FindDeviceLocalMemoryType(device, requirements.memoryTypeBits) });
-		image.Handle.bindMemory(*image.Memory, 0);
-		return image;
-	}
-
-	Image WrapImage(RenderDevice& device, const OwnedImage& owned)
-	{
-		vk::raii::ImageView view(device.GetDevice(), vk::ImageViewCreateInfo{
-			.image = *owned.Handle,
-			.viewType = vk::ImageViewType::e2D,
-			.format = kFormat,
-			.subresourceRange = kColorRange });
-		return Image(*owned.Handle, std::move(view), ImageDesc{ .Extent = kExtent, .Format = kFormat });
-	}
+	constexpr ImageState kSampled{
+		.Layout = vk::ImageLayout::eShaderReadOnlyOptimal,
+		.Access = vk::AccessFlagBits2::eShaderSampledRead,
+		.Stage = vk::PipelineStageFlagBits2::eFragmentShader };
 
 }
 
-CDL_TEST_CASE(Image, KeepsItsDescriptionAndView, Gpu)
+// Swapping the two sides is the classic slip: it still compiles, and a layout-only check can miss it.
+CDL_TEST_CASE(Image, BarrierRunsFromTheFirstStateToTheSecond, Unit)
 {
-	LoggerFixture logs(LogLevel::Warn, kRenderChannelMask);
-	{
-		TestDevice gpu;
-		OwnedImage owned = CreateOwnedImage(gpu.Device);
-		Image image = WrapImage(gpu.Device, owned);
+	const vk::Image image{ reinterpret_cast<VkImage>(std::uintptr_t{ 0x1000 }) };	// Never handed to Vulkan
+	const vk::ImageSubresourceRange range{ .aspectMask = vk::ImageAspectFlagBits::eColor, .baseMipLevel = 1, .levelCount = 3, .baseArrayLayer = 2, .layerCount = 4 };
 
-		CDL_EXPECT_EQ(image.GetDesc().Extent.width, kExtent.width);
-		CDL_EXPECT_EQ(image.GetDesc().Extent.height, kExtent.height);
-		CDL_EXPECT_EQ(image.GetDesc().Format, kFormat);
-		CDL_EXPECT(*image.GetImageView());
-	}
-	ExpectNoVulkanDebugMessages(logs);
+	const vk::ImageMemoryBarrier2 barrier = MakeImageBarrier(image, kTransferDst, kSampled, range);
+
+	CDL_EXPECT_EQ(barrier.oldLayout, kTransferDst.Layout);
+	CDL_EXPECT(barrier.srcAccessMask == kTransferDst.Access);
+	CDL_EXPECT(barrier.srcStageMask == kTransferDst.Stage);
+	CDL_EXPECT_EQ(barrier.newLayout, kSampled.Layout);
+	CDL_EXPECT(barrier.dstAccessMask == kSampled.Access);
+	CDL_EXPECT(barrier.dstStageMask == kSampled.Stage);
+	CDL_EXPECT(barrier.image == image);
+	CDL_EXPECT(barrier.subresourceRange == range);
+
+	// No queue family ownership transfer: that needs both families named, and a matching barrier on the other queue
+	CDL_EXPECT_EQ(barrier.srcQueueFamilyIndex, VK_QUEUE_FAMILY_IGNORED);
+	CDL_EXPECT_EQ(barrier.dstQueueFamilyIndex, VK_QUEUE_FAMILY_IGNORED);
 }
 
-// The clear checks the first barrier's newLayout, and the second barrier's oldLayout must be that same layout.
-CDL_TEST_CASE(Image, TransitionsFromTheLayoutItLastMovedTo, Gpu)
+// An upload's shape over a mip chain: from a fresh ImageState to TransferDst, written, then on to sampled. The clear
+// checks every mip reached TransferDst, and the second barrier's oldLayout every mip that stayed there, so a barrier
+// covering less than its range fails validation. Starting from ImageState{} also checks the default is a fresh image.
+CDL_TEST_CASE(Image, BarrierCoversEveryMipInItsRange, Gpu)
 {
+	constexpr vk::Format kFormat = vk::Format::eR8G8B8A8Unorm;
+	constexpr uint32_t kMipLevels = 3;
+	constexpr vk::ImageSubresourceRange kAllMips{ .aspectMask = vk::ImageAspectFlagBits::eColor, .levelCount = kMipLevels, .layerCount = 1 };
+
 	LoggerFixture logs(LogLevel::Warn, kRenderChannelMask);
 	{
 		TestDevice gpu;
-		OwnedImage owned = CreateOwnedImage(gpu.Device);
-		Image image = WrapImage(gpu.Device, owned);
+		OwnedImage owned = CreateOwnedImage(gpu.Device, kFormat, { .width = 8, .height = 8 }, kMipLevels,
+			vk::ImageUsageFlagBits::eTransferDst | vk::ImageUsageFlagBits::eSampled);
 		TestCommands commands(gpu.Device);
 
-		commands.Buffer.begin({ .flags = vk::CommandBufferUsageFlagBits::eOneTimeSubmit });
-		image.Transition(kToTransferDst, commands.Buffer);
-		commands.Buffer.clearColorImage(*owned.Handle, vk::ImageLayout::eTransferDstOptimal, vk::ClearColorValue(0.0f, 0.0f, 0.0f, 1.0f), kColorRange);
-		image.Transition(kToColorAttachment, commands.Buffer);
-		commands.Buffer.end();
-
-		SubmitAndWait(gpu.Device, commands.Buffer);
-	}
-	ExpectNoVulkanDebugMessages(logs);
-}
-
-// A layout change the Image never recorded, as presentation makes, must be adopted through SetState. Without it the
-// next Transition names TransferDst as its oldLayout while the image is really in General.
-CDL_TEST_CASE(Image, SetStateAdoptsALayoutChangedElsewhere, Gpu)
-{
-	LoggerFixture logs(LogLevel::Warn, kRenderChannelMask);
-	{
-		TestDevice gpu;
-		OwnedImage owned = CreateOwnedImage(gpu.Device);
-		Image image = WrapImage(gpu.Device, owned);
-		TestCommands commands(gpu.Device);
+		const vk::ImageMemoryBarrier2 toTransferDst = MakeImageBarrier(*owned.Handle, ImageState{}, kTransferDst, kAllMips);
+		const vk::ImageMemoryBarrier2 toSampled = MakeImageBarrier(*owned.Handle, kTransferDst, kSampled, kAllMips);
 
 		commands.Buffer.begin({ .flags = vk::CommandBufferUsageFlagBits::eOneTimeSubmit });
-		image.Transition(kToTransferDst, commands.Buffer);
-
-		const vk::ImageMemoryBarrier2 elsewhere{
-			.srcStageMask = vk::PipelineStageFlagBits2::eClear,
-			.srcAccessMask = vk::AccessFlagBits2::eTransferWrite,
-			.dstStageMask = vk::PipelineStageFlagBits2::eColorAttachmentOutput,
-			.dstAccessMask = vk::AccessFlagBits2::eNone,
-			.oldLayout = vk::ImageLayout::eTransferDstOptimal,
-			.newLayout = vk::ImageLayout::eGeneral,
-			.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
-			.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
-			.image = *owned.Handle,
-			.subresourceRange = kColorRange };
-		commands.Buffer.pipelineBarrier2({ .imageMemoryBarrierCount = 1, .pImageMemoryBarriers = &elsewhere });
-
-		image.SetState(vk::ImageLayout::eGeneral, vk::AccessFlagBits2::eNone, vk::PipelineStageFlagBits2::eColorAttachmentOutput);
-		image.Transition(kToColorAttachment, commands.Buffer);
+		commands.Buffer.pipelineBarrier2({ .imageMemoryBarrierCount = 1, .pImageMemoryBarriers = &toTransferDst });
+		commands.Buffer.clearColorImage(*owned.Handle, vk::ImageLayout::eTransferDstOptimal, vk::ClearColorValue(1.0f, 0.0f, 1.0f, 1.0f), kAllMips);
+		commands.Buffer.pipelineBarrier2({ .imageMemoryBarrierCount = 1, .pImageMemoryBarriers = &toSampled });
 		commands.Buffer.end();
 
 		SubmitAndWait(gpu.Device, commands.Buffer);

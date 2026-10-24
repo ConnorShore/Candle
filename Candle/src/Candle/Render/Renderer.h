@@ -10,7 +10,7 @@ namespace Candle {
 
 	class RenderDevice;
 	class Pipeline;
-	class Image;
+	class SwapChainImage;
 	class GeometryPool;
 	class RenderPipeline;
 
@@ -23,7 +23,7 @@ namespace Candle {
 	{
 	public:
 		explicit Renderer(RenderDevice& renderDevice, GeometryPool& geometryPool, vk::Format targetFormat);				// pipelines, bindless tables, render graph
-		void Render(const FramePacket& packet, FrameContext& frame, Image& target);   // target is imported into the graph; its owner presents it
+		void Render(const FramePacket& packet, FrameContext& frame, SwapChainImage& target);   // target is imported into the graph; its owner presents it
 
 	private:
 		void CreatePipeline(const RenderPipeline& pipeline); // builds a Pipeline from the description and stores it

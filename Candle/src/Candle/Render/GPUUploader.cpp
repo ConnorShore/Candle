@@ -7,7 +7,6 @@
 
 namespace Candle {
 
-
 	GPUUploader::GPUUploader(RenderDevice& renderDevice, GPUAllocator& allocator)
 		: m_RenderDevice(renderDevice)
 		, m_Allocator(allocator)
@@ -83,6 +82,27 @@ namespace Candle {
 		vk::CommandBufferSubmitInfo commandBufferInfo{ .commandBuffer = *m_CommandBuffer };
 		m_LastUploadValue = m_RenderDevice.Submit(QueueType::Graphics, { .CommandBuffers = { &commandBufferInfo, 1 } });
 		m_StagingDeletions.Enqueue(QueueType::Graphics, m_LastUploadValue, std::move(stagingBuffer));
+	}
+
+	void GPUUploader::UploadImage(const ImageUpload upload, vk::PipelineStageFlags2 dstStages, vk::AccessFlags2 dstAccess)
+	{
+		CDL_CORE_ASSERT(Platform::IsMainThread(), "GPUUploader owns its command pool, so it is main thread only");
+
+		// Create staging buffer
+
+		// Upload image bytes (cpu) to a staging buffer
+
+		// Create vulkan image
+
+		// Transition image layout to optimal layout for copy
+
+		// Copy staging buffer to image
+
+		// Transition image layout to destination layout
+
+		// Submit command buffer and wait for completion
+
+		// Free staging buffer
 	}
 
 	void GPUUploader::FreeCompletedStagingBuffers()

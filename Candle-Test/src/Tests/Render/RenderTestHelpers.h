@@ -212,6 +212,50 @@ namespace Candle::Test {
 		device.WaitFor(QueueType::Graphics, device.Submit(QueueType::Graphics, { .CommandBuffers = { &commandBufferInfo, 1 } }));
 	}
 
+	// A VkImage the test owns, for code that takes one it doesn't own, as with swapchain images.
+	// Memory is declared first so the image is destroyed before the memory it is bound to.
+	struct OwnedImage
+	{
+		vk::raii::DeviceMemory Memory{ nullptr };
+		vk::raii::Image Handle{ nullptr };
+	};
+
+	inline uint32_t FindDeviceLocalMemoryType(RenderDevice& device, uint32_t allowedTypes)
+	{
+		const vk::PhysicalDeviceMemoryProperties properties = device.GetPhysicalDevice().getMemoryProperties();
+		for (uint32_t i = 0; i < properties.memoryTypeCount; ++i)
+		{
+			if ((allowedTypes & (1u << i)) && (properties.memoryTypes[i].propertyFlags & vk::MemoryPropertyFlagBits::eDeviceLocal))
+				return i;
+		}
+
+		CDL_CHECK_MSG(false, "no device-local memory type fits the image");
+		return 0;
+	}
+
+	// 2D, one layer, optimally tiled, bound to device-local memory and still in Undefined
+	inline OwnedImage CreateOwnedImage(RenderDevice& device, vk::Format format, vk::Extent2D extent, uint32_t mipLevels, vk::ImageUsageFlags usage)
+	{
+		OwnedImage image;
+		image.Handle = vk::raii::Image(device.GetDevice(), vk::ImageCreateInfo{
+			.imageType = vk::ImageType::e2D,
+			.format = format,
+			.extent = { extent.width, extent.height, 1 },
+			.mipLevels = mipLevels,
+			.arrayLayers = 1,
+			.samples = vk::SampleCountFlagBits::e1,
+			.tiling = vk::ImageTiling::eOptimal,
+			.usage = usage,
+			.initialLayout = vk::ImageLayout::eUndefined });
+
+		const vk::MemoryRequirements requirements = image.Handle.getMemoryRequirements();
+		image.Memory = vk::raii::DeviceMemory(device.GetDevice(), vk::MemoryAllocateInfo{
+			.allocationSize = requirements.size,
+			.memoryTypeIndex = FindDeviceLocalMemoryType(device, requirements.memoryTypeBits) });
+		image.Handle.bindMemory(*image.Memory, 0);
+		return image;
+	}
+
 	// Compiled shaders are build outputs, not checked-in files, so a missing one is a setup step rather than a failure.
 	inline void SkipUnlessCompiled(const std::filesystem::path& spirvPath)
 	{

@@ -16,6 +16,13 @@ namespace Candle {
 		vk::Buffer Destination; 
 	};
 
+	struct ImageUpload
+	{
+		std::span<const std::byte> Data;
+		vk::Image Destination;
+		vk::ImageLayout DestinationLayout;
+	};
+
 	// Records and submits one-off copies on the graphics queue.
 	// Threading: main thread only; it owns its command pool.
 	class GPUUploader
@@ -32,6 +39,7 @@ namespace Candle {
 
 		// Stages every region, records the copies plus one barrier into dstStages/dstAccess, and submits without waiting.
 		void UploadBuffers(std::span<const BufferUpload> uploads, vk::PipelineStageFlags2 dstStages, vk::AccessFlags2 dstAccess);
+		void UploadImage(const ImageUpload upload, vk::PipelineStageFlags2 dstStages, vk::AccessFlags2 dstAccess);
 
 		void FreeCompletedStagingBuffers();	// Frees the staging buffers of uploads the GPU has finished
 

@@ -5,7 +5,7 @@
 #include "PipelineSpecification.h"
 #include "FramePacket.h"
 #include "FrameContext.h"
-#include "Image.h"
+#include "SwapChainImage.h"
 #include "GeometryPool.h"
 
 #include "Candle/Render/Pipelines/TrianglePipeline.h"
@@ -29,7 +29,7 @@ namespace Candle {
 		CreatePipeline(TrianglePipeline{});
 	}
 
-	void Renderer::Render(const FramePacket& packet, FrameContext& frame, Image& target)
+	void Renderer::Render(const FramePacket& packet, FrameContext& frame, SwapChainImage& target)
 	{
 		CDL_PROFILE_SCOPE("Renderer::Render");
 
@@ -46,9 +46,8 @@ namespace Candle {
 		// Before starting rendering, transition the swapchain image to COLOR_ATTACHMENT_OPTIMAL
 		target.Transition({
 			.Layout = vk::ImageLayout::eColorAttachmentOptimal,
-			.AccessMask = vk::AccessFlagBits2::eColorAttachmentWrite,
-			.StageMask = vk::PipelineStageFlagBits2::eColorAttachmentOutput,
-			.AspectMask = vk::ImageAspectFlagBits::eColor
+			.Access = vk::AccessFlagBits2::eColorAttachmentWrite,
+			.Stage = vk::PipelineStageFlagBits2::eColorAttachmentOutput
 			}, frame.CommandBuffer);
 
 		vk::ClearValue clearColor = vk::ClearColorValue(0.0f, 0.0f, 0.0f, 1.0f);
@@ -88,8 +87,7 @@ namespace Candle {
 
 		target.Transition({
 			.Layout = vk::ImageLayout::ePresentSrcKHR,
-			.AccessMask = vk::AccessFlagBits2::eNone,
-			.AspectMask = vk::ImageAspectFlagBits::eColor,
+			.Access = vk::AccessFlagBits2::eNone
 			}, frame.CommandBuffer);
 
 		// End recording commands into the command buffer. After this, the command buffer can be submitted to the graphics queue for execution.
