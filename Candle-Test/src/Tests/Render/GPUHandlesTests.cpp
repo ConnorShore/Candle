@@ -1,8 +1,11 @@
-// GPUMeshHandle's validity, which callers check before handing a handle to GeometryPool.
+// GPUHandle: validity, which callers check before handing a handle to a pool, and the tag that keeps kinds apart.
 
 #include "TestFramework.h"
 
+#include <Candle/Core/Asserts.h>
 #include <Candle/Render/GPUHandles.h>
+
+#include <type_traits>
 
 using namespace Candle;
 using Candle::Test::Type::Unit;
@@ -20,3 +23,13 @@ CDL_TEST_CASE(GPUHandles, AnyIndexButTheSentinelIsValid, Unit)
 	CDL_EXPECT((GPUMeshHandle{ .Index = 0, .Generation = 0 }.IsValid()));
 	CDL_EXPECT((GPUMeshHandle{ .Index = 41, .Generation = 3 }.IsValid()));
 }
+
+namespace {
+
+	struct OtherTag {};
+
+}
+
+// The tag only makes kinds distinct types, so a mesh handle can't be handed to a pool of another kind.
+CDL_STATIC_ASSERT(!std::is_same_v<GPUMeshHandle, GPUHandle<OtherTag>>);
+CDL_STATIC_ASSERT(!std::is_convertible_v<GPUMeshHandle, GPUHandle<OtherTag>>);

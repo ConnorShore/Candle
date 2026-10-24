@@ -84,3 +84,20 @@ CDL_TEST_CASE(Window, MinimizeAndRestoreAreReported, Display)
 	window.Restore();
 	CDL_CHECK_MSG(WaitForEvent<WindowMinimized>([](const WindowMinimized& e) { return !e.Minimized; }), "no restore event");
 }
+
+// Application fills every packet's Minimized from this, so the state must agree with the events the window reports.
+CDL_TEST_CASE(Window, IsMinimizedFollowsMinimizeAndRestore, Display)
+{
+	WindowingBackend backend;
+	Window window(TestWindowSpec());
+	DiscardPendingEvents();
+	CDL_EXPECT_FALSE(window.IsMinimized());
+
+	window.Minimize();
+	CDL_CHECK_MSG(WaitForEvent<WindowMinimized>([](const WindowMinimized& e) { return e.Minimized; }), "no minimize event");
+	CDL_EXPECT(window.IsMinimized());
+
+	window.Restore();
+	CDL_CHECK_MSG(WaitForEvent<WindowMinimized>([](const WindowMinimized& e) { return !e.Minimized; }), "no restore event");
+	CDL_EXPECT_FALSE(window.IsMinimized());
+}

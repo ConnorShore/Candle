@@ -40,12 +40,15 @@ CDL_TEST_CASE(MeshAssetHandler, LoadUploadsTheMeshAndStoresItsHandle, Gpu)
 
 		CDL_CHECK(asset->GetGPUHandle().IsValid());
 		CDL_EXPECT_EQ(gpu.Pool.GetMeshInfo(asset->GetGPUHandle()).IndexCount, 3u);
+
+		RunReleaseFrame(gpu);
 		CDL_EXPECT_EQ(LiveAllocations(gpu.Allocator), 2u);
 	}
 	ExpectNoVulkanDebugMessages(logs);
 }
 
-CDL_TEST_CASE(MeshAssetHandler, UnloadDestroysTheMeshAndClearsItsHandle, Gpu)
+// The handle is cleared at once; the buffers go when the frame that carried the release retires.
+CDL_TEST_CASE(MeshAssetHandler, UnloadReleasesTheMeshAndClearsItsHandle, Gpu)
 {
 	LoggerFixture logs(LogLevel::Warn, kRenderChannelMask);
 	{
@@ -54,10 +57,14 @@ CDL_TEST_CASE(MeshAssetHandler, UnloadDestroysTheMeshAndClearsItsHandle, Gpu)
 		IAssetHandler& untyped = handler;
 		SharedPtr<MeshAsset> asset = CreateTriangleAsset();
 		untyped.OnLoad(*asset);
+		const GPUMeshHandle mesh = asset->GetGPUHandle();
 
 		untyped.OnUnload(*asset);
 
 		CDL_EXPECT_FALSE(asset->GetGPUHandle().IsValid());
+		CDL_EXPECT_FALSE(gpu.Pool.IsAlive(mesh));
+
+		RunReleaseFrame(gpu);
 		CDL_EXPECT_EQ(LiveAllocations(gpu.Allocator), 0u);
 	}
 	ExpectNoVulkanDebugMessages(logs);
@@ -77,6 +84,27 @@ CDL_TEST_CASE(MeshAssetHandler, AssetManagerLoadsMeshesThroughIt, Gpu)
 
 		CDL_EXPECT(asset->GetGPUHandle().IsValid());
 		CDL_EXPECT(assets.GetAsset<MeshAsset>("Triangle") == asset);
+	}
+	ExpectNoVulkanDebugMessages(logs);
+}
+
+CDL_TEST_CASE(MeshAssetHandler, AssetManagerUnloadsMeshesThroughIt, Gpu)
+{
+	LoggerFixture logs(LogLevel::Warn, kRenderChannelMask);
+	{
+		TestGeometry gpu;
+		AssetManager assets;
+		assets.RegisterAssetHandler(ScopedPtr<MeshAssetHandler>::Create(gpu.Pool));
+		SharedPtr<MeshAsset> asset = CreateTriangleAsset();
+		assets.LoadAsset("Triangle", asset);
+
+		assets.UnloadAsset("Triangle", AssetType::Mesh);
+
+		CDL_EXPECT_FALSE(asset->GetGPUHandle().IsValid());
+		CDL_EXPECT(assets.GetAsset<MeshAsset>("Triangle") == nullptr);
+
+		RunReleaseFrame(gpu);
+		CDL_EXPECT_EQ(LiveAllocations(gpu.Allocator), 0u);
 	}
 	ExpectNoVulkanDebugMessages(logs);
 }

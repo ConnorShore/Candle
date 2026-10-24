@@ -257,6 +257,28 @@ CDL_TEST_CASE(RenderDevice, WaitForBlocksUntilTheGpuReachesTheValue, Gpu)
 	ExpectNoVulkanDebugMessages(logs);
 }
 
+// The completed value is a poll, so deletion queues can drain without waiting: it stays below a submit held back by a
+// host-signaled gate, and reaches it once the GPU does.
+CDL_TEST_CASE(RenderDevice, CompletedTimelineValueTracksTheGpu, Gpu)
+{
+	LoggerFixture logs(LogLevel::Warn, kRenderChannelMask);
+	{
+		TestDevice gpu;
+		CDL_EXPECT_EQ(gpu.Device.GetCompletedTimelineValue(QueueType::Graphics), 0u);
+
+		vk::SemaphoreTypeCreateInfo timelineType{ .semaphoreType = vk::SemaphoreType::eTimeline, .initialValue = 0 };
+		vk::raii::Semaphore gate(gpu.Device.GetDevice(), vk::SemaphoreCreateInfo{ .pNext = &timelineType });
+		const vk::SemaphoreSubmitInfo gateWait{ .semaphore = *gate, .value = 1, .stageMask = vk::PipelineStageFlagBits2::eAllCommands };
+		const uint64_t value = gpu.Device.Submit(QueueType::Graphics, { .Waits = { &gateWait, 1 } });
+		CDL_EXPECT_LT(gpu.Device.GetCompletedTimelineValue(QueueType::Graphics), value);
+
+		gpu.Device.GetDevice().signalSemaphore({ .semaphore = *gate, .value = 1 });
+		gpu.Device.WaitFor(QueueType::Graphics, value);
+		CDL_EXPECT_EQ(gpu.Device.GetCompletedTimelineValue(QueueType::Graphics), value);
+	}
+	ExpectNoVulkanDebugMessages(logs);
+}
+
 // Many threads submitting at once, alternating roles. Per VkQueue the values must be unique and gap-free, and rise
 // within each thread; validation's thread-safety checks fail the test if two submits ever touch one VkQueue together.
 // Gpu rather than Stress, because a driver is the harder requirement.

@@ -5,6 +5,7 @@
 #include "RenderSpecification.h"
 #include "VulkanUtils.h"
 
+#include "Candle/Core/Profiler.h"
 #include "Candle/Core/Threading/ScopedLock.h"
 #include "Candle/Platform/Platform.h"
 
@@ -142,6 +143,8 @@ namespace Candle {
 
 	uint64_t RenderDevice::Submit(QueueType queue, const SubmitDesc& desc)
 	{
+		CDL_PROFILE_SCOPE("RenderDevice::Submit");
+
 		CDL_CORE_ASSERT(desc.Signals.size() <= SubmitDesc::kMaxSignals, "Too many signal semaphores in one submit");
 
 		QueueState& state = *m_Queues[std::to_underlying(queue)];
@@ -177,6 +180,8 @@ namespace Candle {
 
 	void RenderDevice::WaitFor(QueueType queue, uint64_t value) const
 	{
+		CDL_PROFILE_WAIT("RenderDevice::WaitFor");
+
 		const QueueState& state = *m_Queues[std::to_underlying(queue)];
 		vk::SemaphoreWaitInfo waitInfo{ .semaphoreCount = 1, .pSemaphores = &*state.Timeline, .pValues = &value };
 
@@ -185,8 +190,15 @@ namespace Candle {
 		CDL_CORE_ASSERT(result == vk::Result::eSuccess, "Untimed timeline wait returned early");
 	}
 
+	uint64_t RenderDevice::GetCompletedTimelineValue(QueueType queue) const
+	{
+		return m_Queues[std::to_underlying(queue)]->Timeline.getCounterValue();
+	}
+
 	void RenderDevice::WaitIdle()
 	{
+		CDL_PROFILE_WAIT("RenderDevice::WaitIdle");
+
 		// Locks the storage, not m_Queues, so an aliased queue's lock isn't taken twice
 		ScopedLock<AdaptiveSpinLock> graphicsLock(m_QueueStates[std::to_underlying(QueueType::Graphics)].SubmitLock);
 		ScopedLock<AdaptiveSpinLock> transferLock(m_QueueStates[std::to_underlying(QueueType::Transfer)].SubmitLock);

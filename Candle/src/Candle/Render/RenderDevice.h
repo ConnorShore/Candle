@@ -1,5 +1,6 @@
 #pragma once
 
+#include "QueueType.h"
 #include "Candle/Core/Threading/AdaptiveSpinLock.h"
 
 #include <vulkan/vulkan_raii.hpp>
@@ -13,13 +14,6 @@ namespace Candle {
 
 	class RenderInstance;
 	struct RenderSpecification;
-
-	enum class QueueType : uint8_t
-	{
-		Graphics,
-		Transfer,
-		Count
-	};
 
 	struct QueueFamilyIndices
 	{
@@ -64,6 +58,7 @@ namespace Candle {
 		vk::Result Present(const vk::PresentInfoKHR& presentInfo);	// Graphics queue, under its submit lock
 
 		void WaitFor(QueueType queue, uint64_t value) const;	// Blocks until the queue's timeline reaches value; 0 returns at once
+		uint64_t GetCompletedTimelineValue(QueueType queue) const;	// The value the GPU has reached on the queue's timeline; never blocks
 		void WaitIdle(); // Shutdown only, never in the frame loop. vkDeviceWaitIdle synchronizes on every queue, so it takes every submit lock.
 
 		inline vk::raii::Device& GetDevice() { return m_LogicalDevice; }

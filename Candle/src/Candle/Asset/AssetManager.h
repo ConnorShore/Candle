@@ -21,6 +21,7 @@ namespace Candle {
 
 		// Temporary placeholder for now (creates default mesh for now)
 		uint64_t LoadAsset(const std::string& name, SharedPtr<Asset> asset);
+		void UnloadAsset(const std::string& name, AssetType type);
 
 		// See if can enfore kType to be defined via Asset (IsAsset above should work partially but want compiler error if kType is not defined when creating a new asset class
 		// Then GetType() can exist in base asset class and return kType (which is static) for the derived class

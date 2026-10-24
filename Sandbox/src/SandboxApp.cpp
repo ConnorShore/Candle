@@ -62,6 +62,9 @@ namespace Candle {
 		spec.LoggerSpec.LogToFile = true;
 		spec.LoggerSpec.LogFilePath = "logs/Sandbox.log";
 
+		// Render settings for the Sandbox application
+		spec.RenderSpec.DevicePreference = RenderDevicePreference::DiscreteGPU;
+
 		return ScopedPtr<SandboxApp>::Create(spec);
 	}
 }

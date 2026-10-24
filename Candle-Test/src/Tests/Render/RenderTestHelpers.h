@@ -5,9 +5,11 @@
 #include "TestFramework.h"
 #include "TestHelpers.h"
 
+#include <Candle/Render/FramePacket.h>
 #include <Candle/Render/GeometryPool.h>
 #include <Candle/Render/GPUAllocator.h>
 #include <Candle/Render/GPUBuffer.h>
+#include <Candle/Render/GPUResourceRegistry.h>
 #include <Candle/Render/GPUUploader.h>
 #include <Candle/Render/RenderDevice.h>
 #include <Candle/Render/RenderInstance.h>
@@ -93,11 +95,31 @@ namespace Candle::Test {
 	};
 
 	// What GeometryPool needs, in dependency order: it stages through the uploader, which allocates through the allocator.
+	// Uploads don't block, so the GPU is drained before the pool frees the meshes it still holds.
 	struct TestGeometry : TestAllocator
 	{
 		GPUUploader Uploader{ Device, Allocator };
-		GeometryPool Pool{ Allocator, Uploader };
+		GPUResourceRegistry Registry;
+		GeometryPool Pool{ Allocator, Uploader, Registry };
+
+		inline ~TestGeometry() { Device.WaitIdle(); }
 	};
+
+	// Stands in for one frame of RenderManager: pending releases ride a packet to an empty submit, retire with it once
+	// the GPU reaches it, and their slots come back to the main thread. Frees the uploads' staging too.
+	inline void RunReleaseFrame(TestGeometry& gpu)
+	{
+		FramePacket packet;
+		gpu.Registry.MoveReleasedSlotsIntoPacket(packet);
+
+		const uint64_t retireValue = gpu.Device.Submit(QueueType::Graphics, {});
+		gpu.Registry.RetireReleasedSlots(packet, retireValue);
+		gpu.Device.WaitFor(QueueType::Graphics, retireValue);
+		gpu.Registry.FreeRetiredSlots(gpu.Device.GetCompletedTimelineValue(QueueType::Graphics), packet);
+
+		gpu.Registry.ReturnRecycledSlotsToPools(packet);
+		gpu.Uploader.FreeCompletedStagingBuffers();
+	}
 
 	// One triangle and its indices, for tests that need any mesh at all.
 	inline const std::array<GPU::Vertex, 3> kTriangleVertices = { {
