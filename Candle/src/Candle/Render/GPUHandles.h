@@ -17,7 +17,9 @@ namespace Candle {
 
 	struct MeshTag {};
 	using GPUMeshHandle = GPUHandle<MeshTag>;
-	using GPUTextureHandle = GPUHandle<struct TextureTag>;
+
+	struct TextureTag {};
+	using GPUTextureHandle = GPUHandle<TextureTag>;
 
 	// A handle with the kind erased, so one list can carry slots of every pool
 	struct GPUSlotRef

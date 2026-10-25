@@ -6,7 +6,7 @@
 namespace Candle {
 
 	GPUImage::GPUImage(const GPUImageSpec& spec, GPUAllocator& allocator)
-		: m_Allocator(allocator.GetAllocator()), m_Extent(spec.m_Extent)
+		: m_Allocator(allocator.GetAllocator())
 	{
 		vk::ImageCreateInfo imageInfo{
 			.imageType = vk::ImageType::e2D,
