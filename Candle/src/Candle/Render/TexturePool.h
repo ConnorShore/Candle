@@ -3,6 +3,9 @@
 #include "GPUHandles.h"
 #include "GPUImage.h"
 #include "GPUResourcePool.h"
+#include "TextureData.h"
+
+#include <span>
 
 namespace Candle {
 
@@ -13,6 +16,14 @@ namespace Candle {
 	struct TextureInfo
 	{
 		uint32_t Index;
+	};
+
+	struct TextureCreateSpec
+	{
+		std::span<const std::byte> Data;
+		glm::uvec2 Extent;
+		TextureFormat Format;
+		TextureColorSpace ColorSpace;
 	};
 
 	class TexturePool
@@ -26,7 +37,8 @@ namespace Candle {
 		TexturePool& operator=(const TexturePool&) = delete;
 
 		// TODO: Maybe have own Format enum
-		GPUTextureHandle CreateTexture(glm::uvec2 extent, vk::Format format);
+		// Only reads data: it is copied into a staging buffer before this returns, so the caller keeps ownership
+		GPUTextureHandle CreateTexture(TextureCreateSpec spec);
 		void ReleaseTexture(GPUTextureHandle handle);
 
 		// False for the default handle and for a released mesh, even once another mesh reuses its slot

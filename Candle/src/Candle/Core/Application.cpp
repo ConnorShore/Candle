@@ -8,6 +8,7 @@
 
 // Temporary, until we have a better way to register asset handlers //
 #include "Candle/Render/Assets/MeshAsset.h"
+#include "Candle/Render/Assets/Texture.h"
 //
 
 namespace Candle {
@@ -44,8 +45,10 @@ namespace Candle {
 			},
 			.Indices = { 0, 1, 2 }
 		};
-		SharedPtr<MeshAsset> meshAsset = SharedPtr<MeshAsset>::Create(std::move(testMeshData));
-		m_AssetManager.LoadAsset("TestMesh", meshAsset);
+		SharedPtr<MeshAsset> meshAsset = SharedPtr<MeshAsset>::Create("TestMesh", std::move(testMeshData));
+		m_AssetManager.LoadAsset(meshAsset);
+
+		uint64_t texUUID = m_AssetManager.LoadAsset<Texture>("TestTexture", "Candle/res/textures/box.jpg");
 	}
 
 	Application::~Application()
@@ -57,6 +60,8 @@ namespace Candle {
 	{
 		SharedPtr<MeshAsset> meshAsset = m_AssetManager.GetAsset<MeshAsset>("TestMesh");
 		std::vector<GPUMeshHandle> meshes{ meshAsset->GetGPUHandle() };
+		SharedPtr<Texture> textureAsset = m_AssetManager.GetAsset<Texture>("TestTexture");
+		std::vector<GPUTextureHandle> materials{ textureAsset->GetGPUHandle() };
 
 		// Spawn the render thread if we have a render manager
 		if (m_RenderManager)
@@ -81,6 +86,7 @@ namespace Candle {
 				FramePacket& packet = m_RenderManager->BeginFramePacket();
 				CDL_PROFILE_SCOPE_METADATA(packet.FrameIndex);
 				packet.Meshes = meshes;
+				packet.Materials = materials;
 				packet.Time = m_FrameStats.TotalTime;
 				packet.Minimized = m_Window->IsMinimized();
 				packet.SurfaceSize = m_Window->GetSize();

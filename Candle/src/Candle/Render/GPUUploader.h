@@ -12,15 +12,16 @@ namespace Candle {
 
 	struct BufferUpload 
 	{ 
-		std::span<const std::byte> Data; 
-		vk::Buffer Destination; 
+		std::span<const std::byte> Data;
+		vk::Buffer Destination;
 	};
 
-	struct ImageUpload
+	struct ImageUploadSpec
 	{
 		std::span<const std::byte> Data;
 		vk::Image Destination;
 		vk::ImageLayout DestinationLayout;
+		glm::uvec2 Extent;
 	};
 
 	// Records and submits one-off copies on the graphics queue.
@@ -39,7 +40,7 @@ namespace Candle {
 
 		// Stages every region, records the copies plus one barrier into dstStages/dstAccess, and submits without waiting.
 		void UploadBuffers(std::span<const BufferUpload> uploads, vk::PipelineStageFlags2 dstStages, vk::AccessFlags2 dstAccess);
-		void UploadImage(const ImageUpload upload, vk::PipelineStageFlags2 dstStages, vk::AccessFlags2 dstAccess);
+		void UploadImage(const ImageUploadSpec upload, vk::PipelineStageFlags2 dstStages, vk::AccessFlags2 dstAccess);
 
 		void FreeCompletedStagingBuffers();	// Frees the staging buffers of uploads the GPU has finished
 

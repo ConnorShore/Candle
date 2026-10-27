@@ -16,6 +16,8 @@ CDL_STATIC_ASSERT(IsAsset<MeshAsset>);
 
 namespace {
 
+	constexpr const char* kTriangleMeshName = "TriangleMesh";
+
 	MeshData TriangleData()
 	{
 		return {
@@ -27,7 +29,7 @@ namespace {
 
 CDL_TEST_CASE(MeshAsset, IsAMeshAsset, Unit)
 {
-	const MeshAsset asset(TriangleData());
+	const MeshAsset asset(kTriangleMeshName, TriangleData());
 
 	CDL_EXPECT_EQ(MeshAsset::kType, AssetType::Mesh);
 	CDL_EXPECT_EQ(asset.GetType(), AssetType::Mesh);
@@ -35,7 +37,7 @@ CDL_TEST_CASE(MeshAsset, IsAMeshAsset, Unit)
 
 CDL_TEST_CASE(MeshAsset, KeepsItsMeshDataAndStartsWithoutAGPUMesh, Unit)
 {
-	const MeshAsset asset(TriangleData());
+	const MeshAsset asset(kTriangleMeshName, TriangleData());
 	const MeshData& data = asset.GetMeshData();
 
 	CDL_CHECK_EQ(data.Vertices.size(), 3u);

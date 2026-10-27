@@ -25,7 +25,13 @@ namespace Candle {
 		allocInfo.usage = VMA_MEMORY_USAGE_AUTO;
 		allocInfo.flags = spec.m_Flags;
 
-		vmaCreateImage(m_Allocator, reinterpret_cast<VkImageCreateInfo*>(&imageInfo), &allocInfo, reinterpret_cast<VkImage*>(&m_Image), &m_Allocation, nullptr);
+		VkResult result = vmaCreateImage(m_Allocator, reinterpret_cast<VkImageCreateInfo*>(&imageInfo), &allocInfo, reinterpret_cast<VkImage*>(&m_Image), &m_Allocation, nullptr);
+		if (result != VK_SUCCESS)
+		{
+			CDL_CORE_ERROR(LogChannel::Memory, "Failed to create GPU image!");
+			throw std::runtime_error("Failed to create GPU image");
+		}
+
 		m_ImageView = vk::raii::ImageView(allocator.GetDevice()->GetDevice(), vk::ImageViewCreateInfo{
 			.image = m_Image,
 			.viewType = vk::ImageViewType::e2D,

@@ -4,6 +4,7 @@
 
 #include "Candle/Core/Core.h"
 #include "Candle/Core/Version.h"
+#include "Candle/Render/TextureData.h"
 
 #include <vulkan/vulkan.hpp>
 
@@ -34,6 +35,25 @@ namespace Candle {
 			static_cast<uint32_t>(version.Major) & 0x7Fu,
 			static_cast<uint32_t>(version.Minor) & 0x3FFu,
 			static_cast<uint32_t>(version.Patch) & 0xFFFu);
+	}
+
+	inline vk::Format ToVulkanFormat(TextureFormat format, TextureColorSpace colorSpace)
+	{
+		bool isSrgb = (colorSpace == TextureColorSpace::eSrgb);
+		switch (format)
+		{
+		case TextureFormat::eRgba8:
+			return isSrgb ? vk::Format::eR8G8B8A8Srgb : vk::Format::eR8G8B8A8Unorm;
+		case TextureFormat::eRgb8:
+			return isSrgb ? vk::Format::eR8G8B8Srgb : vk::Format::eR8G8B8Unorm;
+		case TextureFormat::eRg8:
+			return isSrgb ? vk::Format::eR8G8Srgb : vk::Format::eR8G8Unorm;
+		case TextureFormat::eR8:
+			return isSrgb ? vk::Format::eR8Srgb : vk::Format::eR8Unorm;
+		}
+
+		CDL_CORE_ASSERT(false, "Unhandled TextureFormat");
+		return vk::Format::eUndefined;
 	}
 
 }

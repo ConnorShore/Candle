@@ -85,7 +85,7 @@ namespace Candle {
 		m_StagingDeletions.Enqueue(QueueType::Graphics, m_LastUploadValue, std::move(stagingBuffer));
 	}
 
-	void GPUUploader::UploadImage(const ImageUpload upload, vk::PipelineStageFlags2 dstStages, vk::AccessFlags2 dstAccess)
+	void GPUUploader::UploadImage(const ImageUploadSpec upload, vk::PipelineStageFlags2 dstStages, vk::AccessFlags2 dstAccess)
 	{
 		CDL_CORE_ASSERT(Platform::IsMainThread(), "GPUUploader owns its command pool, so it is main thread only");
 
@@ -126,6 +126,14 @@ namespace Candle {
 		};
 		vk::ImageMemoryBarrier2 barrier = MakeImageBarrier(upload.Destination, baseState, copyState, imageSubresourceRange);
 		m_CommandBuffer.pipelineBarrier2({ .imageMemoryBarrierCount = 1, .pImageMemoryBarriers = &barrier });
+
+		// Copy from staging buffer to image
+		const vk::BufferImageCopy2 region{    // rowLength/imageHeight 0 = tightly packed, which stb's output is
+			.imageSubresource = {.aspectMask = vk::ImageAspectFlagBits::eColor, .mipLevel = 0, .baseArrayLayer = 0, .layerCount = 1 },
+			.imageExtent = { upload.Extent.x, upload.Extent.y, 1 } 
+		};
+		m_CommandBuffer.copyBufferToImage2({ .srcBuffer = stagingBuffer.GetBuffer(), .dstImage = upload.Destination,
+			.dstImageLayout = vk::ImageLayout::eTransferDstOptimal, .regionCount = 1, .pRegions = &region });
 
 		// Transition image layout to destination layout
 		ImageState finalState{

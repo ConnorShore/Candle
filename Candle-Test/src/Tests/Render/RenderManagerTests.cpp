@@ -267,10 +267,10 @@ CDL_TEST_CASE(RenderManager, RegisteredHandlersUploadMeshAssets, Gpu)
 		AssetManager assets;	// Destroyed before the RenderManager whose GeometryPool its handler uploads into
 		test.Manager.RegisterAssetHandlers(assets);
 
-		SharedPtr<MeshAsset> triangle = SharedPtr<MeshAsset>::Create(MeshData{
+		SharedPtr<MeshAsset> triangle = SharedPtr<MeshAsset>::Create("Triangle", MeshData{
 			.Vertices = { kTriangleVertices.begin(), kTriangleVertices.end() },
 			.Indices = { kTriangleIndices.begin(), kTriangleIndices.end() } });
-		assets.LoadAsset("Triangle", triangle);
+		assets.LoadAsset(triangle);
 
 		CDL_CHECK(triangle->GetGPUHandle().IsValid());
 		SubmitFrames(test.Manager, 3, triangle->GetGPUHandle(), WindowSurface(test.AppWindow));

@@ -12,7 +12,7 @@ namespace Candle::Test {
 	// Two asset types, so a test can load one name under both.
 	struct TextureStub : Asset
 	{
-		explicit TextureStub(int id = 0) : Id(id) {}
+		explicit TextureStub(const std::string& name, int id = 0) : Asset(name, {}), Id(id) {}
 
 		inline static constexpr AssetType kType = AssetType::Texture;
 		AssetType GetType() const override { return kType; }
@@ -22,6 +22,8 @@ namespace Candle::Test {
 
 	struct MaterialStub : Asset
 	{
+		explicit MaterialStub(const std::string& name) : Asset(name, {}) {}
+
 		inline static constexpr AssetType kType = AssetType::Material;
 		AssetType GetType() const override { return kType; }
 	};

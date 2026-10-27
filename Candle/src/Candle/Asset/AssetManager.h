@@ -20,7 +20,15 @@ namespace Candle {
 		~AssetManager() = default;
 
 		// Temporary placeholder for now (creates default mesh for now)
-		uint64_t LoadAsset(const std::string& name, SharedPtr<Asset> asset);
+		uint64_t LoadAsset(SharedPtr<Asset> asset);
+
+		template<IsAsset T>
+		[[nodiscard]] inline uint64_t LoadAsset(const std::string& name, const std::filesystem::path& filePath)
+		{
+			SharedPtr<T> newAsset = SharedPtr<T>::Create(name, filePath);
+			return LoadAsset(newAsset);
+		}
+
 		void UnloadAsset(const std::string& name, AssetType type);
 
 		// See if can enfore kType to be defined via Asset (IsAsset above should work partially but want compiler error if kType is not defined when creating a new asset class

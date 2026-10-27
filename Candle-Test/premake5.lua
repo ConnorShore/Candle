@@ -25,6 +25,8 @@ project "Candle-Test"
       "%{wks.location}/Candle/vendor/imgui/imgui/backends",
       "%{wks.location}/Candle/vendor/tracy/tracy/public",
       "%{wks.location}/Candle/vendor/VMA/VMA/include",
+      "%{wks.location}/Candle/vendor/stb/stb",
+      "%{wks.location}/Candle/vendor/ktx/ktx/include",
       "$(VULKAN_SDK)/Include",
    }
 
@@ -35,6 +37,9 @@ project "Candle-Test"
 
    -- getenv reads the CDL_TEST_* options; the CRT's _dupenv_s replacement buys nothing in a test runner.
    defines { "_CRT_SECURE_NO_WARNINGS" }
+
+   -- Must match Candle's: ktx is a static lib, and vendor/stb compiles out stb_image's path-taking loaders.
+   defines { "KHRONOS_STATIC", "STBI_NO_STDIO" }
 
    filter "system:windows"
       -- Required by the static SDL3 build; they belong on the final executable

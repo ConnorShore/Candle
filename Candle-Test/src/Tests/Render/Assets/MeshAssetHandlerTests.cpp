@@ -19,7 +19,7 @@ namespace {
 
 	SharedPtr<MeshAsset> CreateTriangleAsset()
 	{
-		return SharedPtr<MeshAsset>::Create(MeshData{
+		return SharedPtr<MeshAsset>::Create("Triangle", MeshData{
 			.Vertices = { kTriangleVertices.begin(), kTriangleVertices.end() },
 			.Indices = { kTriangleIndices.begin(), kTriangleIndices.end() } });
 	}
@@ -80,7 +80,7 @@ CDL_TEST_CASE(MeshAssetHandler, AssetManagerLoadsMeshesThroughIt, Gpu)
 		assets.RegisterAssetHandler(ScopedPtr<MeshAssetHandler>::Create(gpu.Pool));
 		SharedPtr<MeshAsset> asset = CreateTriangleAsset();
 
-		assets.LoadAsset("Triangle", asset);
+		assets.LoadAsset(asset);
 
 		CDL_EXPECT(asset->GetGPUHandle().IsValid());
 		CDL_EXPECT(assets.GetAsset<MeshAsset>("Triangle") == asset);
@@ -96,7 +96,7 @@ CDL_TEST_CASE(MeshAssetHandler, AssetManagerUnloadsMeshesThroughIt, Gpu)
 		AssetManager assets;
 		assets.RegisterAssetHandler(ScopedPtr<MeshAssetHandler>::Create(gpu.Pool));
 		SharedPtr<MeshAsset> asset = CreateTriangleAsset();
-		assets.LoadAsset("Triangle", asset);
+		assets.LoadAsset(asset);
 
 		assets.UnloadAsset("Triangle", AssetType::Mesh);
 
