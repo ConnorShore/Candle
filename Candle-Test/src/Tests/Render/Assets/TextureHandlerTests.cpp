@@ -55,6 +55,33 @@ CDL_TEST_CASE(TextureHandler, LoadUploadsTheFileAndStoresItsHandle, Gpu)
 	ExpectNoVulkanDebugMessages(logs);
 }
 
+// The file decides the extent and format, so the handler records them; how to sample it stays as the asset was given.
+CDL_TEST_CASE(TextureHandler, LoadFillsInTheExtentAndFormatFromTheFile, Gpu)
+{
+	LoggerFixture logs(LogLevel::Warn, kRenderChannelMask);
+	{
+		TempDirectory dir;
+		TestTextures gpu;
+		TextureHandler handler(gpu.Pool, gpu.Bindless);
+		IAssetHandler& untyped = handler;
+		const std::array<Texel, 6> texels = { kRed, kGreen, kBlue, kWhite, kRed, kGreen };
+		const std::filesystem::path path = WritePPM(dir, "Wide.ppm", { 3, 2 }, texels);
+
+		// Starts with a format and extent the file disagrees with, since eRgba8 and 0 x 0 are what TextureData defaults to
+		SharedPtr<Texture> asset = SharedPtr<Texture>::Create("Wide", path, TextureData{
+			.Sampler = SamplerType::PointClamp, .ColorSpace = TextureColorSpace::eLinear, .Format = TextureFormat::eR8, .Extent = { 1, 1 } });
+
+		untyped.OnLoad(*asset);
+
+		const TextureData& data = asset->GetTextureData();
+		CDL_EXPECT(data.Extent == glm::uvec2(3, 2));
+		CDL_EXPECT_EQ(data.Format, TextureFormat::eRgba8);	// The loader expands RGB, so a PPM comes back as RGBA8
+		CDL_EXPECT_EQ(data.Sampler, SamplerType::PointClamp);
+		CDL_EXPECT_EQ(data.ColorSpace, TextureColorSpace::eLinear);
+	}
+	ExpectNoVulkanDebugMessages(logs);
+}
+
 // The handler, not the pool, publishes the texture, so a shader can only see it if the handler wrote its own slot.
 CDL_TEST_CASE(TextureHandler, LoadPublishesTheTextureAtItsSlotOfTheBindlessTable, Gpu)
 {

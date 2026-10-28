@@ -20,6 +20,8 @@ namespace Candle {
 
 		const TextureLoadInfo& info = expectedInfo.value();
 		TextureData& textureData = asset.m_TextureData;
+		textureData.Extent = info.Extent;	// The file decides these; Sampler and ColorSpace stay as the asset was given them
+		textureData.Format = info.Format;
 
 		TextureCreateSpec spec{
 			.Data = info.Data,

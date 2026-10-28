@@ -55,3 +55,11 @@ CDL_TEST_CASE(Texture, KeepsTheTextureDataItIsGiven, Unit)
 	CDL_EXPECT_EQ(texture.GetTextureData().Sampler, SamplerType::PointClamp);
 	CDL_EXPECT_EQ(texture.GetTextureData().ColorSpace, TextureColorSpace::eLinear);
 }
+
+// TexturePool sizes the data it accepts from this, so a wrong entry fails its assert on every texture of that format.
+CDL_TEST_CASE(TextureData, BytesPerTexelCountsEachFormatsChannels, Unit)
+{
+	CDL_EXPECT_EQ(BytesPerTexel(TextureFormat::eRgba8), 4u);
+	CDL_EXPECT_EQ(BytesPerTexel(TextureFormat::eRg8), 2u);
+	CDL_EXPECT_EQ(BytesPerTexel(TextureFormat::eR8), 1u);
+}

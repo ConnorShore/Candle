@@ -31,19 +31,8 @@ namespace Candle {
 		return { spec, *this };
 	}
 
-	void GPUAllocator::DestroyBuffer(GPUBuffer& buffer)
-	{
-		// TODO: Move to deletion queue (unless this is queued elsewhere already)
-		vmaDestroyBuffer(m_Allocator, buffer.GetBuffer(), buffer.GetAllocation());
-	}
-
 	GPUImage GPUAllocator::CreateImage(GPUImageSpec spec)
 	{
 		return { spec, *this };
-	}
-
-	void GPUAllocator::DestroyImage(GPUImage& img)
-	{
-		vmaDestroyImage(m_Allocator, img.GetImage(), img.GetAllocation());	// TODO: Destroy the allocation too (but we don't have it here)
 	}
 }

@@ -22,18 +22,15 @@ CDL_TEST_CASE(VulkanUtils, ToVulkanVersionPacksLikeVkMakeApiVersion, Unit)
 }
 
 // sRGB picks the format whose sampler decodes to linear; linear stores the bytes as they are, for data like normals.
-CDL_TEST_CASE(VulkanUtils, ToVulkanFormatPicksTheColorSpacesVariant, Unit)
+CDL_TEST_CASE(VulkanUtils, ToVulkanFormatPicksTheColorSpacesVariantOfRgba8, Unit)
 {
-	struct Case { TextureFormat Format; vk::Format Srgb; vk::Format Linear; };
-	constexpr Case kCases[] = {
-		{ TextureFormat::eRgba8, vk::Format::eR8G8B8A8Srgb, vk::Format::eR8G8B8A8Unorm },
-		{ TextureFormat::eRgb8, vk::Format::eR8G8B8Srgb, vk::Format::eR8G8B8Unorm },
-		{ TextureFormat::eRg8, vk::Format::eR8G8Srgb, vk::Format::eR8G8Unorm },
-		{ TextureFormat::eR8, vk::Format::eR8Srgb, vk::Format::eR8Unorm } };
+	CDL_EXPECT(ToVulkanFormat(TextureFormat::eRgba8, TextureColorSpace::eSrgb) == vk::Format::eR8G8B8A8Srgb);
+	CDL_EXPECT(ToVulkanFormat(TextureFormat::eRgba8, TextureColorSpace::eLinear) == vk::Format::eR8G8B8A8Unorm);
+}
 
-	for (const Case& c : kCases)
-	{
-		CDL_EXPECT(ToVulkanFormat(c.Format, TextureColorSpace::eSrgb) == c.Srgb);
-		CDL_EXPECT(ToVulkanFormat(c.Format, TextureColorSpace::eLinear) == c.Linear);
-	}
+// Their sRGB variants are optional, so asking for one asserts; that path can't run here, since asserts break.
+CDL_TEST_CASE(VulkanUtils, ToVulkanFormatMapsDataFormatsToUnorm, Unit)
+{
+	CDL_EXPECT(ToVulkanFormat(TextureFormat::eRg8, TextureColorSpace::eLinear) == vk::Format::eR8G8Unorm);
+	CDL_EXPECT(ToVulkanFormat(TextureFormat::eR8, TextureColorSpace::eLinear) == vk::Format::eR8Unorm);
 }

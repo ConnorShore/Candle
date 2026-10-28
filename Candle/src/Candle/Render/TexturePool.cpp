@@ -16,7 +16,8 @@ namespace Candle {
 	GPUTextureHandle TexturePool::CreateTexture(TextureCreateSpec spec)
 	{
 		CDL_CORE_ASSERT(spec.Extent.x > 0 && spec.Extent.y > 0, "A texture must have an area > 0");
-		CDL_CORE_ASSERT(spec.Data.size_bytes() == spec.Extent.x * spec.Extent.y * 4, "Texture must be in RGBA format");
+		CDL_CORE_ASSERT(spec.Data.size_bytes() == static_cast<size_t>(spec.Extent.x) * spec.Extent.y * BytesPerTexel(spec.Format),
+			"Texture data must be Extent.x * Extent.y tightly packed texels of its format");
 
 		GPUImage image = m_Allocator.CreateImage(GPUImageSpec{
 			.m_Extent = spec.Extent,

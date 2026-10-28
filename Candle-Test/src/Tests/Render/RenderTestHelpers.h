@@ -315,15 +315,19 @@ namespace Candle::Test {
 	}
 
 	// What TextureHandler does with a decoded file: create the texture, then publish its view at its slot of set 0.
-	// Linear by default, so a sampled texel comes back as the bytes that went in.
-	inline GPUTextureHandle CreateBoundTexture(TestTextures& gpu, glm::uvec2 extent, std::span<const Texel> texels,
-		TextureColorSpace colorSpace = TextureColorSpace::eLinear)
+	inline GPUTextureHandle CreateBoundTexture(TestTextures& gpu, const TextureCreateSpec& spec)
 	{
-		const GPUTextureHandle handle = gpu.Pool.CreateTexture({
-			.Data = std::as_bytes(texels), .Extent = extent, .Format = TextureFormat::eRgba8, .ColorSpace = colorSpace });
+		const GPUTextureHandle handle = gpu.Pool.CreateTexture(spec);
 		const TextureInfo info = gpu.Pool.GetTextureInfo(handle);
 		gpu.Bindless.WriteTexture(info.Index, info.ImageView);
 		return handle;
+	}
+
+	// RGBA8, and linear by default, so a sampled texel comes back as the bytes that went in.
+	inline GPUTextureHandle CreateBoundTexture(TestTextures& gpu, glm::uvec2 extent, std::span<const Texel> texels,
+		TextureColorSpace colorSpace = TextureColorSpace::eLinear)
+	{
+		return CreateBoundTexture(gpu, { .Data = std::as_bytes(texels), .Extent = extent, .Format = TextureFormat::eRgba8, .ColorSpace = colorSpace });
 	}
 
 	inline constexpr vk::ImageSubresourceRange kColorSubresourceRange{
