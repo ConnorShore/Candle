@@ -40,9 +40,9 @@ namespace Candle {
 		MeshData testMeshData{
 			.Vertices = {
 				{ { -0.5f, -0.5f, 0.0f }, 0.0f, { 0.0f, 0.0f, 1.0f }, 0.0f },
-				{ {  0.5f, -0.5f, 0.0f }, 1.0f, { 0.0f, 0.0f, 1.0f }, 0.0f },
-				{ {  0.5f,  0.5f, 0.0f }, 1.0f, { 0.0f, 0.0f, 1.0f }, 1.0f },
-				{ { -0.5f,  0.5f, 0.0f }, 0.0f, { 0.0f, 0.0f, 1.0f }, 1.0f }
+				{ {  0.5f, -0.5f, 0.0f }, 2.0f, { 0.0f, 0.0f, 1.0f }, 0.0f },
+				{ {  0.5f,  0.5f, 0.0f }, 2.0f, { 0.0f, 0.0f, 1.0f }, 2.0f },
+				{ { -0.5f,  0.5f, 0.0f }, 0.0f, { 0.0f, 0.0f, 1.0f }, 2.0f }
 			},
 			.Indices = { 
 				0, 1, 2, 
@@ -53,7 +53,11 @@ namespace Candle {
 		SharedPtr<MeshAsset> meshAsset = SharedPtr<MeshAsset>::Create("TestMesh", std::move(testMeshData));
 		m_AssetManager.LoadAsset(meshAsset);
 
-		uint64_t texUUID = m_AssetManager.LoadAsset<Texture>("TestTexture", "Candle/res/textures/box.jpg");
+		TextureData data{
+			.Sampler{SamplerType::LinearWrap}
+		};
+		SharedPtr<Texture> textureAsset = SharedPtr<Texture>::Create("TestTexture", "Candle/res/textures/box.jpg", std::move(data));
+		uint64_t texUUID = m_AssetManager.LoadAsset(textureAsset);
 	}
 
 	Application::~Application()
