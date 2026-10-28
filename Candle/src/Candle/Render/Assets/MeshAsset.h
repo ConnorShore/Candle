@@ -9,7 +9,8 @@ namespace Candle {
 	class MeshAsset : public Asset
 	{
 	public:
-		MeshAsset(MeshData&& meshData) : m_MeshData(std::move(meshData)) {}
+		MeshAsset(const std::string& name, MeshData&& meshData) 
+			: Asset(name, "filepath.mesh"), m_MeshData(std::move(meshData)) {}
 
 		inline const MeshData& GetMeshData() const { return m_MeshData; }
 		inline const GPUMeshHandle& GetGPUHandle() const { return m_GPUHandle; }

@@ -29,6 +29,26 @@ namespace {
 		return nullptr;
 	}
 
+	// Index of the first record whose message starts with prefix, or records.size() if none does.
+	size_t FindFirstPart(const std::vector<LogRecord>& records, std::string_view prefix)
+	{
+		for (size_t i = 0; i < records.size(); ++i)
+		{
+			if (!records[i].IsContinuation && std::string_view(records[i].Message).starts_with(prefix))
+				return i;
+		}
+		return records.size();
+	}
+
+	// The marker followed by letters in sequence, so a part that arrives out of order or twice changes the text.
+	std::string PatternedText(std::string_view marker, size_t length)
+	{
+		std::string text(marker);
+		while (text.size() < length)
+			text.push_back(static_cast<char>('a' + text.size() % 26));
+		return text;
+	}
+
 	// Parses "LoggerStress <thread> <sequence>".
 	bool ParseStressMessage(std::string_view message, int& thread, int& sequence)
 	{
@@ -125,23 +145,60 @@ CDL_TEST_CASE(Logger, FilteredRecordsNeverReachSinks, Unit)
 	CDL_EXPECT(FindMessage(logger.Records, "LoggerTests: masked channel") == nullptr);
 }
 
-CDL_TEST_CASE(Logger, LongMessageIsTruncatedWithEllipsis, Unit)
+CDL_TEST_CASE(Logger, MessageThatFitsUsesOneRecord, Unit)
 {
 	constexpr size_t capacity = sizeof(LogRecord::Message) - 1;
 
 	LoggerFixture logger;
-	const std::string exactFit(capacity, 'a');
-	const std::string tooLong(capacity + 60, 'b');
+	const std::string exactFit = PatternedText("LoggerTests: exact fit ", capacity);
 	CDL_CORE_INFO(LogChannel::Application, "{}", exactFit);
-	CDL_CORE_INFO(LogChannel::Application, "{}", tooLong);
 	CDL_CHECK(Logger::Flush());
 
-	CDL_EXPECT(FindMessage(logger.Records, exactFit) != nullptr);
+	const LogRecord* record = FindMessage(logger.Records, exactFit);
+	CDL_CHECK(record != nullptr);
+	CDL_EXPECT_FALSE(record->HasNext);
+	CDL_EXPECT_FALSE(record->IsContinuation);
+}
 
-	const std::string expected = std::string(capacity - 3, 'b') + "...";
-	const LogRecord* truncated = FindMessage(logger.Records, expected);
-	CDL_CHECK(truncated != nullptr);
-	CDL_CHECK_EQ(truncated->Message[capacity], '\0');
+CDL_TEST_CASE(Logger, LongMessageSpansConsecutiveRecords, Unit)
+{
+	constexpr size_t capacity = sizeof(LogRecord::Message) - 1;
+
+	LoggerFixture logger;
+	const std::string text = PatternedText("LoggerTests: long ", capacity * 2 + 50);
+	CDL_CORE_WARN(LogChannel::Render, "{}", text);
+	CDL_CHECK(Logger::Flush());
+
+	const size_t first = FindFirstPart(logger.Records, "LoggerTests: long ");
+	CDL_CHECK(first + 3 <= logger.Records.size());
+	CDL_EXPECT_EQ(JoinedMessage(logger.Records, first), text);
+
+	for (size_t i = 0; i < 3; ++i)
+	{
+		const LogRecord& part = logger.Records[first + i];
+		CDL_EXPECT_EQ(part.IsContinuation, i > 0);
+		CDL_EXPECT_EQ(part.HasNext, i < 2);
+
+		// Every part carries the metadata, so level and channel filters see the whole message.
+		CDL_EXPECT_EQ(part.Level, LogLevel::Warn);
+		CDL_EXPECT_EQ(part.Channel, LogChannel::Render);
+		CDL_EXPECT_EQ(part.ThreadId, Platform::GetCurrentThreadId());
+	}
+}
+
+CDL_TEST_CASE(Logger, MessageBeyondMaxPartsIsTruncatedWithEllipsis, Unit)
+{
+	constexpr size_t limit = LogMessageMaxParts * (sizeof(LogRecord::Message) - 1);
+
+	LoggerFixture logger;
+	const std::string text = PatternedText("LoggerTests: too long ", limit + 60);
+	CDL_CORE_INFO(LogChannel::Application, "{}", text);
+	CDL_CHECK(Logger::Flush());
+
+	const size_t first = FindFirstPart(logger.Records, "LoggerTests: too long ");
+	CDL_CHECK(first + LogMessageMaxParts <= logger.Records.size());
+	CDL_EXPECT_FALSE(logger.Records[first + LogMessageMaxParts - 1].HasNext);
+	CDL_EXPECT_EQ(JoinedMessage(logger.Records, first), text.substr(0, limit - 3) + "...");
 }
 
 CDL_TEST_CASE(Logger, FatalIsDeliveredBeforeTheCallReturns, Unit)
@@ -241,4 +298,45 @@ CDL_TEST_CASE(FileSink, WritesFormattedRecordsToFile, Unit)
 	CDL_EXPECT(text.contains("[Render]"));
 	CDL_EXPECT(text.contains("[WARN ]"));
 	CDL_EXPECT(text.ends_with("\n"));
+}
+
+CDL_TEST_CASE(FileSink, MultiPartMessageIsWrittenAsOneLine, Unit)
+{
+	const std::filesystem::path directory = std::filesystem::temp_directory_path() / "Candle-Test" / "FileSinkMultiPart";
+	const std::filesystem::path path = directory / "test.log";
+	std::error_code error;
+	std::filesystem::remove_all(directory, error);
+
+	{
+		FileSink sink(path);
+		CDL_CHECK(sink.IsOpen());
+
+		LogRecord parts[2];
+		parts[0].Time = Platform::GetTick();
+		parts[0].Type = 1;
+		parts[0].HasNext = true;
+		std::snprintf(parts[0].Message, sizeof(parts[0].Message), "FileSinkTests: first part, ");
+
+		parts[1] = parts[0];
+		parts[1].HasNext = false;
+		parts[1].IsContinuation = true;
+		std::snprintf(parts[1].Message, sizeof(parts[1].Message), "second part");
+
+		// Separate writes, as when a drain batch ends partway through a message.
+		sink.Write(&parts[0], 1);
+		sink.Write(&parts[1], 1);
+		sink.Flush();
+	}
+
+	std::ifstream file(path, std::ios::binary);
+	std::stringstream contents;
+	contents << file.rdbuf();
+	const std::string text = contents.str();
+	file.close();
+	std::filesystem::remove_all(directory, error);
+
+	CDL_NOTE(text);
+	CDL_EXPECT(text.ends_with("FileSinkTests: first part, second part\n"));
+	CDL_EXPECT_EQ(text.find('\n'), text.size() - 1);
+	CDL_EXPECT_EQ(text.find("[APP]"), text.rfind("[APP]"));
 }

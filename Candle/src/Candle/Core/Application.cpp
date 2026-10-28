@@ -8,6 +8,7 @@
 
 // Temporary, until we have a better way to register asset handlers //
 #include "Candle/Render/Assets/MeshAsset.h"
+#include "Candle/Render/Assets/Texture.h"
 //
 
 namespace Candle {
@@ -38,14 +39,25 @@ namespace Candle {
 		// TEMPORARY FOR TESTING
 		MeshData testMeshData{
 			.Vertices = {
-				{ { 0.5f, -0.5f, 0.0f } },
-				{ { 0.0f, 0.5f, 0.0f } },
-				{ { -0.5f, -0.5f, 0.0f } }
+				{ { -0.5f, -0.5f, 0.0f }, 0.0f, { 0.0f, 0.0f, 1.0f }, 0.0f },
+				{ {  0.5f, -0.5f, 0.0f }, 2.0f, { 0.0f, 0.0f, 1.0f }, 0.0f },
+				{ {  0.5f,  0.5f, 0.0f }, 2.0f, { 0.0f, 0.0f, 1.0f }, 2.0f },
+				{ { -0.5f,  0.5f, 0.0f }, 0.0f, { 0.0f, 0.0f, 1.0f }, 2.0f }
 			},
-			.Indices = { 0, 1, 2 }
+			.Indices = { 
+				0, 1, 2, 
+				2, 3, 0 
+			}
 		};
-		SharedPtr<MeshAsset> meshAsset = SharedPtr<MeshAsset>::Create(std::move(testMeshData));
-		m_AssetManager.LoadAsset("TestMesh", meshAsset);
+
+		SharedPtr<MeshAsset> meshAsset = SharedPtr<MeshAsset>::Create("TestMesh", std::move(testMeshData));
+		m_AssetManager.LoadAsset(meshAsset);
+
+		TextureData data{
+			.Sampler{SamplerType::LinearWrap}
+		};
+		SharedPtr<Texture> textureAsset = SharedPtr<Texture>::Create("TestTexture", "Candle/res/textures/box.jpg", std::move(data));
+		uint64_t texUUID = m_AssetManager.LoadAsset(textureAsset);
 	}
 
 	Application::~Application()
@@ -57,6 +69,9 @@ namespace Candle {
 	{
 		SharedPtr<MeshAsset> meshAsset = m_AssetManager.GetAsset<MeshAsset>("TestMesh");
 		std::vector<GPUMeshHandle> meshes{ meshAsset->GetGPUHandle() };
+		SharedPtr<Texture> textureAsset = m_AssetManager.GetAsset<Texture>("TestTexture");
+		std::vector<GPUTextureHandle> materials{ textureAsset->GetGPUHandle() };
+		std::vector<SamplerType> samplerIndices{ textureAsset->GetTextureData().Sampler };
 
 		// Spawn the render thread if we have a render manager
 		if (m_RenderManager)
@@ -81,6 +96,8 @@ namespace Candle {
 				FramePacket& packet = m_RenderManager->BeginFramePacket();
 				CDL_PROFILE_SCOPE_METADATA(packet.FrameIndex);
 				packet.Meshes = meshes;
+				packet.Materials = materials;
+				packet.SamplerIndices = samplerIndices;
 				packet.Time = m_FrameStats.TotalTime;
 				packet.Minimized = m_Window->IsMinimized();
 				packet.SurfaceSize = m_Window->GetSize();

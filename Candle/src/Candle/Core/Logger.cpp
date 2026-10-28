@@ -4,8 +4,10 @@
 #include "Candle/Core/LogSink.h"
 #include "Candle/Core/Threading/MPSCRingBuffer.h"
 
+#include <algorithm>
 #include <bit>
 #include <cstdio>
+#include <cstring>
 #include <thread>
 #include <vector>
 
@@ -46,6 +48,29 @@ namespace Candle {
 		std::atomic<uint64_t> s_FlushComplete{ 0 };
 
 		uint64_t s_DroppedReported = 0;
+
+		// format_to_n for type-erased format_args: keeps what fits in the buffer, counts all of it. The count
+		// lives outside the writer because vformat_to copies its iterator freely.
+		struct TruncatingWriter
+		{
+			using difference_type = std::ptrdiff_t;
+
+			char* Buffer = nullptr;
+			size_t Capacity = 0;
+			size_t* Size = nullptr;
+
+			TruncatingWriter& operator*() { return *this; }
+			TruncatingWriter& operator++() { return *this; }
+			TruncatingWriter& operator++(int) { return *this; }
+
+			TruncatingWriter& operator=(char c)
+			{
+				if (*Size < Capacity)
+					Buffer[*Size] = c;
+				++*Size;
+				return *this;
+			}
+		};
 
 		// Drain thread only. Empties the ring into every sink; returns how many records moved.
 		size_t DrainOnce()
@@ -236,22 +261,64 @@ namespace Candle {
 		return true;
 	}
 
-	void Logger::PushRecord(const LogRecord& record)
+	void Logger::PushLongLog(const LogRecord& first, std::string_view fmt, std::format_args args)
 	{
-		bool pushSucceeded = Ring().TryPush(record);
+		constexpr size_t partCapacity = sizeof(LogRecord::Message) - 1;
 
-		// If the ring is full, the record is dropped. If it's a fatal record, we must write it to stderr immediately.
-		if (!pushSucceeded && record.Level == LogLevel::Fatal)
-			EmergencyWrite(record);
+		char text[LogMessageMaxParts * partCapacity];
+		size_t size = 0;
+		std::vformat_to(TruncatingWriter{ text, sizeof(text), &size }, fmt, args);
+
+		const size_t length = std::min(size, sizeof(text));
+		if (size > length)
+			std::memcpy(text + length - 3, "...", 3);
+
+		// At least one, in case a formatter with side effects came out shorter the second time.
+		const size_t partCount = std::max<size_t>(1, (length + partCapacity - 1) / partCapacity);
+
+		LogRecord parts[LogMessageMaxParts];
+		for (size_t i = 0; i < partCount; ++i)
+		{
+			const size_t offset = i * partCapacity;
+			const size_t partLength = std::min(partCapacity, length - offset);
+
+			parts[i] = first;
+			std::memcpy(parts[i].Message, text + offset, partLength);
+			parts[i].Message[partLength] = '\0';
+			parts[i].HasNext = i + 1 < partCount;
+			parts[i].IsContinuation = i > 0;
+		}
+
+		Submit(parts, partCount);
 	}
 
-	void Logger::EmergencyWrite(const LogRecord& record)
+	void Logger::Submit(const LogRecord* records, size_t count)
 	{
-		std::fprintf(stderr, "[%s] [%s] (T%u) %s\n",
-			LoggerTypeName(record.Type),
-			LogLevelName(record.Level),
-			record.ThreadId,
-			record.Message);
+		const bool pushed = Ring().TryPushN(records, count);
+		if (records[0].Level != LogLevel::Fatal)
+			return;
+
+		// A full ring would lose a fatal record, so it goes to stderr now. Either way, wait for the sinks
+		// because a crash usually follows, and fall back to stderr if nothing is draining.
+		if (!pushed)
+			EmergencyWrite(records, count);
+		if (!Flush() && pushed)
+			EmergencyWrite(records, count);
+	}
+
+	void Logger::EmergencyWrite(const LogRecord* records, size_t count)
+	{
+		for (size_t i = 0; i < count; ++i)
+		{
+			const LogRecord& record = records[i];
+			if (!record.IsContinuation)
+				std::fprintf(stderr, "[%s] [%s] (T%u) ", LoggerTypeName(record.Type), LogLevelName(record.Level), record.ThreadId);
+
+			std::fputs(record.Message, stderr);
+
+			if (!record.HasNext)
+				std::fputc('\n', stderr);
+		}
 		std::fflush(stderr);
 	}
 

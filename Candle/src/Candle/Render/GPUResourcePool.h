@@ -97,6 +97,14 @@ namespace Candle {
 			return *m_Payloads[handle.Index];
 		}
 
+		// Get without the assert: null for an invalid or stale handle, for callers with a fallback
+		inline const T* TryGet(Handle handle) const
+		{
+			if (!SlotHoldsGeneration(handle.Index, handle.Generation) || !m_Payloads[handle.Index])
+				return nullptr;
+			return &*m_Payloads[handle.Index];
+		}
+
 	protected:
 		inline void DestroyPayload(uint32_t index) override { m_Payloads[index].reset(); }
 

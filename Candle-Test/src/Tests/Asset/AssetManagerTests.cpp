@@ -16,6 +16,8 @@ using Candle::Test::Type::Unit;
 
 namespace {
 
+	constexpr const char* kBrickAssetName = "Brick";
+
 	struct RecordingManager
 	{
 		std::vector<TextureStub*> Loaded;
@@ -30,9 +32,9 @@ namespace {
 CDL_TEST_CASE(AssetManager, LoadPassesTheAssetToItsTypesHandler, Unit)
 {
 	RecordingManager test;
-	SharedPtr<TextureStub> texture = SharedPtr<TextureStub>::Create();
+	SharedPtr<TextureStub> texture = SharedPtr<TextureStub>::Create(kBrickAssetName);
 
-	test.Manager.LoadAsset("Brick", texture);
+	test.Manager.LoadAsset(texture);
 
 	CDL_CHECK_EQ(test.Loaded.size(), 1u);
 	CDL_EXPECT(test.Loaded[0] == texture.Get());
@@ -43,7 +45,7 @@ CDL_TEST_CASE(AssetManager, LoadSkipsHandlersOfOtherTypes, Unit)
 {
 	RecordingManager test;
 
-	test.Manager.LoadAsset("Brick", SharedPtr<MaterialStub>::Create());
+	test.Manager.LoadAsset(SharedPtr<MaterialStub>::Create(kBrickAssetName));
 
 	CDL_EXPECT(test.Loaded.empty());
 }
@@ -54,11 +56,11 @@ CDL_TEST_CASE(AssetManager, LoadWithoutAHandlerStoresTheAssetAndWarns, Unit)
 	LoggerFixture logs(LogLevel::Warn, static_cast<uint16_t>(LogChannel::Asset));
 	{
 		AssetManager manager;
-		SharedPtr<TextureStub> texture = SharedPtr<TextureStub>::Create();
+		SharedPtr<TextureStub> texture = SharedPtr<TextureStub>::Create(kBrickAssetName);
 
-		manager.LoadAsset("Brick", texture);
+		manager.LoadAsset(texture);
 
-		CDL_EXPECT(manager.GetAsset<TextureStub>("Brick") == texture);
+		CDL_EXPECT(manager.GetAsset<TextureStub>(kBrickAssetName) == texture);
 		CDL_CHECK(Logger::Flush());
 	}
 
@@ -72,18 +74,18 @@ CDL_TEST_CASE(AssetManager, LoadWithoutAHandlerStoresTheAssetAndWarns, Unit)
 CDL_TEST_CASE(AssetManager, FindsAnAssetByNameAndByTheIdLoadReturned, Unit)
 {
 	AssetManager manager;
-	SharedPtr<TextureStub> texture = SharedPtr<TextureStub>::Create();
+	SharedPtr<TextureStub> texture = SharedPtr<TextureStub>::Create(kBrickAssetName);
 
-	const uint64_t id = manager.LoadAsset("Brick", texture);
+	const uint64_t id = manager.LoadAsset(texture);
 
-	CDL_EXPECT(manager.GetAsset<TextureStub>("Brick") == texture);
+	CDL_EXPECT(manager.GetAsset<TextureStub>(kBrickAssetName) == texture);
 	CDL_EXPECT(manager.GetAsset(id).Get() == texture.Get());
 }
 
 CDL_TEST_CASE(AssetManager, ReturnsNullForAnUnknownName, Unit)
 {
 	AssetManager manager;
-	manager.LoadAsset("Brick", SharedPtr<TextureStub>::Create());
+	manager.LoadAsset(SharedPtr<TextureStub>::Create(kBrickAssetName));
 
 	CDL_EXPECT(!manager.GetAsset<TextureStub>("Stone"));
 }
@@ -92,28 +94,28 @@ CDL_TEST_CASE(AssetManager, ReturnsNullForAnUnknownName, Unit)
 CDL_TEST_CASE(AssetManager, OneNameUnderTwoTypesIsTwoAssets, Unit)
 {
 	AssetManager manager;
-	SharedPtr<TextureStub> texture = SharedPtr<TextureStub>::Create();
-	SharedPtr<MaterialStub> material = SharedPtr<MaterialStub>::Create();
+	SharedPtr<TextureStub> texture = SharedPtr<TextureStub>::Create(kBrickAssetName);
+	SharedPtr<MaterialStub> material = SharedPtr<MaterialStub>::Create(kBrickAssetName);
 
-	const uint64_t textureId = manager.LoadAsset("Brick", texture);
-	const uint64_t materialId = manager.LoadAsset("Brick", material);
+	const uint64_t textureId = manager.LoadAsset(texture);
+	const uint64_t materialId = manager.LoadAsset(material);
 
 	CDL_EXPECT_NE(textureId, materialId);
-	CDL_EXPECT(manager.GetAsset<TextureStub>("Brick") == texture);
-	CDL_EXPECT(manager.GetAsset<MaterialStub>("Brick") == material);
+	CDL_EXPECT(manager.GetAsset<TextureStub>(kBrickAssetName) == texture);
+	CDL_EXPECT(manager.GetAsset<MaterialStub>(kBrickAssetName) == material);
 }
 
 CDL_TEST_CASE(AssetManager, LoadingANameAgainReplacesTheAsset, Unit)
 {
 	AssetManager manager;
-	SharedPtr<TextureStub> first = SharedPtr<TextureStub>::Create(1);
-	SharedPtr<TextureStub> second = SharedPtr<TextureStub>::Create(2);
+	SharedPtr<TextureStub> first = SharedPtr<TextureStub>::Create(kBrickAssetName, 1);
+	SharedPtr<TextureStub> second = SharedPtr<TextureStub>::Create(kBrickAssetName, 2);
 
-	const uint64_t firstId = manager.LoadAsset("Brick", first);
-	const uint64_t secondId = manager.LoadAsset("Brick", second);
+	const uint64_t firstId = manager.LoadAsset(first);
+	const uint64_t secondId = manager.LoadAsset(second);
 
 	CDL_EXPECT_EQ(firstId, secondId);
-	CDL_EXPECT(manager.GetAsset<TextureStub>("Brick") == second);
+	CDL_EXPECT(manager.GetAsset<TextureStub>(kBrickAssetName) == second);
 	CDL_EXPECT_EQ(first->GetRefCount(), 1u);	// The manager let go of it
 }
 
@@ -121,11 +123,11 @@ CDL_TEST_CASE(AssetManager, KeepsALoadedAssetAlive, Unit)
 {
 	AssetManager manager;
 	{
-		SharedPtr<TextureStub> texture = SharedPtr<TextureStub>::Create(7);
-		manager.LoadAsset("Brick", texture);
+		SharedPtr<TextureStub> texture = SharedPtr<TextureStub>::Create(kBrickAssetName, 7);
+		manager.LoadAsset(texture);
 	}
 
-	SharedPtr<TextureStub> found = manager.GetAsset<TextureStub>("Brick");
+	SharedPtr<TextureStub> found = manager.GetAsset<TextureStub>(kBrickAssetName);
 	CDL_CHECK(found);
 	CDL_EXPECT_EQ(found->Id, 7);
 }
@@ -133,14 +135,14 @@ CDL_TEST_CASE(AssetManager, KeepsALoadedAssetAlive, Unit)
 CDL_TEST_CASE(AssetManager, UnloadPassesTheAssetToItsHandlerAndLetsGoOfIt, Unit)
 {
 	RecordingManager test;
-	SharedPtr<TextureStub> texture = SharedPtr<TextureStub>::Create();
-	test.Manager.LoadAsset("Brick", texture);
+	SharedPtr<TextureStub> texture = SharedPtr<TextureStub>::Create(kBrickAssetName);
+	test.Manager.LoadAsset(texture);
 
-	test.Manager.UnloadAsset("Brick", AssetType::Texture);
+	test.Manager.UnloadAsset(kBrickAssetName, AssetType::Texture);
 
 	CDL_CHECK_EQ(test.Unloaded.size(), 1u);
 	CDL_EXPECT(test.Unloaded[0] == texture.Get());
-	CDL_EXPECT(!test.Manager.GetAsset<TextureStub>("Brick"));
+	CDL_EXPECT(!test.Manager.GetAsset<TextureStub>(kBrickAssetName));
 	CDL_EXPECT_EQ(texture->GetRefCount(), 1u);
 }
 
@@ -148,14 +150,14 @@ CDL_TEST_CASE(AssetManager, UnloadPassesTheAssetToItsHandlerAndLetsGoOfIt, Unit)
 CDL_TEST_CASE(AssetManager, UnloadLeavesTheSameNameUnderAnotherType, Unit)
 {
 	RecordingManager test;
-	SharedPtr<MaterialStub> material = SharedPtr<MaterialStub>::Create();
-	test.Manager.LoadAsset("Brick", SharedPtr<TextureStub>::Create());
-	test.Manager.LoadAsset("Brick", material);
+	SharedPtr<MaterialStub> material = SharedPtr<MaterialStub>::Create(kBrickAssetName);
+	test.Manager.LoadAsset(SharedPtr<TextureStub>::Create(kBrickAssetName));
+	test.Manager.LoadAsset(material);
 
-	test.Manager.UnloadAsset("Brick", AssetType::Texture);
+	test.Manager.UnloadAsset(kBrickAssetName, AssetType::Texture);
 
-	CDL_EXPECT(!test.Manager.GetAsset<TextureStub>("Brick"));
-	CDL_EXPECT(test.Manager.GetAsset<MaterialStub>("Brick") == material);
+	CDL_EXPECT(!test.Manager.GetAsset<TextureStub>(kBrickAssetName));
+	CDL_EXPECT(test.Manager.GetAsset<MaterialStub>(kBrickAssetName) == material);
 }
 
 // Unloading what was never loaded is a caller mistake worth a warning; no handler sees it and nothing else is touched.
@@ -164,13 +166,13 @@ CDL_TEST_CASE(AssetManager, UnloadingAnUnknownNameWarnsAndChangesNothing, Unit)
 	LoggerFixture logs(LogLevel::Warn, static_cast<uint16_t>(LogChannel::Asset));
 	{
 		RecordingManager test;
-		SharedPtr<TextureStub> texture = SharedPtr<TextureStub>::Create();
-		test.Manager.LoadAsset("Brick", texture);
+		SharedPtr<TextureStub> texture = SharedPtr<TextureStub>::Create(kBrickAssetName);
+		test.Manager.LoadAsset(texture);
 
 		test.Manager.UnloadAsset("Stone", AssetType::Texture);
 
 		CDL_EXPECT(test.Unloaded.empty());
-		CDL_EXPECT(test.Manager.GetAsset<TextureStub>("Brick") == texture);
+		CDL_EXPECT(test.Manager.GetAsset<TextureStub>(kBrickAssetName) == texture);
 		CDL_CHECK(Logger::Flush());
 	}
 
@@ -187,11 +189,11 @@ CDL_TEST_CASE(AssetManager, UnloadWithoutAHandlerStillForgetsTheAssetAndWarns, U
 	LoggerFixture logs(LogLevel::Warn, static_cast<uint16_t>(LogChannel::Asset));
 	{
 		AssetManager manager;
-		manager.LoadAsset("Brick", SharedPtr<TextureStub>::Create());
+		manager.LoadAsset(SharedPtr<TextureStub>::Create(kBrickAssetName));
 
-		manager.UnloadAsset("Brick", AssetType::Texture);
+		manager.UnloadAsset(kBrickAssetName, AssetType::Texture);
 
-		CDL_EXPECT(!manager.GetAsset<TextureStub>("Brick"));
+		CDL_EXPECT(!manager.GetAsset<TextureStub>(kBrickAssetName));
 		CDL_CHECK(Logger::Flush());
 	}
 
@@ -208,7 +210,7 @@ CDL_TEST_CASE(AssetManager, ASecondHandlerForATypeReplacesTheFirst, Unit)
 	manager.RegisterAssetHandler(ScopedPtr<TextureStubHandler>::Create(firstLoaded, unloaded));
 	manager.RegisterAssetHandler(ScopedPtr<TextureStubHandler>::Create(secondLoaded, unloaded));
 
-	manager.LoadAsset("Brick", SharedPtr<TextureStub>::Create());
+	manager.LoadAsset(SharedPtr<TextureStub>::Create(kBrickAssetName));
 
 	CDL_EXPECT(firstLoaded.empty());
 	CDL_EXPECT_EQ(secondLoaded.size(), 1u);

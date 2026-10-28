@@ -25,6 +25,8 @@ group "Vendors"
    include "Candle/vendor/tracy"
    include "Candle/vendor/SPIRV-Reflect"
    include "Candle/vendor/VMA"
+   include "Candle/vendor/stb"
+   include "Candle/vendor/ktx"
 group ""
 
 include "Candle"

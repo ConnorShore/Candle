@@ -13,6 +13,7 @@
 #include <format>
 #include <latch>
 #include <optional>
+#include <string>
 #include <system_error>
 #include <thread>
 #include <vector>
@@ -78,6 +79,15 @@ namespace Candle::Test {
 	private:
 		std::vector<LogRecord>& m_Out;
 	};
+
+	// The full text of the message whose first part is records[first], with its continuation records rejoined.
+	inline std::string JoinedMessage(const std::vector<LogRecord>& records, size_t first)
+	{
+		std::string message = records[first].Message;
+		for (size_t i = first; records[i].HasNext && i + 1 < records.size(); ++i)
+			message += records[i + 1].Message;
+		return message;
+	}
 
 	// Owns one Logger Init/Shutdown cycle with a CaptureSink and no console output. Restores the
 	// default level and mask afterwards, because both are process-wide statics.

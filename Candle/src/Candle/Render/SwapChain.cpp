@@ -4,7 +4,7 @@
 #include "RenderInstance.h"
 #include "RenderDevice.h"
 #include "RenderConstants.h"
-#include "Image.h"
+#include "SwapChainImage.h"
 
 #include "Candle/Core/Window.h"
 #include "Candle/Platform/Platform.h"
@@ -95,7 +95,7 @@ namespace Candle {
 
 		// Presentation leaves no barrier of ours to chain from; Undefined discards contents every frame overwrites
 		if (result == vk::Result::eSuccess || result == vk::Result::eSuboptimalKHR)
-			m_SwapChainImages[index].SetState(vk::ImageLayout::eUndefined, vk::AccessFlagBits2::eNone, kAcquireWaitStage);
+			m_SwapChainImages[index].SetState({ .Layout = vk::ImageLayout::eUndefined, .Access = vk::AccessFlagBits2::eNone, .Stage = kAcquireWaitStage });
 
 		return { result, index };
 	}
@@ -170,7 +170,7 @@ namespace Candle {
 		std::vector<vk::Image> swapChainImages = m_SwapChain.getImages();
 		vk::ImageViewCreateInfo imageViewCreateInfo{ .viewType = vk::ImageViewType::e2D,
 													.format = m_SwapChainSurfaceFormat.format,
-													.subresourceRange = {vk::ImageAspectFlagBits::eColor, 0, 1, 0, 1} };
+													.subresourceRange = SwapChainImage::kSubresourceRange };
 
 		m_SwapChainImages.clear();
 		m_PresentSemaphores.clear();

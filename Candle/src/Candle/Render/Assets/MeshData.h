@@ -6,7 +6,6 @@
 
 namespace Candle {
 
-	// Temporary placeholder for a mesh asset. Will eventually be a full asset with vertex/index buffers, materials, etc.
 	struct MeshData
 	{
 		std::vector<GPU::Vertex> Vertices;

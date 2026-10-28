@@ -5,8 +5,9 @@
 #include "PipelineSpecification.h"
 #include "FramePacket.h"
 #include "FrameContext.h"
-#include "Image.h"
+#include "SwapChainImage.h"
 #include "GeometryPool.h"
+#include "TexturePool.h"
 
 #include "Candle/Render/Pipelines/TrianglePipeline.h"
 #include "Candle/Render/Pipelines/TriangleInterop.h"
@@ -17,19 +18,21 @@
 namespace Candle {
 
 	namespace {
-
 		// A float time steps ~0.24 ms at an hour; wrapping keeps shader animation smooth for one jump per period
 		constexpr double kShaderTimeWrapSeconds = 3600.0;
-
 	}
 
-	Renderer::Renderer(RenderDevice& renderDevice, GeometryPool& geometryPool, vk::Format targetFormat)
-		: m_RenderDevice(renderDevice), m_GeometryPool(geometryPool), m_TargetFormat(targetFormat)
+	Renderer::Renderer(RenderDevice& renderDevice, GeometryPool& geometryPool, TexturePool& texturePool, BindlessTable& bindlessTable, vk::Format targetFormat)
+		: m_RenderDevice(renderDevice)
+		, m_GeometryPool(geometryPool)
+		, m_TexturePool(texturePool)
+		, m_BindlessTable(bindlessTable)
+		, m_TargetFormat(targetFormat)
 	{
 		CreatePipeline(TrianglePipeline{});
 	}
 
-	void Renderer::Render(const FramePacket& packet, FrameContext& frame, Image& target)
+	void Renderer::Render(const FramePacket& packet, FrameContext& frame, SwapChainImage& target)
 	{
 		CDL_PROFILE_SCOPE("Renderer::Render");
 
@@ -46,9 +49,8 @@ namespace Candle {
 		// Before starting rendering, transition the swapchain image to COLOR_ATTACHMENT_OPTIMAL
 		target.Transition({
 			.Layout = vk::ImageLayout::eColorAttachmentOptimal,
-			.AccessMask = vk::AccessFlagBits2::eColorAttachmentWrite,
-			.StageMask = vk::PipelineStageFlagBits2::eColorAttachmentOutput,
-			.AspectMask = vk::ImageAspectFlagBits::eColor
+			.Access = vk::AccessFlagBits2::eColorAttachmentWrite,
+			.Stage = vk::PipelineStageFlagBits2::eColorAttachmentOutput
 			}, frame.CommandBuffer);
 
 		vk::ClearValue clearColor = vk::ClearColorValue(0.0f, 0.0f, 0.0f, 1.0f);
@@ -76,9 +78,22 @@ namespace Candle {
 		frame.CommandBuffer.setViewport(0, vk::Viewport(0.0f, static_cast<float>(swapChainExtent.height), static_cast<float>(swapChainExtent.width), -static_cast<float>(swapChainExtent.height), 0.0f, 1.0f));
 		frame.CommandBuffer.setScissor(0, vk::Rect2D(vk::Offset2D(0, 0), swapChainExtent));
 
+		// Bind the bindless descriptor set to the pipeline layout
+		vk::PipelineLayout pipelineLayout = m_Pipelines[0].GetLayout();
+		m_BindlessTable.BindSet(*frame.CommandBuffer, vk::PipelineBindPoint::eGraphics, pipelineLayout);
+
 		// Push constants for the triangle shader (will eventually be set per mesh)
 		MeshDrawInfo drawInfo = m_GeometryPool.GetMeshInfo(packet.Meshes[0]);
-		m_Pipelines[0].PushConstants(*frame.CommandBuffer, GPU::MeshDrawPushConstants{ .Global = global, .Vertices = drawInfo.VerticesAddr });
+		TextureInfo textureInfo = m_TexturePool.GetTextureInfo(packet.Materials[0]);
+		SamplerType samplerIndex = packet.SamplerIndices[0];
+
+		GPU::MeshDrawPushConstants pushConstants{ 
+			.Global = global, 
+			.Vertices = drawInfo.VerticesAddr, 
+			.TextureIndex = textureInfo.Index,
+			.SamplerIndex = static_cast<uint32_t>(samplerIndex)
+		};
+		m_Pipelines[0].PushConstants(*frame.CommandBuffer, pushConstants);
 		frame.CommandBuffer.bindIndexBuffer(drawInfo.Indices, 0, vk::IndexType::eUint32);
 
 		frame.CommandBuffer.drawIndexed(drawInfo.IndexCount, 1, 0, 0, 0);
@@ -88,8 +103,7 @@ namespace Candle {
 
 		target.Transition({
 			.Layout = vk::ImageLayout::ePresentSrcKHR,
-			.AccessMask = vk::AccessFlagBits2::eNone,
-			.AspectMask = vk::ImageAspectFlagBits::eColor,
+			.Access = vk::AccessFlagBits2::eNone
 			}, frame.CommandBuffer);
 
 		// End recording commands into the command buffer. After this, the command buffer can be submitted to the graphics queue for execution.
@@ -98,7 +112,7 @@ namespace Candle {
 
 	void Renderer::CreatePipeline(const RenderPipeline& pipeline)
 	{
-		m_Pipelines.emplace_back(pipeline.CreateSpecification(m_RenderDevice, m_TargetFormat), m_RenderDevice, m_TargetFormat);
+		m_Pipelines.emplace_back(pipeline.CreateSpecification(m_RenderDevice, m_TargetFormat), m_RenderDevice, m_BindlessTable, m_TargetFormat);
 	}
 
 }

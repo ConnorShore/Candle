@@ -1,6 +1,6 @@
 #pragma once
 
-#include "Image.h"
+#include "SwapChainImage.h"
 
 #include <vulkan/vulkan_raii.hpp>
 #include <glm/glm.hpp>
@@ -41,7 +41,7 @@ namespace Candle {
 		// True after Recreate(extent) even if the surface overrode it, so a disagreeing surface can't force a rebuild every frame
 		inline bool IsValid(const glm::uvec2& extent) const { return extent == m_RequestedExtent; }
 
-		inline Image& GetImage(uint32_t imageIndex) { return m_SwapChainImages[imageIndex]; }
+		inline SwapChainImage& GetImage(uint32_t imageIndex) { return m_SwapChainImages[imageIndex]; }
 		inline const vk::SurfaceFormatKHR& GetSurfaceFormat() const { return m_SwapChainSurfaceFormat; }
 
 	private:
@@ -56,7 +56,7 @@ namespace Candle {
 		vk::SurfaceFormatKHR	m_SwapChainSurfaceFormat;
 		glm::uvec2				m_RequestedExtent;	// Set by Recreate; the real extent is on each image's desc
 
-		std::vector<Image> m_SwapChainImages;
+		std::vector<SwapChainImage> m_SwapChainImages;
 
 		std::vector<vk::raii::Semaphore> m_AcquireSemaphores;	// Per frame in flight: needed before the image index is known
 		std::vector<vk::raii::Semaphore> m_PresentSemaphores;	// Per image: presentation never reports when it is done with one

@@ -20,3 +20,17 @@ CDL_TEST_CASE(VulkanUtils, ToVulkanVersionPacksLikeVkMakeApiVersion, Unit)
 	CDL_EXPECT_EQ(ToVulkanVersion(VersionInfo{ 0, 0, 0 }), 0u);
 	CDL_EXPECT_EQ(ToVulkanVersion(VersionInfo{ 127, 1023, 4095 }), 0x1FFFFFFFu);	// Every field at its widest, none spilling
 }
+
+// sRGB picks the format whose sampler decodes to linear; linear stores the bytes as they are, for data like normals.
+CDL_TEST_CASE(VulkanUtils, ToVulkanFormatPicksTheColorSpacesVariantOfRgba8, Unit)
+{
+	CDL_EXPECT(ToVulkanFormat(TextureFormat::eRgba8, TextureColorSpace::eSrgb) == vk::Format::eR8G8B8A8Srgb);
+	CDL_EXPECT(ToVulkanFormat(TextureFormat::eRgba8, TextureColorSpace::eLinear) == vk::Format::eR8G8B8A8Unorm);
+}
+
+// Their sRGB variants are optional, so asking for one asserts; that path can't run here, since asserts break.
+CDL_TEST_CASE(VulkanUtils, ToVulkanFormatMapsDataFormatsToUnorm, Unit)
+{
+	CDL_EXPECT(ToVulkanFormat(TextureFormat::eRg8, TextureColorSpace::eLinear) == vk::Format::eR8G8Unorm);
+	CDL_EXPECT(ToVulkanFormat(TextureFormat::eR8, TextureColorSpace::eLinear) == vk::Format::eR8Unorm);
+}

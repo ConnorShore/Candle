@@ -11,6 +11,8 @@
 #include "GPUAllocator.h"
 #include "GPUUploader.h"
 #include "GeometryPool.h"
+#include "TexturePool.h"
+#include "BindlessTable.h"
 #include "GPUResourceRegistry.h"
 #include "FramePump.h"
 
@@ -78,7 +80,9 @@ namespace Candle {
 		GPUAllocator m_GPUAllocator;
 		GPUUploader m_GPUUploader;	// After the allocator it stages through, before the pools that upload with it
 		GPUResourceRegistry m_ResourceRegistry;	// Before the pools that register with it
+		BindlessTable m_BindlessTable;	// Before the pools, so it outlives everything that writes into it
 		GeometryPool m_GeometryPool;
+		TexturePool m_TexturePool;
 		Renderer m_Renderer;
 		RenderCommandPoolManager m_CommandPoolManager;
 		Thread m_RenderThread;

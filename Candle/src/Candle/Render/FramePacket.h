@@ -1,6 +1,7 @@
 #pragma once
 
 #include "GPUHandles.h"
+#include "SamplerType.h"
 
 #include <vector>
 #include <glm/glm.hpp>
@@ -13,6 +14,8 @@ namespace Candle {
 	{
 		// Vector not span as data is copied to the render thread, and the simulation thread may modify its own copy of the vector after sending it to the render thread
 		std::vector<GPUMeshHandle> Meshes;
+		std::vector<GPUTextureHandle> Materials;	// Eventually mesh/material will be a model
+		std::vector<SamplerType> SamplerIndices;	// One per material; the render thread uses this to index into the bindless table
 		double Time{ 0.0 };		// Simulation time in seconds at extraction; the renderer never reads a clock of its own
 
 		bool Minimized{ false };		// Whether the surface is minimized; the renderer may skip rendering if true

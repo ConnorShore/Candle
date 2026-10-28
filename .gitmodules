@@ -13,3 +13,10 @@
 [submodule "Candle/vendor/VMA/VMA"]
 	path = Candle/vendor/VMA/VMA
 	url = https://github.com/GPUOpen-LibrariesAndSDKs/VulkanMemoryAllocator.git
+[submodule "Candle/vendor/stb/stb"]
+	path = Candle/vendor/stb/stb
+	url = https://github.com/nothings/stb.git
+[submodule "Candle/vendor/ktx/ktx"]
+	path = Candle/vendor/ktx/ktx
+	url = https://github.com/KhronosGroup/KTX-Software.git
+	shallow = true

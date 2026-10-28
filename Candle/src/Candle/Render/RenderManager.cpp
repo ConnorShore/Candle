@@ -13,6 +13,7 @@
 #include "Candle/Render/FramePump.h"
 
 #include "Candle/Render/Assets/MeshAssetHandler.h"
+#include "Candle/Render/Assets/TextureHandler.h"
 #include "Candle/Render/ShaderInterop/FrameData.h"
 
 namespace Candle {
@@ -40,11 +41,16 @@ namespace Candle {
 		, m_SwapChain(m_RenderInstance, m_RenderDevice, window)
 		, m_GPUAllocator({ renderSpec.VulkanVersion, &m_RenderDevice, &m_RenderInstance })
 		, m_GPUUploader(m_RenderDevice, m_GPUAllocator)
+		, m_BindlessTable(m_RenderDevice)
 		, m_GeometryPool(m_GPUAllocator, m_GPUUploader, m_ResourceRegistry)
-		, m_Renderer(m_RenderDevice, m_GeometryPool, m_SwapChain.GetSurfaceFormat().format)
+		, m_TexturePool(m_GPUAllocator, m_GPUUploader, m_ResourceRegistry)
+		, m_Renderer(m_RenderDevice, m_GeometryPool, m_TexturePool, m_BindlessTable, m_SwapChain.GetSurfaceFormat().format)
 		, m_CommandPoolManager(m_RenderDevice, m_JobSystem.GetNumWorkers())
 		, m_RenderThread({ .Name = "Candle-RenderThread", .Priority = ThreadPriority::High })
 	{
+		// Before any packet exists, since any frame may resolve a missing texture to the error texture
+		m_BindlessTable.WriteDefaultTextures(m_TexturePool);
+
 		CreateFrameContexts();
 	}
 
@@ -90,6 +96,7 @@ namespace Candle {
 	void RenderManager::RegisterAssetHandlers(AssetManager& assetManager)
 	{
 		assetManager.RegisterAssetHandler(ScopedPtr<MeshAssetHandler>::Create(m_GeometryPool));
+		assetManager.RegisterAssetHandler(ScopedPtr<TextureHandler>::Create(m_TexturePool, m_BindlessTable));
 	}
 
 	FramePacket& RenderManager::BeginFramePacket()

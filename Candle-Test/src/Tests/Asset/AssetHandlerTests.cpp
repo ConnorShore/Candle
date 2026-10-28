@@ -47,7 +47,7 @@ CDL_TEST_CASE(AssetHandler, UntypedCallsReachTheTypedOverloads, Unit)
 	TextureStubHandler handler(loaded, unloaded);
 	IAssetHandler& untyped = handler;
 
-	TextureStub texture;
+	TextureStub texture("Brick");
 	untyped.OnLoad(texture);
 	CDL_CHECK_EQ(loaded.size(), 1u);
 	CDL_EXPECT(loaded[0] == &texture);

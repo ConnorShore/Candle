@@ -2,6 +2,7 @@
 
 #include "RenderConstants.h"
 #include "GPUBuffer.h"
+#include "GPUImage.h"
 
 #include <vk_mem_alloc.h>
 
@@ -31,8 +32,9 @@ namespace Candle {
 		GPUAllocator(GPUAllocator&&) = delete;
 		GPUAllocator& operator=(GPUAllocator&&) = delete;
 
+		// The result owns its memory and frees it when destroyed, so the caller destroys it only once the GPU is done with it
 		GPUBuffer CreateBuffer(GPUBufferSpec spec);
-		void DestroyBuffer(GPUBuffer& buffer);	// TODO: This will be handled by a deletion queue (or placed in a deletion queue)
+		GPUImage CreateImage(GPUImageSpec spec);
 
 		inline VmaAllocator& GetAllocator() { return m_Allocator; }
 		inline RenderDevice* GetDevice() { return m_Spec.Device; }

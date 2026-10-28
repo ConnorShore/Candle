@@ -5,6 +5,7 @@
 #include "TestHelpers.h"
 #include "../RenderTestHelpers.h"
 
+#include <Candle/Render/BindlessTable.h>
 #include <Candle/Render/Pipeline.h>
 #include <Candle/Render/PipelineSpecification.h>
 #include <Candle/Render/Pipelines/TriangleInterop.h>
@@ -63,6 +64,7 @@ CDL_TEST_CASE(TrianglePipeline, DescribesTheTriangleShaderAndTarget, Gpu)
 	ExpectNoVulkanDebugMessages(logs);
 }
 
+// The fragment shader samples set 0, so validation also checks each binding it declares against BindlessTable's layout.
 CDL_TEST_CASE(TrianglePipeline, BuildsAPipelineWithoutValidationMessages, Gpu)
 {
 	SkipUnlessCompiled(kTriangleShaderPath);
@@ -70,7 +72,8 @@ CDL_TEST_CASE(TrianglePipeline, BuildsAPipelineWithoutValidationMessages, Gpu)
 	LoggerFixture logs(LogLevel::Warn, kRenderChannelMask);
 	{
 		TestDevice gpu;
-		Pipeline pipeline(TrianglePipeline{}.CreateSpecification(gpu.Device, kColorFormat), gpu.Device, kColorFormat);
+		BindlessTable bindless(gpu.Device);
+		Pipeline pipeline(TrianglePipeline{}.CreateSpecification(gpu.Device, kColorFormat), gpu.Device, bindless, kColorFormat);
 
 		CDL_EXPECT(*pipeline.GetPipeline());
 		CDL_EXPECT(*pipeline.GetLayout());
@@ -89,7 +92,11 @@ CDL_TEST_CASE(TrianglePipeline, ShaderPushBlockMatchesMeshDrawPushConstants, Gpu
 		const PipelineSpecification spec = TrianglePipeline{}.CreateSpecification(gpu.Device, kColorFormat);
 
 		using PushConstants = GPU::MeshDrawPushConstants;
-		const std::array members = { CDL_INTEROP_MEMBER(PushConstants, Global), CDL_INTEROP_MEMBER(PushConstants, Vertices) };
+		const std::array members = {
+			CDL_INTEROP_MEMBER(PushConstants, Global),
+			CDL_INTEROP_MEMBER(PushConstants, Vertices),
+			CDL_INTEROP_MEMBER(PushConstants, TextureIndex),
+			CDL_INTEROP_MEMBER(PushConstants, SamplerIndex) };
 		for (const ShaderEntryPoint& entryPoint : spec.Shader->GetEntryPoints())
 		{
 			CDL_NOTE(entryPoint.Name);

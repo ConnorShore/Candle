@@ -31,9 +31,8 @@ namespace Candle {
 		return { spec, *this };
 	}
 
-	void GPUAllocator::DestroyBuffer(GPUBuffer& buffer)
+	GPUImage GPUAllocator::CreateImage(GPUImageSpec spec)
 	{
-		vmaDestroyBuffer(m_Allocator, buffer.GetBuffer(), buffer.GetAllocation());
+		return { spec, *this };
 	}
-
 }

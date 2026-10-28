@@ -8,6 +8,9 @@ CDL_INTEROP_BEGIN
 	struct Vertex
 	{
 		float3 Position;
+		float UVx;
+		float3 Normal;
+		float UVy;
 	};
 
 CDL_INTEROP_END

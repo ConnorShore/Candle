@@ -5,10 +5,10 @@
 #include "TestHelpers.h"
 #include "RenderTestHelpers.h"
 
-#include <Candle/Render/Image.h>
 #include <Candle/Render/RenderDevice.h>
 #include <Candle/Render/RenderInstance.h>
 #include <Candle/Render/SwapChain.h>
+#include <Candle/Render/SwapChainImage.h>
 
 #include <format>
 
@@ -46,18 +46,16 @@ namespace {
 		const auto [acquired, imageIndex] = test.Chain.AquireNextImage(kFrameIndex);
 		CDL_CHECK_MSG(Presented(acquired), std::format("acquire returned {}", vk::to_string(acquired)));
 
-		Image& target = test.Chain.GetImage(imageIndex);
+		SwapChainImage& target = test.Chain.GetImage(imageIndex);
 		commands.Buffer.begin({ .flags = vk::CommandBufferUsageFlagBits::eOneTimeSubmit });
 		target.Transition({
 			.Layout = vk::ImageLayout::eColorAttachmentOptimal,
-			.AccessMask = vk::AccessFlagBits2::eColorAttachmentWrite,
-			.StageMask = vk::PipelineStageFlagBits2::eColorAttachmentOutput,
-			.AspectMask = vk::ImageAspectFlagBits::eColor }, commands.Buffer);
+			.Access = vk::AccessFlagBits2::eColorAttachmentWrite,
+			.Stage = vk::PipelineStageFlagBits2::eColorAttachmentOutput }, commands.Buffer);
 		target.Transition({
 			.Layout = vk::ImageLayout::ePresentSrcKHR,
-			.AccessMask = vk::AccessFlagBits2::eNone,
-			.StageMask = vk::PipelineStageFlagBits2::eNone,
-			.AspectMask = vk::ImageAspectFlagBits::eColor }, commands.Buffer);
+			.Access = vk::AccessFlagBits2::eNone,
+			.Stage = vk::PipelineStageFlagBits2::eNone }, commands.Buffer);
 		commands.Buffer.end();
 
 		const vk::CommandBufferSubmitInfo commandBufferInfo{ .commandBuffer = *commands.Buffer };

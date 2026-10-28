@@ -4,6 +4,7 @@
 
 #include "Candle/Core/Core.h"
 #include "Candle/Core/Version.h"
+#include "Candle/Render/TextureData.h"
 
 #include <vulkan/vulkan.hpp>
 
@@ -34,6 +35,26 @@ namespace Candle {
 			static_cast<uint32_t>(version.Major) & 0x7Fu,
 			static_cast<uint32_t>(version.Minor) & 0x3FFu,
 			static_cast<uint32_t>(version.Patch) & 0xFFFu);
+	}
+
+	// Every result is in the spec's mandatory set for sampled images with linear filtering, so it works on any device.
+	inline vk::Format ToVulkanFormat(TextureFormat format, TextureColorSpace colorSpace)
+	{
+		const bool isSrgb = (colorSpace == TextureColorSpace::eSrgb);
+		switch (format)
+		{
+		case TextureFormat::eRgba8:
+			return isSrgb ? vk::Format::eR8G8B8A8Srgb : vk::Format::eR8G8B8A8Unorm;
+		case TextureFormat::eRg8:
+			CDL_CORE_ASSERT(!isSrgb, "RG8 textures are linear only: R8G8_SRGB is optional, and few devices sample it");
+			return vk::Format::eR8G8Unorm;
+		case TextureFormat::eR8:
+			CDL_CORE_ASSERT(!isSrgb, "R8 textures are linear only: R8_SRGB is optional, and few devices sample it");
+			return vk::Format::eR8Unorm;
+		}
+
+		CDL_CORE_ASSERT(false, "Unhandled TextureFormat");
+		return vk::Format::eUndefined;
 	}
 
 }
