@@ -50,7 +50,7 @@ CDL_TEST_CASE(TextureHandler, LoadUploadsTheFileAndStoresItsHandle, Gpu)
 		CDL_EXPECT(gpu.Pool.IsAlive(asset->GetGPUHandle()));
 
 		RunReleaseFrame(gpu);
-		CDL_EXPECT_EQ(LiveAllocations(gpu.Allocator), 1u);	// The image, once the upload's staging is drained
+		CDL_EXPECT_EQ(LiveAllocations(gpu.Allocator), kDefaultTextureAllocations + 1u);	// The image, once the upload's staging is drained
 	}
 	ExpectNoVulkanDebugMessages(logs);
 }
@@ -149,7 +149,7 @@ CDL_TEST_CASE(TextureHandler, LoadOfAMissingFileLeavesNoTexture, Gpu)
 		untyped.OnLoad(*asset);
 
 		CDL_EXPECT_FALSE(asset->GetGPUHandle().IsValid());
-		CDL_EXPECT_EQ(LiveAllocations(gpu.Allocator), 0u);
+		CDL_EXPECT_EQ(LiveAllocations(gpu.Allocator), kDefaultTextureAllocations);
 	}
 	ExpectNoVulkanDebugMessages(logs);
 }
@@ -173,7 +173,7 @@ CDL_TEST_CASE(TextureHandler, UnloadReleasesTheTextureAndClearsItsHandle, Gpu)
 		CDL_EXPECT_FALSE(gpu.Pool.IsAlive(texture));
 
 		RunReleaseFrame(gpu);
-		CDL_EXPECT_EQ(LiveAllocations(gpu.Allocator), 0u);
+		CDL_EXPECT_EQ(LiveAllocations(gpu.Allocator), kDefaultTextureAllocations);
 	}
 	ExpectNoVulkanDebugMessages(logs);
 }
@@ -216,7 +216,7 @@ CDL_TEST_CASE(TextureHandler, AssetManagerUnloadsTexturesThroughIt, Gpu)
 		CDL_EXPECT(assets.GetAsset<Texture>("White") == nullptr);
 
 		RunReleaseFrame(gpu);
-		CDL_EXPECT_EQ(LiveAllocations(gpu.Allocator), 0u);
+		CDL_EXPECT_EQ(LiveAllocations(gpu.Allocator), kDefaultTextureAllocations);
 	}
 	ExpectNoVulkanDebugMessages(logs);
 }

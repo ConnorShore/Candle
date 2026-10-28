@@ -8,7 +8,16 @@ namespace Candle {
 	uint64_t AssetManager::LoadAsset(SharedPtr<Asset> asset)
 	{
 		AssetType type = asset->GetType();
-		uint64_t uuid = HashToUUID(asset->GetName(), type);
+		std::string name = asset->GetName();
+		uint64_t uuid = HashToUUID(name, type);
+
+		// If there is an existing asset, unload it and replace it with new asset
+		if (m_Assets.find(uuid) != m_Assets.end())
+		{
+			CDL_CORE_WARN(LogChannel::Asset, "Asset {} of type {} is already loaded. Unloading existing asset and replacing with new asset", name, static_cast<int>(type));
+			UnloadAsset(name, type);
+		}
+
 		m_Assets[uuid] = std::move(asset);
 
 		SharedPtr<Asset> savedAsset = m_Assets[uuid];

@@ -48,6 +48,9 @@ namespace Candle {
 		, m_CommandPoolManager(m_RenderDevice, m_JobSystem.GetNumWorkers())
 		, m_RenderThread({ .Name = "Candle-RenderThread", .Priority = ThreadPriority::High })
 	{
+		// Before any packet exists, since any frame may resolve a missing texture to the error texture
+		m_BindlessTable.WriteDefaultTextures(m_TexturePool);
+
 		CreateFrameContexts();
 	}
 

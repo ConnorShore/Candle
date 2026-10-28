@@ -9,10 +9,11 @@
 namespace Candle {
 
 	class RenderDevice;
+	class TexturePool;
 
 	// Set 0 of every pipeline layout. Binding 0 is Texture2D[kMaxTextures], element i being TexturePool slot i;
 	// binding 1 is SamplerState[SamplerType::Count], written once at construction.
-	// Threading: construct before the render thread starts. WriteTexture on the main thread while the render thread
+	// Threading: construct, and WriteDefaultTextures, before the render thread starts. WriteTexture on the main thread while the render thread
 	//   binds the set, which binding 0's UPDATE_AFTER_BIND permits. The caller must never write an element a pending
 	//   command buffer may read; TexturePool guarantees it, since a slot is only reissued once the GPU has retired it.
 	//   GetSet and GetLayout from any thread.
@@ -27,6 +28,7 @@ namespace Candle {
 		BindlessTable& operator=(const BindlessTable&) = delete;
 
 		void WriteTexture(uint32_t index, vk::ImageView view);
+		void WriteDefaultTextures(const TexturePool& pool);	// Every DefaultTexture, at the element its value names
 		void BindSet(vk::CommandBuffer commandBuffer, vk::PipelineBindPoint bindPoint, vk::PipelineLayout& pipelineLayout);
 
 		inline vk::DescriptorSet GetSet() const { return *m_DescriptorSet; }

@@ -128,8 +128,19 @@ namespace Candle::Test {
 		BindlessTable Bindless{ Device };
 		TexturePool Pool{ Allocator, Uploader, Registry };
 
+		// Publishes the defaults as RenderManager does, then drains their staging so a test counts only its own allocations
+		inline TestTextures()
+		{
+			Bindless.WriteDefaultTextures(Pool);
+			Device.WaitIdle();
+			Uploader.FreeCompletedStagingBuffers();
+		}
+
 		inline ~TestTextures() { Device.WaitIdle(); }
 	};
+
+	// The images every TexturePool holds from construction to destruction, one per DefaultTexture
+	inline constexpr uint32_t kDefaultTextureAllocations = static_cast<uint32_t>(DefaultTexture::Count);
 
 	// Stands in for one frame of RenderManager: pending releases ride a packet to an empty submit, retire with it once
 	// the GPU reaches it, and their slots come back to the main thread. Frees the uploads' staging too.

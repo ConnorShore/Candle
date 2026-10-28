@@ -2,6 +2,7 @@
 #include "BindlessTable.h"
 #include "RenderDevice.h"
 #include "RenderConstants.h"
+#include "TexturePool.h"
 
 #include "Candle/Platform/Platform.h"
 
@@ -160,6 +161,15 @@ namespace Candle {
 		};
 
 		m_RenderDevice.GetDevice().updateDescriptorSets({ textureWrite }, {});
+	}
+
+	void BindlessTable::WriteDefaultTextures(const TexturePool& pool)
+	{
+		for (uint32_t i = 0; i < static_cast<uint32_t>(DefaultTexture::Count); ++i)
+		{
+			const TextureInfo info = pool.GetTextureInfo(pool.GetDefaultTexture(static_cast<DefaultTexture>(i)));
+			WriteTexture(info.Index, info.ImageView);
+		}
 	}
 
 	void BindlessTable::BindSet(vk::CommandBuffer commandBuffer, vk::PipelineBindPoint bindPoint, vk::PipelineLayout& pipelineLayout)

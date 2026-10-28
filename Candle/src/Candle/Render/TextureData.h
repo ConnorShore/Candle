@@ -26,6 +26,13 @@ namespace Candle {
 		eR8
 	};
 
+	// Engine textures TexturePool creates before any other, in this order, so each one's bindless index is its value
+	enum class DefaultTexture : uint32_t
+	{
+		Error,	// What a missing or failed texture resolves to
+		Count
+	};
+
 	// Texture data is tightly packed: rows of Extent.x texels, with no padding between them
 	inline uint32_t BytesPerTexel(TextureFormat format)
 	{

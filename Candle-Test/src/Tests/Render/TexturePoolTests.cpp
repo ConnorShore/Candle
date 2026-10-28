@@ -69,10 +69,10 @@ CDL_TEST_CASE(TexturePool, CreateTextureReturnsAValidHandleAndItsInfo, Gpu)
 		CDL_EXPECT(gpu.Pool.IsAlive(texture));
 		CDL_EXPECT_EQ(info.Index, texture.Index);	// The bindless element the texture is published at
 		CDL_EXPECT(info.ImageView);
-		CDL_EXPECT_EQ(LiveAllocations(gpu.Allocator), 2u);	// The image and its upload's staging
+		CDL_EXPECT_EQ(LiveAllocations(gpu.Allocator), kDefaultTextureAllocations + 2u);	// The image and its upload's staging
 
 		RunReleaseFrame(gpu);
-		CDL_EXPECT_EQ(LiveAllocations(gpu.Allocator), 1u);
+		CDL_EXPECT_EQ(LiveAllocations(gpu.Allocator), kDefaultTextureAllocations + 1u);
 	}
 	ExpectNoVulkanDebugMessages(logs);
 }
@@ -99,13 +99,13 @@ CDL_TEST_CASE(TexturePool, ReleaseFreesTheImageOnlyOnceTheFrameRetires, Gpu)
 		TestTextures gpu;
 		const GPUTextureHandle texture = CreateTexel(gpu.Pool);
 		RunReleaseFrame(gpu);
-		CDL_CHECK_EQ(LiveAllocations(gpu.Allocator), 1u);
+		CDL_CHECK_EQ(LiveAllocations(gpu.Allocator), kDefaultTextureAllocations + 1u);
 
 		gpu.Pool.ReleaseTexture(texture);
-		CDL_EXPECT_EQ(LiveAllocations(gpu.Allocator), 1u);
+		CDL_EXPECT_EQ(LiveAllocations(gpu.Allocator), kDefaultTextureAllocations + 1u);
 
 		RunReleaseFrame(gpu);
-		CDL_EXPECT_EQ(LiveAllocations(gpu.Allocator), 0u);
+		CDL_EXPECT_EQ(LiveAllocations(gpu.Allocator), kDefaultTextureAllocations);
 	}
 	ExpectNoVulkanDebugMessages(logs);
 }
