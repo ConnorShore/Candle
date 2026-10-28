@@ -9,7 +9,9 @@ CDL_INTEROP_BEGIN
 	struct MeshDrawPushConstants
 	{
 		GlobalPushConstants Global;
-		CDL_GPU_PTR(Vertex) Vertices;	// Set per draw
+		CDL_GPU_PTR(Vertex) Vertices;		// Set per draw
+		uint TextureIndex;					// Set per draw
+		uint SamplerIndex;					// Set per draw
 	};
 
 CDL_INTEROP_END

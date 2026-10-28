@@ -1,0 +1,7 @@
+// Set 0, mirroring BindlessTable. Every shader includes this, so nothing pipeline-specific belongs here.
+
+[[vk::binding(0,0)]]
+Texture2D<float4> textures[];
+
+[[vk::binding(1,0)]]
+SamplerState samplers[];

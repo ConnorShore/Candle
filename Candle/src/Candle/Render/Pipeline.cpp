@@ -1,6 +1,7 @@
 #include "cdlpch.h"
 #include "Pipeline.h"
 #include "RenderDevice.h"
+#include "BindlessTable.h"
 
 #include <array>
 
@@ -94,13 +95,13 @@ namespace Candle {
 	}
 	
 
-	Pipeline::Pipeline(PipelineSpecification spec, RenderDevice& renderDevice, vk::Format format)
+	Pipeline::Pipeline(PipelineSpecification spec, RenderDevice& renderDevice, BindlessTable& bindlessTable, vk::Format format)
 		: m_Specification(std::move(spec))
 	{
-		CreatePipeline(format, renderDevice);
+		CreatePipeline(format, renderDevice, bindlessTable);
 	}
 
-	void Pipeline::CreatePipeline(vk::Format format, RenderDevice& renderDevice)
+	void Pipeline::CreatePipeline(vk::Format format, RenderDevice& renderDevice, BindlessTable& bindlessTable)
 	{
 #pragma region Shader Module
 		// Create shader modules and pipeline shader stage create info for each entry point
@@ -154,9 +155,16 @@ namespace Candle {
 		// Create pipeline layout (descriptor set layouts, push constants)
 		// Every layout declares the same range whatever its shader uses, so all are compatible for push constants
 		ValidatePushConstants(m_Specification.Shader->GetEntryPoints());
-		vk::PushConstantRange pushConstantRange{ .stageFlags = kPushConstantStages, .offset = 0, .size = kPushConstantsSize };
+		vk::PushConstantRange pushConstantRange{ 
+			.stageFlags = kPushConstantStages, 
+			.offset = 0, 
+			.size = kPushConstantsSize 
+		};
+
+		vk::DescriptorSetLayout layouts[] = { bindlessTable.GetLayout() };
 		vk::PipelineLayoutCreateInfo pipelineLayoutInfo{
-			.setLayoutCount = 0,
+			.setLayoutCount = 1,
+			.pSetLayouts = layouts,
 			.pushConstantRangeCount = 1,
 			.pPushConstantRanges = &pushConstantRange
 		};

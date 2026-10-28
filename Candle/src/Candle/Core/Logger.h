@@ -55,9 +55,18 @@ inline LogChannel operator|(LogChannel lhs, LogChannel rhs) { return static_cast
 		uint8_t Type = 0; // 0 = Core, 1 = Application
 		LogLevel Level = LogLevel::Info;
 		LogChannel Channel = LogChannel::None;
-		char Message[240] = { 0 };
+
+		// A message too long for one record continues in the records straight after it, pushed together so
+		// nothing interleaves. Sinks print the header on the first part and the newline after the last.
+		bool HasNext = false;
+		bool IsContinuation = false;
+
+		char Message[238] = { 0 };
 	};
 	CDL_STATIC_ASSERT(sizeof(LogRecord) == 256, "LogRecord size is not 256 bytes. Check for padding or alignment issues.");	// 256 is 4 cache lines
+
+	// Past this many records (about 3.8 KB) a message is cut short with "...", so one can't flood the ring.
+	static constexpr size_t LogMessageMaxParts = 16;
 
 	// Simple display helpers (safe to call from any thread)
 	const char* LogLevelName(LogLevel level);
@@ -110,16 +119,18 @@ inline LogChannel operator|(LogChannel lhs, LogChannel rhs) { return static_cast
 			// Set capacity to size-1 to leave room for the null terminator.
 			constexpr size_t capacity = sizeof(LogRecord::Message) - 1;
 
+			// format_to_n only reads its arguments, so they are intact for the long path below.
 			auto result = std::format_to_n(record.Message, capacity, fmt, std::forward<Args>(args)...);
-			*result.out = '\0';
 
+			// Formatting twice when a message doesn't fit is cheaper than every message paying for the longest.
 			if (static_cast<size_t>(result.size) > capacity)
-				std::memcpy(record.Message + capacity - 3, "...", 3);
+			{
+				PushLongLog(record, fmt.get(), std::make_format_args(args...));
+				return;
+			}
 
-			PushRecord(record);
-
-			if (level == LogLevel::Fatal && !Flush())
-				EmergencyWrite(record);
+			*result.out = '\0';
+			Submit(&record, 1);
 		}
 
 		inline static Logger* CoreLogger()
@@ -135,11 +146,16 @@ inline LogChannel operator|(LogChannel lhs, LogChannel rhs) { return static_cast
 		}
 
 	private:
-		static void PushRecord(const LogRecord& record);
+		// Cold path for a message longer than one record: formats it again, splits it into up to
+		// LogMessageMaxParts records carrying first's metadata, and submits them as one group.
+		static void PushLongLog(const LogRecord& first, std::string_view fmt, std::format_args args);
+
+		// Pushes the parts of one message as a single group, so they reach the sinks unbroken.
+		static void Submit(const LogRecord* records, size_t count);
 
 		// Last resort when the drain thread cannot be reached: straight to stderr, unsynchronised,
 		// on the assumption the process is about to die anyway.
-		static void EmergencyWrite(const LogRecord& record);
+		static void EmergencyWrite(const LogRecord* records, size_t count);
 
 	private:
 		uint8_t m_Type = 0;

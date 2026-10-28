@@ -6,11 +6,12 @@
 namespace Candle {
 
 	class TexturePool;
+	class BindlessTable;
 
 	class TextureHandler : public AssetHandler<Texture>
 	{
 	public:
-		TextureHandler(TexturePool& texturePool);
+		TextureHandler(TexturePool& texturePool, BindlessTable& bindlessTable);
 		virtual ~TextureHandler() = default;
 
 	protected:
@@ -19,6 +20,7 @@ namespace Candle {
 
 	private:
 		TexturePool& m_TexturePool;
+		BindlessTable& m_BindlessTable;
 	};
 
 }

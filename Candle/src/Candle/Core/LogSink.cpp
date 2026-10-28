@@ -22,24 +22,33 @@ namespace Candle {
 
 		constexpr const char* s_ColorReset = "\x1b[0m";
 
+		// Stateless across calls: a continuation carries on the line its first part opened, even when a drain
+		// batch ended between them, because a message's parts are always adjacent in the stream.
 		void AppendRecord(std::string& out, const LogRecord& record, bool color)
 		{
-			const uint64_t milliseconds = Platform::ToUnixMicroseconds(record.Time) / 1000;
-			const uint64_t seconds = milliseconds / 1000;
+			if (!record.IsContinuation)
+			{
+				const uint64_t milliseconds = Platform::ToUnixMicroseconds(record.Time) / 1000;
+				const uint64_t seconds = milliseconds / 1000;
 
-			if (color)
-				out.append(s_LevelColors[static_cast<size_t>(record.Level)]);
+				if (color)
+					out.append(s_LevelColors[static_cast<size_t>(record.Level)]);
 
-			std::format_to(std::back_inserter(out), "[{:02}:{:02}:{:02}.{:03}] [{}] [{}] [{:<5}] (T{}) {}",
-				(seconds / 3600) % 24,
-				(seconds / 60) % 60,
-				seconds % 60,
-				milliseconds % 1000,
-				LoggerTypeName(record.Type),
-				LogChannelName(record.Channel),
-				LogLevelName(record.Level),
-				record.ThreadId,
-				record.Message);
+				std::format_to(std::back_inserter(out), "[{:02}:{:02}:{:02}.{:03}] [{}] [{}] [{:<5}] (T{}) ",
+					(seconds / 3600) % 24,
+					(seconds / 60) % 60,
+					seconds % 60,
+					milliseconds % 1000,
+					LoggerTypeName(record.Type),
+					LogChannelName(record.Channel),
+					LogLevelName(record.Level),
+					record.ThreadId);
+			}
+
+			out.append(record.Message);
+
+			if (record.HasNext)
+				return;
 
 			if (color)
 				out.append(s_ColorReset);

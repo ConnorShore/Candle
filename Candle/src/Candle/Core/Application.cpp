@@ -39,12 +39,17 @@ namespace Candle {
 		// TEMPORARY FOR TESTING
 		MeshData testMeshData{
 			.Vertices = {
-				{ { 0.5f, -0.5f, 0.0f } },
-				{ { 0.0f, 0.5f, 0.0f } },
-				{ { -0.5f, -0.5f, 0.0f } }
+				{ { -0.5f, -0.5f, 0.0f }, 0.0f, { 0.0f, 0.0f, 1.0f }, 0.0f },
+				{ {  0.5f, -0.5f, 0.0f }, 1.0f, { 0.0f, 0.0f, 1.0f }, 0.0f },
+				{ {  0.5f,  0.5f, 0.0f }, 1.0f, { 0.0f, 0.0f, 1.0f }, 1.0f },
+				{ { -0.5f,  0.5f, 0.0f }, 0.0f, { 0.0f, 0.0f, 1.0f }, 1.0f }
 			},
-			.Indices = { 0, 1, 2 }
+			.Indices = { 
+				0, 1, 2, 
+				2, 3, 0 
+			}
 		};
+
 		SharedPtr<MeshAsset> meshAsset = SharedPtr<MeshAsset>::Create("TestMesh", std::move(testMeshData));
 		m_AssetManager.LoadAsset(meshAsset);
 
@@ -62,6 +67,7 @@ namespace Candle {
 		std::vector<GPUMeshHandle> meshes{ meshAsset->GetGPUHandle() };
 		SharedPtr<Texture> textureAsset = m_AssetManager.GetAsset<Texture>("TestTexture");
 		std::vector<GPUTextureHandle> materials{ textureAsset->GetGPUHandle() };
+		std::vector<SamplerType> samplerIndices{ textureAsset->GetTextureData().Sampler };
 
 		// Spawn the render thread if we have a render manager
 		if (m_RenderManager)
@@ -87,6 +93,7 @@ namespace Candle {
 				CDL_PROFILE_SCOPE_METADATA(packet.FrameIndex);
 				packet.Meshes = meshes;
 				packet.Materials = materials;
+				packet.SamplerIndices = samplerIndices;
 				packet.Time = m_FrameStats.TotalTime;
 				packet.Minimized = m_Window->IsMinimized();
 				packet.SurfaceSize = m_Window->GetSize();

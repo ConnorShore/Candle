@@ -13,7 +13,7 @@ namespace Candle {
 	{
 		glm::uvec2 m_Extent{ 1, 1 };
 		vk::Format m_Format{ vk::Format::eR8G8B8A8Unorm };
-		VmaAllocationCreateFlags m_Flags{ VMA_ALLOCATION_CREATE_DEDICATED_MEMORY_BIT };
+		VmaAllocationCreateFlags m_Flags{ 0 };
 	};
 
 	class GPUImage
@@ -53,7 +53,7 @@ namespace Candle {
 		}
 
 		inline vk::Image GetImage() const { return m_Image; }
-		inline vk::raii::ImageView& GetImageView() { return m_ImageView; }
+		inline vk::ImageView GetImageView() const { return *m_ImageView; }	// Non-owning, so handing it out leaves the image const
 		inline VmaAllocation GetAllocation() const { return m_Allocation; }
 
 	private:

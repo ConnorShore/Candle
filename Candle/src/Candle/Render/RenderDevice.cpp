@@ -58,6 +58,10 @@ namespace Candle {
 			CDL_REQUIRED_FEATURE(vk::PhysicalDeviceVulkan12Features, scalarBlockLayout),	// slangc -fvk-use-c-layout emits offsets and strides std430 rejects
 			CDL_REQUIRED_FEATURE(vk::PhysicalDeviceVulkan12Features, timelineSemaphore),
 			CDL_REQUIRED_FEATURE(vk::PhysicalDeviceVulkan12Features, bufferDeviceAddress),	// For VMA_ALLOCATOR_CREATE_BUFFER_DEVICE_ADDRESS_BIT
+			CDL_REQUIRED_FEATURE(vk::PhysicalDeviceVulkan12Features, descriptorBindingPartiallyBound),
+			CDL_REQUIRED_FEATURE(vk::PhysicalDeviceVulkan12Features, descriptorBindingUpdateUnusedWhilePending),
+			CDL_REQUIRED_FEATURE(vk::PhysicalDeviceVulkan12Features, descriptorBindingSampledImageUpdateAfterBind),
+			CDL_REQUIRED_FEATURE(vk::PhysicalDeviceVulkan12Features, runtimeDescriptorArray),
 			CDL_REQUIRED_FEATURE(vk::PhysicalDeviceVulkan13Features, dynamicRendering),
 			CDL_REQUIRED_FEATURE(vk::PhysicalDeviceVulkan13Features, synchronization2),
 		};

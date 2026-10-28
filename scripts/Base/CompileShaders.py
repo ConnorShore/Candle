@@ -36,7 +36,7 @@ def compile_shaders(slangc, base_directory, spirv_version):
             dirs.remove("bin")  # Never walk our own output.
 
         for file in files:
-            if not file.endswith(".slang"):
+            if not file.endswith(".slang"):  # A .slangh is only compiled inside the shaders that include it.
                 continue
 
             shader_path = os.path.join(root, file)

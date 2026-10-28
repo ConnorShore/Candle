@@ -12,6 +12,7 @@
 namespace Candle {
 
 	class RenderDevice;
+	class BindlessTable;
 	class SwapChain;
 
 	// The one push-constant range every pipeline layout declares, so pushed values survive pipeline binds.
@@ -22,7 +23,7 @@ namespace Candle {
 	class Pipeline
 	{
 	public:
-		Pipeline(PipelineSpecification spec, RenderDevice& renderDevice, vk::Format format);
+		Pipeline(PipelineSpecification spec, RenderDevice& renderDevice, BindlessTable& bindlessTable, vk::Format format);
 		~Pipeline() = default;
 
 		// Delete copy constructor and assignment operator
@@ -47,7 +48,7 @@ namespace Candle {
 		}
 
 	private:
-		void CreatePipeline(vk::Format format, RenderDevice& renderDevice);
+		void CreatePipeline(vk::Format format, RenderDevice& renderDevice, BindlessTable& bindlessTable);
 
 	private:
 		PipelineSpecification m_Specification;

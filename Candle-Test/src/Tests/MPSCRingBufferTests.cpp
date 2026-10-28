@@ -101,6 +101,44 @@ CDL_TEST_CASE(MPSCRingBuffer, PopBatchFreesSlotsForProducers, Unit)
 	CDL_CHECK_EQ(*ring.Pop(), 10);
 }
 
+CDL_TEST_CASE(MPSCRingBuffer, PushNIsAllOrNothing, Unit)
+{
+	MPSCRingBuffer<int> ring(8);
+	const int group[] = { 10, 11, 12, 13 };
+	CDL_CHECK(ring.TryPushN(group, 4));
+	CDL_CHECK(ring.TryPush(14));
+
+	// Three slots free: a group of four must be refused whole, not partly written.
+	CDL_CHECK_FALSE(ring.TryPushN(group, 4));
+	CDL_CHECK_EQ(ring.DroppedCount(), 4u);
+
+	CDL_CHECK(ring.TryPushN(group, 3));
+	CDL_CHECK_FALSE(ring.TryPush(99));
+
+	int out[8] = {};
+	CDL_CHECK_EQ(ring.PopBatch(out, 8), 8u);
+	const int expected[] = { 10, 11, 12, 13, 14, 10, 11, 12 };
+	for (size_t i = 0; i < std::size(expected); ++i)
+		CDL_EXPECT_EQ(out[i], expected[i]);
+}
+
+CDL_TEST_CASE(MPSCRingBuffer, PushNWrapsAcrossTheEnd, Unit)
+{
+	MPSCRingBuffer<int> ring(8);
+	int out[8] = {};
+	for (int i = 0; i < 6; ++i)
+		CDL_CHECK(ring.TryPush(i));
+	CDL_CHECK_EQ(ring.PopBatch(out, 8), 6u);
+
+	// Lands in slots 6, 7, 0 and 1.
+	const int group[] = { 20, 21, 22, 23 };
+	CDL_CHECK(ring.TryPushN(group, 4));
+
+	CDL_CHECK_EQ(ring.PopBatch(out, 8), 4u);
+	for (size_t i = 0; i < std::size(group); ++i)
+		CDL_EXPECT_EQ(out[i], group[i]);
+}
+
 namespace {
 
 	// Trivially copyable, so it can go through the ring.
@@ -108,6 +146,14 @@ namespace {
 	{
 		uint32_t Producer = 0;
 		uint32_t Sequence = 0;
+	};
+
+	// One item of a TryPushN group; Remaining counts down to 0 on the group's last item.
+	struct GroupItem
+	{
+		uint32_t Producer = 0;
+		uint32_t Group = 0;
+		uint32_t Remaining = 0;
 	};
 
 }
@@ -166,5 +212,79 @@ CDL_TEST_CASE(MPSCRingBuffer, ManyProducersOneConsumerLoseNothing, Stress)
 	CDL_CHECK_EQ(outOfOrder, 0u);
 	for (int producer = 0; producer < producerCount; ++producer)
 		CDL_EXPECT_EQ(nextExpected[producer], perProducer);
+	CDL_CHECK_FALSE(ring.Pop().has_value());
+}
+
+CDL_TEST_CASE(MPSCRingBuffer, PushNGroupsStayUnbrokenUnderContention, Stress)
+{
+	// Every producer pushes groups of 1-7 items into a small ring at once. Each group must come out with
+	// nothing from another producer inside it, and each producer's groups must come out in order.
+	constexpr uint32_t groupsPerProducer = 20'000;
+	constexpr uint32_t maxGroupSize = 7;
+	const int producerCount = StressThreadCount() - 1;
+
+	uint64_t total = 0;
+	for (int producer = 0; producer < producerCount; ++producer)
+		for (uint32_t group = 0; group < groupsPerProducer; ++group)
+			total += 1 + (group + producer) % maxGroupSize;
+
+	MPSCRingBuffer<GroupItem> ring(256);
+	std::vector<uint32_t> nextGroup(producerCount, 0);
+	uint64_t received = 0;
+	uint64_t broken = 0;
+	uint64_t outOfOrder = 0;
+	std::atomic<int> producersDone = 0;
+
+	// Thread 0 is the single consumer; the rest are producers.
+	RunConcurrently(producerCount + 1, [&](int thread) {
+		if (thread == 0)
+		{
+			GroupItem batch[64];
+			GroupItem previous;
+			bool insideGroup = false;
+			while (true)
+			{
+				const bool allDone = producersDone.load(std::memory_order_acquire) == producerCount;
+				const size_t count = ring.PopBatch(batch, std::size(batch));
+				for (size_t i = 0; i < count; ++i)
+				{
+					const GroupItem& item = batch[i];
+					if (insideGroup && (item.Producer != previous.Producer || item.Group != previous.Group || item.Remaining + 1 != previous.Remaining))
+						++broken;
+
+					if (item.Remaining == 0 && item.Group != nextGroup[item.Producer]++)
+						++outOfOrder;
+
+					insideGroup = item.Remaining > 0;
+					previous = item;
+				}
+				received += count;
+
+				if (count == 0 && allDone)
+					break;
+			}
+			return;
+		}
+
+		const uint32_t producer = static_cast<uint32_t>(thread - 1);
+		GroupItem items[maxGroupSize];
+		for (uint32_t group = 0; group < groupsPerProducer; ++group)
+		{
+			const uint32_t size = 1 + (group + producer) % maxGroupSize;
+			for (uint32_t i = 0; i < size; ++i)
+				items[i] = GroupItem{ producer, group, size - 1 - i };
+
+			while (!ring.TryPushN(items, size))
+				CDL_THREAD_PAUSE();
+		}
+		producersDone.fetch_add(1, std::memory_order_release);
+	});
+
+	CDL_NOTE(std::format("{} producers x {} groups, {} items refused while full", producerCount, groupsPerProducer, ring.DroppedCount()));
+	CDL_CHECK_EQ(received, total);
+	CDL_CHECK_EQ(broken, 0u);
+	CDL_CHECK_EQ(outOfOrder, 0u);
+	for (int producer = 0; producer < producerCount; ++producer)
+		CDL_EXPECT_EQ(nextGroup[producer], groupsPerProducer);
 	CDL_CHECK_FALSE(ring.Pop().has_value());
 }

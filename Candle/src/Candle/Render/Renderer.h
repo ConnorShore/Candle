@@ -1,6 +1,7 @@
 #pragma once
 
 #include "Pipeline.h"
+#include "BindlessTable.h"
 
 #include <vector>
 
@@ -12,6 +13,8 @@ namespace Candle {
 	class Pipeline;
 	class SwapChainImage;
 	class GeometryPool;
+	class TexturePool;
+	class BindlessTable;
 	class RenderPipeline;
 
 	struct FrameContext;
@@ -22,7 +25,8 @@ namespace Candle {
 	class Renderer
 	{
 	public:
-		explicit Renderer(RenderDevice& renderDevice, GeometryPool& geometryPool, vk::Format targetFormat);				// pipelines, bindless tables, render graph
+		explicit Renderer(RenderDevice& renderDevice, GeometryPool& geometryPool, TexturePool& texturePool, 
+							BindlessTable& bindlessTable, vk::Format targetFormat);				// pipelines, bindless tables, render graph
 		void Render(const FramePacket& packet, FrameContext& frame, SwapChainImage& target);   // target is imported into the graph; its owner presents it
 
 	private:
@@ -31,6 +35,8 @@ namespace Candle {
 	private:
 		RenderDevice& m_RenderDevice;
 		GeometryPool& m_GeometryPool;
+		TexturePool& m_TexturePool;
+		BindlessTable& m_BindlessTable;
 		vk::Format m_TargetFormat;
 
 		// Eventually this will go in a PipelineLibrary and the RenderPass

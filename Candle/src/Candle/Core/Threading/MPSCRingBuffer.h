@@ -38,37 +38,52 @@ namespace Candle {
 		MPSCRingBuffer(const MPSCRingBuffer&) = delete;
 		MPSCRingBuffer& operator=(const MPSCRingBuffer&) = delete;
 
-		bool TryPush(const T& item)
+		inline bool TryPush(const T& item)
 		{
-			size_t currentHead = m_Head.load(std::memory_order_relaxed);
+			return TryPushN(&item, 1);
+		}
 
+		// All or nothing: claims count consecutive slots with one CAS, so no other producer's item lands
+		// between them. If they don't all fit, nothing is written and all count are added to the dropped total.
+		inline bool TryPushN(const T* items, size_t count)
+		{
+			CDL_CORE_ASSERT(count > 0 && count <= m_Capacity, "MPSCRingBuffer::TryPushN count must be in [1, capacity]");
+
+			size_t first = 0;
 			while (true)
 			{
-				// Head and tail are free-running and never wrapped, so this difference is an exact
-				// occupancy. A stale tail only ever over-reports fullness, which is the safe direction.
-				size_t currentTail = m_Tail.load(std::memory_order_acquire);
-				if (currentHead - currentTail >= m_Capacity)
+				// Tail before head: every slot the consumer has freed was claimed first, so a head read after
+				// the tail is never behind it and this free-running difference can't wrap. Read the other way
+				// round, the consumer can pass a stale head and the wrap reads as full. A stale tail only ever
+				// over-reports fullness, which is the safe direction.
+				const size_t currentTail = m_Tail.load(std::memory_order_acquire);
+				size_t currentHead = m_Head.load(std::memory_order_relaxed);
+				if (currentHead - currentTail > m_Capacity - count)
 				{
-					// Buffer is full, drop the item and increment the dropped count
-					m_Dropped.fetch_add(1, std::memory_order_relaxed);
+					m_Dropped.fetch_add(count, std::memory_order_relaxed);
 					return false;
 				}
 
-				if (m_Head.compare_exchange_weak(currentHead, currentHead + 1, std::memory_order_relaxed, std::memory_order_relaxed))
-					break; // Successfully reserved a slot
-
-				// If compare_exchange_weak fails, currentHead is updated to the current value of m_Head, so we can retry
+				if (m_Head.compare_exchange_weak(currentHead, currentHead + count, std::memory_order_relaxed, std::memory_order_relaxed))
+				{
+					first = currentHead;
+					break;
+				}
 			}
 
-			// We've successfully reserved a slot at currentHead. Now we can write the item.
-			size_t index = currentHead & m_Mask;
+			for (size_t i = 0; i < count; ++i)
+			{
+				Slot& slot = m_Buffer[(first + i) & m_Mask];
+				CDL_CORE_ASSERT(slot.State.load(std::memory_order_acquire) == SlotState::Empty,
+					"Producer claimed a slot the consumer has not released");
+				slot.Value = items[i];
+			}
 
-			// Ensure that the slot is empty before writing to it
-			CDL_CORE_ASSERT(m_Buffer[index].State.load(std::memory_order_acquire) == SlotState::Empty,
-				"Producer claimed a slot the consumer has not released");
+			// Published back to front. The consumer stops at the first unwritten slot, so it sees none of the
+			// group until the first slot is published, and by then the rest already are.
+			for (size_t i = count; i-- > 0;)
+				m_Buffer[(first + i) & m_Mask].State.store(SlotState::Written, std::memory_order_release);
 
-			m_Buffer[index].Value = item;
-			m_Buffer[index].State.store(SlotState::Written, std::memory_order_release);
 			return true;
 		}
 
@@ -115,7 +130,7 @@ namespace Candle {
 			return count;
 		}
 
-		// Any thread. Records rejected by TryPush since construction.
+		// Any thread. Items rejected by TryPush and TryPushN since construction.
 		uint64_t DroppedCount() const { return m_Dropped.load(std::memory_order_relaxed); }
 		size_t Capacity() const { return m_Capacity; }
 

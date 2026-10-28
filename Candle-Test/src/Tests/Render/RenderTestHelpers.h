@@ -62,10 +62,11 @@ namespace Candle::Test {
 		CDL_CHECK(Logger::Flush());
 
 		std::vector<std::string> messages;
-		for (const LogRecord& record : logs.Records)
+		for (size_t i = 0; i < logs.Records.size(); ++i)
 		{
-			if (record.Channel == LogChannel::Render && std::string_view(record.Message).starts_with("[Vulkan Debug]"))
-				messages.emplace_back(record.Message);
+			const LogRecord& record = logs.Records[i];
+			if (record.Channel == LogChannel::Render && !record.IsContinuation && std::string_view(record.Message).starts_with("[Vulkan Debug]"))
+				messages.push_back(JoinedMessage(logs.Records, i));
 		}
 		return messages;
 	}

@@ -1,6 +1,6 @@
 #pragma once
 
-#include "Sampler.h"	// TODO: May be worth moving SampleType into this file
+#include "SamplerType.h"	// TODO: May be worth moving SampleType into this file
 
 #include <glm/glm.hpp>
 

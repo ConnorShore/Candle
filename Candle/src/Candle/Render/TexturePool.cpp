@@ -21,7 +21,6 @@ namespace Candle {
 		GPUImage image = m_Allocator.CreateImage(GPUImageSpec{
 			.m_Extent = spec.Extent,
 			.m_Format = ToVulkanFormat(spec.Format, spec.ColorSpace),
-			.m_Flags = VMA_ALLOCATION_CREATE_DEDICATED_MEMORY_BIT
 			});
 
 		ImageUploadSpec uploadSpec{
@@ -50,8 +49,13 @@ namespace Candle {
 
 	TextureInfo TexturePool::GetTextureInfo(GPUTextureHandle handle) const
 	{
+		CDL_CORE_ASSERT(IsAlive(handle), "GetTextureInfo was given a dead texture handle");
+		if (!IsAlive(handle))
+			return {};
+
 		return TextureInfo{
-			.Index = handle.Index
+			.Index = handle.Index,
+			.ImageView = m_Textures.Get(handle).Image.GetImageView()
 		};
 	}
 

@@ -13,9 +13,11 @@ namespace Candle {
 	class GPUUploader;
 	class GPUResourceRegistry;
 
+	// Values, not references into the pool, so an info stays safe to hold after its texture is released
 	struct TextureInfo
 	{
-		uint32_t Index;
+		uint32_t Index{ std::numeric_limits<uint32_t>::max() };
+		vk::ImageView ImageView{ nullptr };
 	};
 
 	struct TextureCreateSpec
@@ -28,6 +30,8 @@ namespace Candle {
 
 	class TexturePool
 	{
+	public:
+
 	public:
 		TexturePool(GPUAllocator& allocator, GPUUploader& uploader, GPUResourceRegistry& registry);
 		~TexturePool() = default;
@@ -44,7 +48,7 @@ namespace Candle {
 		// False for the default handle and for a released mesh, even once another mesh reuses its slot
 		bool IsAlive(GPUTextureHandle handle) const;
 
-		TextureInfo GetTextureInfo(GPUTextureHandle handle) const;
+		TextureInfo GetTextureInfo(GPUTextureHandle handle) const;	// Empty for a dead handle
 
 	private:
 		struct TextureEntry

@@ -41,9 +41,10 @@ namespace Candle {
 		, m_SwapChain(m_RenderInstance, m_RenderDevice, window)
 		, m_GPUAllocator({ renderSpec.VulkanVersion, &m_RenderDevice, &m_RenderInstance })
 		, m_GPUUploader(m_RenderDevice, m_GPUAllocator)
+		, m_BindlessTable(m_RenderDevice)
 		, m_GeometryPool(m_GPUAllocator, m_GPUUploader, m_ResourceRegistry)
 		, m_TexturePool(m_GPUAllocator, m_GPUUploader, m_ResourceRegistry)
-		, m_Renderer(m_RenderDevice, m_GeometryPool, m_SwapChain.GetSurfaceFormat().format)
+		, m_Renderer(m_RenderDevice, m_GeometryPool, m_TexturePool, m_BindlessTable, m_SwapChain.GetSurfaceFormat().format)
 		, m_CommandPoolManager(m_RenderDevice, m_JobSystem.GetNumWorkers())
 		, m_RenderThread({ .Name = "Candle-RenderThread", .Priority = ThreadPriority::High })
 	{
@@ -92,7 +93,7 @@ namespace Candle {
 	void RenderManager::RegisterAssetHandlers(AssetManager& assetManager)
 	{
 		assetManager.RegisterAssetHandler(ScopedPtr<MeshAssetHandler>::Create(m_GeometryPool));
-		assetManager.RegisterAssetHandler(ScopedPtr<TextureHandler>::Create(m_TexturePool));
+		assetManager.RegisterAssetHandler(ScopedPtr<TextureHandler>::Create(m_TexturePool, m_BindlessTable));
 	}
 
 	FramePacket& RenderManager::BeginFramePacket()
