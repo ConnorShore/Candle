@@ -105,6 +105,8 @@ namespace Candle {
 
 	void Pipeline::CreatePipeline(vk::Format format, RenderDevice& renderDevice, BindlessTable& bindlessTable)
 	{
+		bool containsDepthAttachment = m_Specification.DepthAttachmentFormat != vk::Format::eUndefined;
+
 #pragma region Shader Module
 		// Create shader modules and pipeline shader stage create info for each entry point
 		vk::raii::ShaderModule shaderModule = m_Specification.Shader->CreateModule(renderDevice);
@@ -152,8 +154,8 @@ namespace Candle {
 
 #pragma region Depth / Stencil State
 		vk::PipelineDepthStencilStateCreateInfo depthStencil{ 
-			.depthTestEnable = vk::True, 
-			.depthWriteEnable = vk::True, 
+			.depthTestEnable = containsDepthAttachment ? vk::True : vk::False, 
+			.depthWriteEnable = containsDepthAttachment ? vk::True : vk::False,
 			.depthCompareOp = vk::CompareOp::eLessOrEqual, 
 			.depthBoundsTestEnable = vk::False, 
 			.stencilTestEnable = vk::False 
