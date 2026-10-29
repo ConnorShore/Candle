@@ -24,6 +24,8 @@ namespace Candle::GPU {
 	using uint2 = glm::uvec2;
 	using uint3 = glm::uvec3;
 	using uint4 = glm::uvec4;
+
+	using float4x4 = glm::mat4;
 }
 
 #define CDL_INTEROP_BEGIN namespace Candle::GPU {

@@ -107,9 +107,12 @@ namespace {
 		for (int frame = 0; frame < count; ++frame)
 		{
 			FramePacket& packet = manager.BeginFramePacket();
-			packet.Meshes = { mesh };
-			packet.Materials = { texture.IsValid() ? texture : test.DefaultTexture };
-			packet.SamplerIndices = { SamplerType::LinearWrap };
+			packet.DrawItems = { {
+				.Mesh = mesh,
+				.Material = texture.IsValid() ? texture : test.DefaultTexture,
+				.Sampler = SamplerType::LinearWrap,
+				.TransformIndex = 0 } };
+			packet.TransformData = { glm::mat4(1.0f) };
 			packet.Time = frame / 60.0;
 			packet.Minimized = surface.Minimized;
 			packet.SurfaceSize = surface.Size;

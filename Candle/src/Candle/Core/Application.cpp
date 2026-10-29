@@ -39,14 +39,44 @@ namespace Candle {
 		// TEMPORARY FOR TESTING
 		MeshData testMeshData{
 			.Vertices = {
-				{ { -0.5f, -0.5f, 0.0f }, 0.0f, { 0.0f, 0.0f, 1.0f }, 0.0f },
-				{ {  0.5f, -0.5f, 0.0f }, 2.0f, { 0.0f, 0.0f, 1.0f }, 0.0f },
-				{ {  0.5f,  0.5f, 0.0f }, 2.0f, { 0.0f, 0.0f, 1.0f }, 2.0f },
-				{ { -0.5f,  0.5f, 0.0f }, 0.0f, { 0.0f, 0.0f, 1.0f }, 2.0f }
+				// +Z
+				{ { -0.5f, -0.5f,  0.5f }, 0.0f, {  0.0f,  0.0f,  1.0f }, 0.0f },
+				{ {  0.5f, -0.5f,  0.5f }, 1.0f, {  0.0f,  0.0f,  1.0f }, 0.0f },
+				{ {  0.5f,  0.5f,  0.5f }, 1.0f, {  0.0f,  0.0f,  1.0f }, 1.0f },
+				{ { -0.5f,  0.5f,  0.5f }, 0.0f, {  0.0f,  0.0f,  1.0f }, 1.0f },
+				// -Z
+				{ {  0.5f, -0.5f, -0.5f }, 0.0f, {  0.0f,  0.0f, -1.0f }, 0.0f },
+				{ { -0.5f, -0.5f, -0.5f }, 1.0f, {  0.0f,  0.0f, -1.0f }, 0.0f },
+				{ { -0.5f,  0.5f, -0.5f }, 1.0f, {  0.0f,  0.0f, -1.0f }, 1.0f },
+				{ {  0.5f,  0.5f, -0.5f }, 0.0f, {  0.0f,  0.0f, -1.0f }, 1.0f },
+				// +X
+				{ {  0.5f, -0.5f,  0.5f }, 0.0f, {  1.0f,  0.0f,  0.0f }, 0.0f },
+				{ {  0.5f, -0.5f, -0.5f }, 1.0f, {  1.0f,  0.0f,  0.0f }, 0.0f },
+				{ {  0.5f,  0.5f, -0.5f }, 1.0f, {  1.0f,  0.0f,  0.0f }, 1.0f },
+				{ {  0.5f,  0.5f,  0.5f }, 0.0f, {  1.0f,  0.0f,  0.0f }, 1.0f },
+				// -X
+				{ { -0.5f, -0.5f, -0.5f }, 0.0f, { -1.0f,  0.0f,  0.0f }, 0.0f },
+				{ { -0.5f, -0.5f,  0.5f }, 1.0f, { -1.0f,  0.0f,  0.0f }, 0.0f },
+				{ { -0.5f,  0.5f,  0.5f }, 1.0f, { -1.0f,  0.0f,  0.0f }, 1.0f },
+				{ { -0.5f,  0.5f, -0.5f }, 0.0f, { -1.0f,  0.0f,  0.0f }, 1.0f },
+				// +Y
+				{ { -0.5f,  0.5f,  0.5f }, 0.0f, {  0.0f,  1.0f,  0.0f }, 0.0f },
+				{ {  0.5f,  0.5f,  0.5f }, 1.0f, {  0.0f,  1.0f,  0.0f }, 0.0f },
+				{ {  0.5f,  0.5f, -0.5f }, 1.0f, {  0.0f,  1.0f,  0.0f }, 1.0f },
+				{ { -0.5f,  0.5f, -0.5f }, 0.0f, {  0.0f,  1.0f,  0.0f }, 1.0f },
+				// -Y
+				{ { -0.5f, -0.5f, -0.5f }, 0.0f, {  0.0f, -1.0f,  0.0f }, 0.0f },
+				{ {  0.5f, -0.5f, -0.5f }, 1.0f, {  0.0f, -1.0f,  0.0f }, 0.0f },
+				{ {  0.5f, -0.5f,  0.5f }, 1.0f, {  0.0f, -1.0f,  0.0f }, 1.0f },
+				{ { -0.5f, -0.5f,  0.5f }, 0.0f, {  0.0f, -1.0f,  0.0f }, 1.0f }
 			},
-			.Indices = { 
-				0, 1, 2, 
-				2, 3, 0 
+			.Indices = {
+				 0,  1,  2,   2,  3,  0,
+				 4,  5,  6,   6,  7,  4,
+				 8,  9, 10,  10, 11,  8,
+				12, 13, 14,  14, 15, 12,
+				16, 17, 18,  18, 19, 16,
+				20, 21, 22,  22, 23, 20
 			}
 		};
 
@@ -67,11 +97,23 @@ namespace Candle {
 
 	void Application::Run()
 	{
+		// Sample test data setup (temporary)
 		SharedPtr<MeshAsset> meshAsset = m_AssetManager.GetAsset<MeshAsset>("TestMesh");
-		std::vector<GPUMeshHandle> meshes{ meshAsset->GetGPUHandle() };
 		SharedPtr<Texture> textureAsset = m_AssetManager.GetAsset<Texture>("TestTexture");
-		std::vector<GPUTextureHandle> materials{ textureAsset->GetGPUHandle() };
-		std::vector<SamplerType> samplerIndices{ textureAsset->GetTextureData().Sampler };
+		std::vector<DrawItem> drawItems{
+			{
+				.Mesh = meshAsset->GetGPUHandle(),
+				.Material = textureAsset->GetGPUHandle(),
+				.Sampler = textureAsset->GetTextureData().Sampler,
+				.TransformIndex = 0
+			}
+		};
+		std::vector<glm::mat4> transforms{
+			glm::translate(glm::mat4(1.0f), glm::vec3(0.0f, 0.0f, 0.0f))
+		};
+		glm::mat4 viewMatrix = glm::lookAt(glm::vec3(2.0f, 2.0f, 2.0f), glm::vec3(0.0f, 0.0f, 0.0f), glm::vec3(0.0f, 1.0f, 0.0f));
+		glm::mat4 projectionMatrix = glm::perspective(glm::radians(45.0f), 16.0f / 9.0f, 0.1f, 100.0f);
+		//
 
 		// Spawn the render thread if we have a render manager
 		if (m_RenderManager)
@@ -95,9 +137,10 @@ namespace Candle {
 				CDL_PROFILE_SCOPE("Application::Run::FramePacket");
 				FramePacket& packet = m_RenderManager->BeginFramePacket();
 				CDL_PROFILE_SCOPE_METADATA(packet.FrameIndex);
-				packet.Meshes = meshes;
-				packet.Materials = materials;
-				packet.SamplerIndices = samplerIndices;
+				packet.DrawItems = drawItems;
+				packet.TransformData = transforms;
+				packet.ViewMatrix = viewMatrix;
+				packet.ProjectionMatrix = projectionMatrix;
 				packet.Time = m_FrameStats.TotalTime;
 				packet.Minimized = m_Window->IsMinimized();
 				packet.SurfaceSize = m_Window->GetSize();

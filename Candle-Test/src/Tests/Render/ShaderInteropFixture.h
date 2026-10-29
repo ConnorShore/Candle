@@ -8,19 +8,19 @@
 
 CDL_INTEROP_BEGIN
 
-	// Members placed where C++ and std430 disagree, so a shader compiled without C layout fails to match.
-	// Starts with Global, so Pipeline accepts it as a push-constant block.
+	// Shaped like a production block: Global, then per-draw geometry and material values. Frame-wide and variable-count
+	// data stays behind Global.Frame, never embedded, which is what keeps a block within the 128-byte range.
+	// The material members sit where C layout and std430 disagree, so a shader compiled without C layout fails to match.
 	struct InteropFixturePushConstants
 	{
 		GlobalPushConstants Global;
-		float Scalar;
-		float3 Vector3;					// std430 aligns a float3 to 16
-		float4 Vector4;					// std430 aligns a float4 to 16
-		uint Count;
-		float2 Vector2;					// std430 aligns a float2 to 8
-		Vertex EmbeddedVertex;			// A struct of one float3: 16-aligned and 16 bytes in std430
-		FrameData EmbeddedFrame;
 		CDL_GPU_PTR(Vertex) Vertices;
+		uint VertexOffset;				// Into Vertices, as for meshes sharing one buffer
+		uint TransformIndex;			// Into Global.Frame->TransformData
+		float3 EmissiveColor;			// std430 aligns a float3 to 16: 32, not 24
+		float EmissiveStrength;			// Packs into the float3's tail in both layouts, so it moves with it
+		float4 BaseColorFactor;			// std430 aligns a float4 to 16: 48, not 40
+		float2 UVScale;					// Last, and ends on the struct's 8-byte alignment (see ShaderInteropTests)
 	};
 
 CDL_INTEROP_END

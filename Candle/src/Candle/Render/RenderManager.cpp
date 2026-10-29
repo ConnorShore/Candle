@@ -3,6 +3,7 @@
 #include "ShaderLoader.h"
 #include "Shader.h"
 #include "FramePacket.h"
+#include "RenderConstants.h"
 
 #include "Candle/Core/Window.h"
 #include "Candle/Core/Profiler.h"
@@ -222,6 +223,11 @@ namespace Candle {
 			// Written by the CPU every frame and read once per draw, so host-visible rather than staged into device memory
 			frameContext.FrameData = m_GPUAllocator.CreateBuffer({
 				.m_Size = sizeof(GPU::FrameData),
+				.m_Usage = vk::BufferUsageFlagBits::eShaderDeviceAddress,
+				.m_Flags = VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT | VMA_ALLOCATION_CREATE_MAPPED_BIT });
+
+			frameContext.TransformData = m_GPUAllocator.CreateBuffer({
+				.m_Size = kMaxTransforms * sizeof(glm::mat4),
 				.m_Usage = vk::BufferUsageFlagBits::eShaderDeviceAddress,
 				.m_Flags = VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT | VMA_ALLOCATION_CREATE_MAPPED_BIT });
 		}

@@ -36,11 +36,23 @@ namespace Candle {
 	{
 		CDL_PROFILE_SCOPE("Renderer::Render");
 
+		// Write the transform data into the frame's TransformData buffer, if any
+		const std::span<const glm::mat4> transforms = packet.TransformData;
+		if (!transforms.empty())
+			frame.TransformData.Write(std::as_bytes(transforms));
+
 		// Safe to overwrite: RenderManager waited on this slot's RetireValue, and vkQueueSubmit makes host writes visible to the GPU
-		const GPU::FrameData frameData{ .Time = static_cast<float>(std::fmod(packet.Time, kShaderTimeWrapSeconds)) };
+		const GPU::FrameData frameData{ 
+			.ViewProjection = packet.ProjectionMatrix * packet.ViewMatrix,
+			.TransformData = frame.TransformData.GetDeviceAddress(),
+			.TransformCount = static_cast<uint32_t>(transforms.size()),
+			.Time = static_cast<float>(std::fmod(packet.Time, kShaderTimeWrapSeconds))
+		};
 		frame.FrameData.Write(std::as_bytes(std::span(&frameData, 1)));
 
-		const GPU::GlobalPushConstants global{ .Frame = frame.FrameData.GetDeviceAddress() };
+		const GPU::GlobalPushConstants global{ 
+			.Frame = frame.FrameData.GetDeviceAddress() 
+		};
 
 		// For now, just record a command buffer that draws a triangle to the target image using the first pipeline in m_Pipelines
 		// In the future, this will be more complex and involve a render graph and multiple pipelines
@@ -83,15 +95,17 @@ namespace Candle {
 		m_BindlessTable.BindSet(*frame.CommandBuffer, vk::PipelineBindPoint::eGraphics, pipelineLayout);
 
 		// Push constants for the triangle shader (will eventually be set per mesh)
-		MeshDrawInfo drawInfo = m_GeometryPool.GetMeshInfo(packet.Meshes[0]);
-		TextureInfo textureInfo = m_TexturePool.GetTextureInfo(packet.Materials[0]);
-		SamplerType samplerIndex = packet.SamplerIndices[0];
+		MeshDrawInfo drawInfo = m_GeometryPool.GetMeshInfo(packet.DrawItems[0].Mesh);
+		TextureInfo textureInfo = m_TexturePool.GetTextureInfo(packet.DrawItems[0].Material);
+		SamplerType samplerIndex = packet.DrawItems[0].Sampler;
+		uint32_t transformIndex = packet.DrawItems[0].TransformIndex;
 
 		GPU::MeshDrawPushConstants pushConstants{ 
 			.Global = global, 
 			.Vertices = drawInfo.VerticesAddr, 
 			.TextureIndex = textureInfo.Index,
-			.SamplerIndex = static_cast<uint32_t>(samplerIndex)
+			.SamplerIndex = static_cast<uint32_t>(samplerIndex),
+			.TransformIndex = transformIndex
 		};
 		m_Pipelines[0].PushConstants(*frame.CommandBuffer, pushConstants);
 		frame.CommandBuffer.bindIndexBuffer(drawInfo.Indices, 0, vk::IndexType::eUint32);
