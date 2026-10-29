@@ -15,7 +15,8 @@ namespace Candle {
 			.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
 			.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
 			.image = image,
-			.subresourceRange = range };
+			.subresourceRange = range 
+		};
 	}
 
 }

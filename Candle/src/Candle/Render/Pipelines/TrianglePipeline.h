@@ -9,7 +9,7 @@ namespace Candle {
 	public:
 		TrianglePipeline() : RenderPipeline("BasicTriangle") {}
 
-		PipelineSpecification CreateSpecification(RenderDevice& renderDevice, vk::Format format) const override;
+		PipelineSpecification CreateSpecification(RenderDevice& renderDevice, vk::Format colorFormat, vk::Format depthFormat) const override;
 
 	};
 

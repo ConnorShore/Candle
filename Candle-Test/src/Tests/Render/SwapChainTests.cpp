@@ -170,3 +170,21 @@ CDL_TEST_CASE(SwapChain, IsValidOnlyForTheLastRequestedExtent, Gpu)
 	}
 	ExpectNoVulkanDebugMessages(logs);
 }
+
+// Renderer sizes its depth target from GetExtent to cover the colour target's render area, so it must be what the images
+// really are. The window keeps its size, so the surface overrides the request, as in IsValidOnlyForTheLastRequestedExtent.
+CDL_TEST_CASE(SwapChain, GetExtentIsTheImagesExtentNotTheRequestedOne, Gpu)
+{
+	LoggerFixture logs(LogLevel::Warn, kRenderChannelMask);
+	{
+		TestSwapChain test;
+		const glm::uvec2 windowSize = test.AppWindow.GetSize();
+		test.Chain.Recreate(windowSize + glm::uvec2(100, 50));
+
+		const vk::Extent2D extent = test.Chain.GetExtent();
+		CDL_EXPECT(extent == test.Chain.GetImage(0).GetDesc().Extent);
+		CDL_EXPECT_EQ(extent.width, windowSize.x);
+		CDL_EXPECT_EQ(extent.height, windowSize.y);
+	}
+	ExpectNoVulkanDebugMessages(logs);
+}

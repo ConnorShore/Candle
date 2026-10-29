@@ -41,6 +41,13 @@ namespace Candle {
 		// True after Recreate(extent) even if the surface overrode it, so a disagreeing surface can't force a rebuild every frame
 		inline bool IsValid(const glm::uvec2& extent) const { return extent == m_RequestedExtent; }
 
+		// The extent the images really have, which the surface may have chosen over the requested one; size paired targets from this
+		inline vk::Extent2D GetExtent() const 
+		{
+			CDL_CORE_ASSERT(!m_SwapChainImages.empty(), "Must have images to get extent"); 
+			return m_SwapChainImages.front().GetDesc().Extent; 
+		}
+
 		inline SwapChainImage& GetImage(uint32_t imageIndex) { return m_SwapChainImages[imageIndex]; }
 		inline const vk::SurfaceFormatKHR& GetSurfaceFormat() const { return m_SwapChainSurfaceFormat; }
 

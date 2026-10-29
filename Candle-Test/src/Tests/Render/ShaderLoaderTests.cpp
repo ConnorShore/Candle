@@ -177,9 +177,9 @@ CDL_TEST_CASE(ShaderLoader, ReflectsThePushBlockOfEveryEntryPointUsingIt, Gpu)
 
 			const PushConstantBlock& block = entryPoint->m_PushConstantBlock;
 			CDL_EXPECT_NE(block.Size, 0u);
-			CDL_CHECK_EQ(block.Members.size(), 9u);
+			CDL_CHECK_EQ(block.Members.size(), 8u);
 			CDL_EXPECT_EQ(block.Members.front().Name, std::string("Global"));
-			CDL_EXPECT_EQ(block.Members.back().Name, std::string("Vertices"));
+			CDL_EXPECT_EQ(block.Members.back().Name, std::string("UVScale"));
 		}
 	}
 	ExpectNoVulkanDebugMessages(logs);

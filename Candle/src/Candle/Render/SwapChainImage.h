@@ -33,6 +33,7 @@ namespace Candle {
 
 		inline vk::raii::ImageView& GetImageView() { return m_ImageView; }
 		inline ImageDesc& GetDesc() { return m_Desc; }
+		inline const ImageDesc& GetDesc() const { return m_Desc; }
 
 	private:
 		vk::Image m_Image;

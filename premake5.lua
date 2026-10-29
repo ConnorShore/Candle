@@ -4,9 +4,10 @@ workspace "Candle"
    cppdialect "C++23"
    startproject "Sandbox"
 
-   -- Workspace-wide: all three change declarations, so every TU including glm or vulkan.hpp must agree.
+   -- Workspace-wide: each changes declarations or inline definitions, so every TU including glm or vulkan.hpp must agree.
    -- OUT_OF_DATE_AS_SUCCESS makes acquire/present return eErrorOutOfDateKHR instead of throwing it.
-   defines { "GLM_FORCE_CTOR_INIT", "VULKAN_HPP_NO_STRUCT_CONSTRUCTORS", "VULKAN_HPP_HANDLE_ERROR_OUT_OF_DATE_AS_SUCCESS" }
+   -- DEPTH_ZERO_TO_ONE makes glm's projections output Vulkan's [0, 1] depth range instead of OpenGL's [-1, 1].
+   defines { "GLM_FORCE_CTOR_INIT", "GLM_FORCE_DEPTH_ZERO_TO_ONE", "VULKAN_HPP_NO_STRUCT_CONSTRUCTORS", "VULKAN_HPP_HANDLE_ERROR_OUT_OF_DATE_AS_SUCCESS" }
 
    filter "configurations:not Dist"
       defines { "CDL_ENABLE_ASSERTS" }

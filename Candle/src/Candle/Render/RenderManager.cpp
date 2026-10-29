@@ -3,6 +3,7 @@
 #include "ShaderLoader.h"
 #include "Shader.h"
 #include "FramePacket.h"
+#include "RenderConstants.h"
 
 #include "Candle/Core/Window.h"
 #include "Candle/Core/Profiler.h"
@@ -44,7 +45,7 @@ namespace Candle {
 		, m_BindlessTable(m_RenderDevice)
 		, m_GeometryPool(m_GPUAllocator, m_GPUUploader, m_ResourceRegistry)
 		, m_TexturePool(m_GPUAllocator, m_GPUUploader, m_ResourceRegistry)
-		, m_Renderer(m_RenderDevice, m_GeometryPool, m_TexturePool, m_BindlessTable, m_SwapChain.GetSurfaceFormat().format)
+		, m_Renderer(m_RenderDevice, m_GeometryPool, m_TexturePool, m_BindlessTable, m_GPUAllocator, m_SwapChain.GetSurfaceFormat().format, m_SwapChain.GetExtent())
 		, m_CommandPoolManager(m_RenderDevice, m_JobSystem.GetNumWorkers())
 		, m_RenderThread({ .Name = "Candle-RenderThread", .Priority = ThreadPriority::High })
 	{
@@ -224,6 +225,11 @@ namespace Candle {
 				.m_Size = sizeof(GPU::FrameData),
 				.m_Usage = vk::BufferUsageFlagBits::eShaderDeviceAddress,
 				.m_Flags = VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT | VMA_ALLOCATION_CREATE_MAPPED_BIT });
+
+			frameContext.TransformData = m_GPUAllocator.CreateBuffer({
+				.m_Size = kMaxTransforms * sizeof(glm::mat4),
+				.m_Usage = vk::BufferUsageFlagBits::eShaderDeviceAddress,
+				.m_Flags = VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT | VMA_ALLOCATION_CREATE_MAPPED_BIT });
 		}
 	}
 
@@ -233,6 +239,9 @@ namespace Candle {
 
 		// The reported extent, not Window::GetSize(): Window is main thread only, and this will run on the render thread
 		m_SwapChain.Recreate(surfaceExtent);
+
+		// The swapchain's real extent, not surfaceExtent: the surface may override the request, and a stale packet's size is one
+		m_Renderer.RecreateTargets(m_SwapChain.GetExtent(), m_GPUAllocator);
 	}
 
 }

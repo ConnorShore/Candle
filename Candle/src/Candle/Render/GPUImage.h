@@ -13,6 +13,8 @@ namespace Candle {
 	{
 		glm::uvec2 m_Extent{ 1, 1 };
 		vk::Format m_Format{ vk::Format::eR8G8B8A8Unorm };
+		vk::ImageUsageFlags m_Usage{ vk::ImageUsageFlagBits::eSampled | vk::ImageUsageFlagBits::eTransferDst };
+		vk::ImageAspectFlags m_Aspect{ vk::ImageAspectFlagBits::eColor };
 		VmaAllocationCreateFlags m_Flags{ 0 };
 	};
 
@@ -52,11 +54,14 @@ namespace Candle {
 			return *this;
 		}
 
+		void Recreate(const GPUImageSpec& spec, GPUAllocator& allocator);
+
 		inline vk::Image GetImage() const { return m_Image; }
 		inline vk::ImageView GetImageView() const { return *m_ImageView; }	// Non-owning, so handing it out leaves the image const
 		inline VmaAllocation GetAllocation() const { return m_Allocation; }
 
 	private:
+		void Create(const GPUImageSpec& spec, GPUAllocator& allocator);
 		void Destroy();
 
 	private:

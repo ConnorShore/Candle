@@ -28,6 +28,9 @@ namespace {
 
 	constexpr vk::Format kColorFormat = vk::Format::eR8G8B8A8Unorm;
 
+	// Every device must support it as an attachment, and it isn't the D32 Renderer usually picks, so a hardcoded format shows
+	constexpr vk::Format kDepthFormat = vk::Format::eD16Unorm;
+
 	const ShaderEntryPoint* FindEntryPoint(const Shader& shader, std::string_view name)
 	{
 		const auto& entryPoints = shader.GetEntryPoints();
@@ -45,7 +48,7 @@ CDL_TEST_CASE(TrianglePipeline, DescribesTheTriangleShaderAndTarget, Gpu)
 	{
 		TestDevice gpu;
 		const TrianglePipeline triangle;
-		const PipelineSpecification spec = triangle.CreateSpecification(gpu.Device, kColorFormat);
+		const PipelineSpecification spec = triangle.CreateSpecification(gpu.Device, kColorFormat, kDepthFormat);
 
 		CDL_EXPECT_EQ(triangle.GetName(), std::string("BasicTriangle"));
 		CDL_CHECK(spec.Shader);
@@ -53,7 +56,7 @@ CDL_TEST_CASE(TrianglePipeline, DescribesTheTriangleShaderAndTarget, Gpu)
 		CDL_EXPECT(spec.Shader->GetFilePath() == kTriangleShaderPath);	// Repo-relative, so any clone finds it
 		CDL_EXPECT_EQ(spec.Topology, PrimitiveTopology::TriangleList);
 		CDL_EXPECT(spec.ColorAttachmentFormats == std::vector<vk::Format>{ kColorFormat });
-		CDL_EXPECT(spec.DepthAttachmentFormat == vk::Format::eUndefined);
+		CDL_EXPECT(spec.DepthAttachmentFormat == kDepthFormat);
 
 		const ShaderEntryPoint* vertex = FindEntryPoint(*spec.Shader, "VertMain");
 		const ShaderEntryPoint* fragment = FindEntryPoint(*spec.Shader, "FragMain");
@@ -73,7 +76,7 @@ CDL_TEST_CASE(TrianglePipeline, BuildsAPipelineWithoutValidationMessages, Gpu)
 	{
 		TestDevice gpu;
 		BindlessTable bindless(gpu.Device);
-		Pipeline pipeline(TrianglePipeline{}.CreateSpecification(gpu.Device, kColorFormat), gpu.Device, bindless, kColorFormat);
+		Pipeline pipeline(TrianglePipeline{}.CreateSpecification(gpu.Device, kColorFormat, kDepthFormat), gpu.Device, bindless, kColorFormat);
 
 		CDL_EXPECT(*pipeline.GetPipeline());
 		CDL_EXPECT(*pipeline.GetLayout());
@@ -89,18 +92,19 @@ CDL_TEST_CASE(TrianglePipeline, ShaderPushBlockMatchesMeshDrawPushConstants, Gpu
 	LoggerFixture logs(LogLevel::Warn, kRenderChannelMask);
 	{
 		TestDevice gpu;
-		const PipelineSpecification spec = TrianglePipeline{}.CreateSpecification(gpu.Device, kColorFormat);
+		const PipelineSpecification spec = TrianglePipeline{}.CreateSpecification(gpu.Device, kColorFormat, kDepthFormat);
 
 		using PushConstants = GPU::MeshDrawPushConstants;
 		const std::array members = {
 			CDL_INTEROP_MEMBER(PushConstants, Global),
 			CDL_INTEROP_MEMBER(PushConstants, Vertices),
 			CDL_INTEROP_MEMBER(PushConstants, TextureIndex),
-			CDL_INTEROP_MEMBER(PushConstants, SamplerIndex) };
+			CDL_INTEROP_MEMBER(PushConstants, SamplerIndex),
+			CDL_INTEROP_MEMBER(PushConstants, TransformIndex) };
 		for (const ShaderEntryPoint& entryPoint : spec.Shader->GetEntryPoints())
 		{
 			CDL_NOTE(entryPoint.Name);
-			ExpectPushBlockMatches(entryPoint.m_PushConstantBlock, sizeof(PushConstants), members);
+			ExpectPushBlockMatches<PushConstants>(entryPoint.m_PushConstantBlock, members);
 		}
 	}
 	ExpectNoVulkanDebugMessages(logs);

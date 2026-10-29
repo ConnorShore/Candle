@@ -2,6 +2,7 @@
 
 #include "Pipeline.h"
 #include "BindlessTable.h"
+#include "GPUImage.h"
 
 #include <vector>
 
@@ -16,6 +17,7 @@ namespace Candle {
 	class TexturePool;
 	class BindlessTable;
 	class RenderPipeline;
+	class GPUAllocator;
 
 	struct FrameContext;
 	struct FramePacket;
@@ -26,8 +28,11 @@ namespace Candle {
 	{
 	public:
 		explicit Renderer(RenderDevice& renderDevice, GeometryPool& geometryPool, TexturePool& texturePool, 
-							BindlessTable& bindlessTable, vk::Format targetFormat);				// pipelines, bindless tables, render graph
+							BindlessTable& bindlessTable, GPUAllocator& allocator, vk::Format targetFormat, vk::Extent2D targetExtent);	// pipelines, bindless tables, render graph
 		void Render(const FramePacket& packet, FrameContext& frame, SwapChainImage& target);   // target is imported into the graph; its owner presents it
+
+		// targetExtent is the colour target's real extent, since the depth image must cover the same render area
+		void RecreateTargets(vk::Extent2D targetExtent, GPUAllocator& allocator);
 
 	private:
 		void CreatePipeline(const RenderPipeline& pipeline); // builds a Pipeline from the description and stores it
@@ -38,11 +43,11 @@ namespace Candle {
 		TexturePool& m_TexturePool;
 		BindlessTable& m_BindlessTable;
 		vk::Format m_TargetFormat;
+		vk::Format m_DepthFormat;	// Chosen once, before m_DepthImage; the depth image and every pipeline's spec both take it
+		GPUImage m_DepthImage;	// For now, one depth image for the whole frame; eventually this will be per-pipeline and per-target
 
 		// Eventually this will go in a PipelineLibrary and the RenderPass
 		std::vector<Pipeline> m_Pipelines;
-
-
 	};
 
 }

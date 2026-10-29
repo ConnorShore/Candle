@@ -57,6 +57,7 @@ def compile_shaders(slangc, base_directory, spirv_version):
                 "-emit-spirv-directly",
                 "-fvk-use-entrypoint-name",
                 "-fvk-use-c-layout",  # C++'s struct layout rules, so an interop struct has one layout in both languages.
+                "-matrix-layout-column-major",  # Use column-major layout for matrices to match glm and candle engine convention
                 "-I", ENGINE_SOURCE_DIRECTORY,
                 "-o", output_path
             ], capture_output=True, encoding="utf-8", errors="replace")

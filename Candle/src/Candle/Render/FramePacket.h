@@ -8,14 +8,23 @@
 
 namespace Candle {
 
+	struct DrawItem
+	{
+		GPUMeshHandle Mesh;
+		GPUTextureHandle Material;
+		SamplerType Sampler;
+		uint32_t TransformIndex;	// Index into the FramePacket's TransformData array
+	};
+
 	// A packet of data that is sent to the renderer for rendering. This will be filled by the simulation and then sent to the render thread for rendering.
 	// Threading: simulation thread fills it, render thread reads it. The simulation thread must not modify the packet after it has been sent to the render thread.
 	struct FramePacket
 	{
 		// Vector not span as data is copied to the render thread, and the simulation thread may modify its own copy of the vector after sending it to the render thread
-		std::vector<GPUMeshHandle> Meshes;
-		std::vector<GPUTextureHandle> Materials;	// Eventually mesh/material will be a model
-		std::vector<SamplerType> SamplerIndices;	// One per material; the render thread uses this to index into the bindless table
+		std::vector<DrawItem> DrawItems;
+		std::vector<glm::mat4> TransformData;	// Model matrices for each draw item; the renderer writes them into a GPU buffer and shaders read them by address
+		glm::mat4 ViewMatrix{ 1.0f };
+		glm::mat4 ProjectionMatrix{ 1.0f };
 		double Time{ 0.0 };		// Simulation time in seconds at extraction; the renderer never reads a clock of its own
 
 		bool Minimized{ false };		// Whether the surface is minimized; the renderer may skip rendering if true

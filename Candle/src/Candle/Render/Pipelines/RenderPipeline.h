@@ -15,7 +15,8 @@ namespace Candle {
 	public:
 		virtual ~RenderPipeline() = default;
 
-		virtual PipelineSpecification CreateSpecification(RenderDevice& renderDevice, vk::Format format) const = 0;
+		// The formats are the Renderer's targets', so a pipeline can't disagree with the attachments it is drawn into
+		virtual PipelineSpecification CreateSpecification(RenderDevice& renderDevice, vk::Format colorFormat, vk::Format depthFormat) const = 0;
 
 		inline const std::string& GetName() const { return m_Name; }
 
