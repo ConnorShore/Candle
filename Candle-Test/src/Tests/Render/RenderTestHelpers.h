@@ -306,7 +306,8 @@ namespace Candle::Test {
 	inline SharedPtr<Shader> LoadTestShader(const std::string& name, const std::filesystem::path& spirvPath)
 	{
 		auto shader = ShaderLoader::LoadShader(name, spirvPath);
-		CDL_CHECK_MSG(shader.has_value(), shader.error());
+		if (!shader)
+			CDL_CHECK_MSG(false, shader.error());
 		return *shader;
 	}
 
