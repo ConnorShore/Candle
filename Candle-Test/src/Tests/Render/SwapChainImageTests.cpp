@@ -66,7 +66,7 @@ CDL_TEST_CASE(SwapChainImage, KeepsItsDescriptionAndView, Gpu)
 		CDL_EXPECT_EQ(image.GetDesc().Extent.width, kExtent.width);
 		CDL_EXPECT_EQ(image.GetDesc().Extent.height, kExtent.height);
 		CDL_EXPECT_EQ(image.GetDesc().Format, kFormat);
-		CDL_EXPECT(*image.GetImageView());
+		CDL_EXPECT(image.GetImageView());
 	}
 	ExpectNoVulkanDebugMessages(logs);
 }

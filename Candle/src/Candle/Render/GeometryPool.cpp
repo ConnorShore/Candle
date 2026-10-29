@@ -13,21 +13,21 @@ namespace Candle {
 	{
 	}
 
-	GPUMeshHandle GeometryPool::CreateMesh(std::span<const GPU::Vertex> vertices, std::span<const uint32_t> indices)
+	GPUMeshHandle GeometryPool::CreateMesh(std::span<const GPU::Vertex> vertices, std::span<const uint32_t> indices, const std::string& debugName)
 	{
 		CDL_CORE_ASSERT(!vertices.empty() && !indices.empty(), "A mesh needs vertices and indices; Vulkan rejects zero-sized buffers");
 
-		// Create buffers and device address before assigning to a slot (in case of any failures)
+		// Create buffers before assigning to a slot (in case of any failures)
 		GPUBuffer vertexBuffer = m_Allocator.CreateBuffer(GPUBufferSpec{
-			.m_Size = vertices.size_bytes(),
-			.m_Usage = vk::BufferUsageFlagBits::eVertexBuffer | vk::BufferUsageFlagBits::eTransferDst | vk::BufferUsageFlagBits::eShaderDeviceAddress
+			.Size = vertices.size_bytes(),
+			.Usage = vk::BufferUsageFlagBits::eVertexBuffer | vk::BufferUsageFlagBits::eTransferDst | vk::BufferUsageFlagBits::eShaderDeviceAddress,
+			.DebugName = debugName + " Vertices"
 			});
 		GPUBuffer indexBuffer = m_Allocator.CreateBuffer(GPUBufferSpec{
-			.m_Size = indices.size_bytes(),
-			.m_Usage = vk::BufferUsageFlagBits::eIndexBuffer | vk::BufferUsageFlagBits::eTransferDst
+			.Size = indices.size_bytes(),
+			.Usage = vk::BufferUsageFlagBits::eIndexBuffer | vk::BufferUsageFlagBits::eTransferDst,
+			.DebugName = debugName + " Indices"
 			});
-
-		vk::DeviceAddress vertexAddress = vertexBuffer.GetDeviceAddress();
 
 		// Vertices are read through their address in the vertex shader, indices by the input assembler
 		const std::array<BufferUpload, 2> uploads = {
@@ -41,7 +41,6 @@ namespace Candle {
 		return m_Meshes.Insert(MeshEntry{
 			.VertexBuffer = std::move(vertexBuffer),
 			.IndexBuffer = std::move(indexBuffer),
-			.VertexAddress = vertexAddress,
 			.IndexCount = static_cast<uint32_t>(indices.size())
 			});
 	}
@@ -60,7 +59,7 @@ namespace Candle {
 	{
 		const MeshEntry& mesh = m_Meshes.Get(handle);
 		return MeshDrawInfo{
-			.VerticesAddr = mesh.VertexAddress,
+			.VerticesAddr = mesh.VertexBuffer.GetDeviceAddress(),
 			.Indices = mesh.IndexBuffer.GetBuffer(),
 			.IndexCount = mesh.IndexCount
 		};

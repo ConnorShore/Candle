@@ -9,6 +9,7 @@
 #include "Candle/Render/ShaderInterop/Vertex.h"
 
 #include <span>
+#include <string>
 
 namespace Candle {
 
@@ -27,7 +28,7 @@ namespace Candle {
 		GeometryPool(const GeometryPool&) = delete;
 		GeometryPool& operator=(const GeometryPool&) = delete;
 
-		GPUMeshHandle CreateMesh(std::span<const GPU::Vertex> vertices, std::span<const uint32_t> indices);
+		GPUMeshHandle CreateMesh(std::span<const GPU::Vertex> vertices, std::span<const uint32_t> indices, const std::string& debugName = "Mesh");
 		void ReleaseMesh(GPUMeshHandle handle);
 
 		// False for the default handle and for a released mesh, even once another mesh reuses its slot
@@ -40,7 +41,6 @@ namespace Candle {
 		{
 			GPUBuffer VertexBuffer;
 			GPUBuffer IndexBuffer;
-			vk::DeviceAddress VertexAddress;
 			uint32_t IndexCount;
 		};
 

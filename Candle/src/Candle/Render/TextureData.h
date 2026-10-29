@@ -1,6 +1,6 @@
 #pragma once
 
-#include "SamplerType.h"	// TODO: May be worth moving SampleType into this file
+#include "SamplerType.h"
 
 #include "Candle/Core/Core.h"
 
@@ -13,17 +13,17 @@ namespace Candle {
 
 	enum class TextureColorSpace
 	{
-		eSrgb,
-		eLinear,
+		Srgb,
+		Linear,
 	};
 
 	// Only formats every Vulkan device must sample with linear filtering, so RGB data is expanded to RGBA8, as stb does.
 	// R8 and RG8 hold data such as masks or normal XY, and their sRGB variants are optional, so they are linear only.
 	enum class TextureFormat
 	{
-		eRgba8,
-		eRg8,
-		eR8
+		Rgba8,
+		Rg8,
+		R8
 	};
 
 	// Engine textures TexturePool creates before any other, in this order, so each one's bindless index is its value
@@ -38,9 +38,9 @@ namespace Candle {
 	{
 		switch (format)
 		{
-		case TextureFormat::eRgba8: return 4;
-		case TextureFormat::eRg8:   return 2;
-		case TextureFormat::eR8:    return 1;
+		case TextureFormat::Rgba8: return 4;
+		case TextureFormat::Rg8:   return 2;
+		case TextureFormat::R8:    return 1;
 		}
 
 		CDL_CORE_ASSERT(false, "Unhandled TextureFormat");

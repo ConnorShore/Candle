@@ -11,9 +11,15 @@ namespace Candle {
 
 	namespace {
 
+		constexpr const char* kKhronosValidationLayer = "VK_LAYER_KHRONOS_validation";
 		constexpr std::array<const char*, 1> kValidationLayers = {
-			"VK_LAYER_KHRONOS_validation"
+			kKhronosValidationLayer
 		};
+
+		bool HasExtension(const std::vector<vk::ExtensionProperties>& extensions, const char* name)
+		{
+			return std::ranges::any_of(extensions, [name](const vk::ExtensionProperties& extension) { return strcmp(extension.extensionName, name) == 0; });
+		}
 
 		vk::DebugUtilsMessageSeverityFlagsEXT MapValidationSeverity(ValidationSpecification::ValidationSeverity minimum)
 		{
@@ -110,7 +116,7 @@ namespace Candle {
 					[requiredLayer](auto const& layerProperty) { return strcmp(layerProperty.layerName, requiredLayer) == 0; });
 			});
 		if (unsupportedLayerIt != requiredLayers.end())
-			throw std::runtime_error("Required layer not supported: " + std::string(*unsupportedLayerIt));
+			CDL_CORE_PANIC(LogChannel::Render, "Required layer not supported: {} (validation layers come with the Vulkan SDK)", *unsupportedLayerIt);
 
 		// Get the required instance extensions
 		uint32_t extensionCount = 0;
@@ -132,15 +138,45 @@ namespace Candle {
 		// Every required extension, including debug utils, not just the platform's
 		for (const char* requiredExtension : requiredExtensions)
 		{
-			bool extensionSupported = std::ranges::any_of(extensionProperties,
-				[requiredExtension](auto const& extensionProperty) {
-					return strcmp(extensionProperty.extensionName, requiredExtension) == 0;
-				});
-			if (!extensionSupported)
-				throw std::runtime_error("Required extension not supported: " + std::string(requiredExtension));
+			if (!HasExtension(extensionProperties, requiredExtension))
+				CDL_CORE_PANIC(LogChannel::Render, "Required extension not supported: {}", requiredExtension);
+		}
+
+		// Without validation, debug utils only names objects, so it's optional
+		m_DebugUtilsEnabled = m_Specification.ValidationSpec.EnableValidation;
+		if (!m_DebugUtilsEnabled && m_Specification.ValidationSpec.EnableDebugUtils)
+		{
+			m_DebugUtilsEnabled = HasExtension(extensionProperties, vk::EXTDebugUtilsExtensionName);
+			if (m_DebugUtilsEnabled)
+				requiredExtensions.push_back(vk::EXTDebugUtilsExtensionName);
+			else
+				CDL_CORE_WARN(LogChannel::Render, "VK_EXT_debug_utils is not available, so Vulkan objects won't be named");
+		}
+
+		// Synchronization validation is off by default in the layer, and is set through the layer's own VK_EXT_layer_settings
+		vk::Bool32 enableSyncValidation = vk::True;
+		vk::LayerSettingEXT syncValidationSetting{
+			.pLayerName = kKhronosValidationLayer,
+			.pSettingName = "validate_sync",
+			.type = vk::LayerSettingTypeEXT::eBool32,
+			.valueCount = 1,
+			.pValues = &enableSyncValidation
+		};
+		vk::LayerSettingsCreateInfoEXT layerSettings{ .settingCount = 1, .pSettings = &syncValidationSetting };
+
+		bool useLayerSettings = false;
+		if (m_Specification.ValidationSpec.EnableValidation && m_Specification.ValidationSpec.EnableSynchronizationValidation)
+		{
+			auto layerExtensions = m_Context.enumerateInstanceExtensionProperties(std::string(kKhronosValidationLayer));
+			useLayerSettings = HasExtension(layerExtensions, vk::EXTLayerSettingsExtensionName);
+			if (useLayerSettings)
+				requiredExtensions.push_back(vk::EXTLayerSettingsExtensionName);
+			else
+				CDL_CORE_WARN(LogChannel::Render, "The validation layer has no VK_EXT_layer_settings, so synchronization validation is off");
 		}
 
 		vk::InstanceCreateInfo createInfo{
+			.pNext = useLayerSettings ? &layerSettings : nullptr,
 			.pApplicationInfo = &appInfo,
 			.enabledLayerCount = static_cast<uint32_t>(requiredLayers.size()),
 			.ppEnabledLayerNames = requiredLayers.data(),

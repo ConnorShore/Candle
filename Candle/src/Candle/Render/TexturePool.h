@@ -7,12 +7,14 @@
 
 #include <array>
 #include <span>
+#include <string>
 
 namespace Candle {
 
 	class GPUAllocator;
 	class GPUUploader;
 	class GPUResourceRegistry;
+	class BindlessTable;
 
 	// Values, not references into the pool, so an info stays safe to hold after its texture is released
 	struct TextureInfo
@@ -27,6 +29,7 @@ namespace Candle {
 		glm::uvec2 Extent;
 		TextureFormat Format;
 		TextureColorSpace ColorSpace;
+		std::string DebugName;
 	};
 
 	// Threading: CreateTexture, ReleaseTexture and IsAlive on the main thread. GetTextureInfo on the main thread for a live
@@ -36,24 +39,26 @@ namespace Candle {
 	class TexturePool
 	{
 	public:
-		TexturePool(GPUAllocator& allocator, GPUUploader& uploader, GPUResourceRegistry& registry);
+		TexturePool(GPUAllocator& allocator, GPUUploader& uploader, GPUResourceRegistry& registry, BindlessTable& bindlessTable);
 		~TexturePool() = default;
 
 		// Delete copy constructor and assignment operator
 		TexturePool(const TexturePool&) = delete;
 		TexturePool& operator=(const TexturePool&) = delete;
 
-		// Only reads data: it is copied into a staging buffer before this returns, so the caller keeps ownership
+		// Only reads data: it is copied into a staging buffer before this returns, so the caller keeps ownership.
+		// Also writes the texture into the bindless table at its handle's index.
 		GPUTextureHandle CreateTexture(TextureCreateSpec spec);
 		void ReleaseTexture(GPUTextureHandle handle);
 
-		// False for the default handle and for a released mesh, even once another mesh reuses its slot
+		// False for a value-initialized handle and for a released texture, even once another texture reuses its slot.
+		// True for the default textures, which are never released.
 		bool IsAlive(GPUTextureHandle handle) const;
 
 		// The default handle resolves to DefaultTexture::Error; a stale one asserts, and resolves to it too outside Debug
 		TextureInfo GetTextureInfo(GPUTextureHandle handle) const;
 
-		// Created with the pool and never released; BindlessTable::WriteDefaultTextures must publish them before any frame
+		// Created and written into the bindless table with the pool, and never released
 		inline GPUTextureHandle GetDefaultTexture(DefaultTexture texture) const { return m_DefaultTextures[static_cast<size_t>(texture)]; }
 
 	private:
@@ -65,6 +70,7 @@ namespace Candle {
 	private:
 		GPUAllocator& m_Allocator;
 		GPUUploader& m_Uploader;
+		BindlessTable& m_BindlessTable;
 		GPUResourcePool<TextureEntry, TextureTag> m_Textures;
 		std::array<GPUTextureHandle, static_cast<size_t>(DefaultTexture::Count)> m_DefaultTextures;	// After m_Textures, which the constructor creates them in
 	};

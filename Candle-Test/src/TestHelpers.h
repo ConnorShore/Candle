@@ -182,12 +182,10 @@ namespace Candle::Test {
 	// The backend is probed on its own, because the app also creates a render device, and its failures must fail the test.
 	inline void EmplaceWindowedApp(std::optional<TestApplication>& app)
 	{
-		try
-		{
-			Platform::InitWindowing();
-			Platform::ShutdownWindowing();
-		}
-		catch (const std::exception& e) { CDL_SKIP(std::format("windowing unavailable: {}", e.what())); }
+		auto windowing = Platform::InitWindowing();
+		if (!windowing)
+			CDL_SKIP(std::format("windowing unavailable: {}", windowing.error()));
+		Platform::ShutdownWindowing();
 
 		ApplicationSpecification spec = QuietSpec();
 		spec.Headless = false;
@@ -206,8 +204,9 @@ namespace Candle::Test {
 	{
 		WindowingBackend()
 		{
-			try { Platform::InitWindowing(); }
-			catch (const std::exception& e) { CDL_SKIP(std::format("windowing unavailable: {}", e.what())); }
+			auto windowing = Platform::InitWindowing();
+			if (!windowing)
+				CDL_SKIP(std::format("windowing unavailable: {}", windowing.error()));
 		}
 		~WindowingBackend() { Platform::ShutdownWindowing(); }
 

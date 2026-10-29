@@ -5,19 +5,23 @@
 
 #include <glm/glm.hpp>
 
+#include <string>
+
 namespace Candle {
 
 	class GPUAllocator;
 
 	struct GPUImageSpec
 	{
-		glm::uvec2 m_Extent{ 1, 1 };
-		vk::Format m_Format{ vk::Format::eR8G8B8A8Unorm };
-		vk::ImageUsageFlags m_Usage{ vk::ImageUsageFlagBits::eSampled | vk::ImageUsageFlagBits::eTransferDst };
-		vk::ImageAspectFlags m_Aspect{ vk::ImageAspectFlagBits::eColor };
-		VmaAllocationCreateFlags m_Flags{ 0 };
+		glm::uvec2 Extent{ 1, 1 };
+		vk::Format Format{ vk::Format::eR8G8B8A8Unorm };
+		vk::ImageUsageFlags Usage{ vk::ImageUsageFlagBits::eSampled | vk::ImageUsageFlagBits::eTransferDst };
+		vk::ImageAspectFlags Aspect{ vk::ImageAspectFlagBits::eColor };
+		VmaAllocationCreateFlags Flags{ 0 };
+		std::string DebugName;	// Names the image, its view and its allocation; empty leaves them unnamed
 	};
 
+	// Threading: not internally synchronized; one owner at a time, which may hand it to another thread
 	class GPUImage
 	{
 	public:

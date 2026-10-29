@@ -18,7 +18,9 @@ namespace Candle {
 		allocatorCreateInfo.device = static_cast<VkDevice>(*m_Spec.Device->GetDevice());
 		allocatorCreateInfo.instance = static_cast<VkInstance>(*m_Spec.Instance->GetVulkanInstance());
 
-		vmaCreateAllocator(&allocatorCreateInfo, &m_Allocator);
+		VkResult result = vmaCreateAllocator(&allocatorCreateInfo, &m_Allocator);
+		if (result != VK_SUCCESS)
+			CDL_CORE_PANIC(LogChannel::Memory, "Failed to create the GPU allocator: {}", vk::to_string(static_cast<vk::Result>(result)));
 	}
 
 	GPUAllocator::~GPUAllocator()

@@ -14,7 +14,7 @@ namespace Candle {
 	void MeshAssetHandler::Load(MeshAsset& asset)
 	{
 		const MeshData& meshData = asset.GetMeshData();
-		asset.m_GPUHandle = m_GeometryPool.CreateMesh(meshData.Vertices, meshData.Indices);
+		asset.m_GPUHandle = m_GeometryPool.CreateMesh(meshData.Vertices, meshData.Indices, asset.GetName());
 	}
 
 	void MeshAssetHandler::Unload(MeshAsset& asset)

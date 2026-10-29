@@ -9,6 +9,7 @@
 #include "GeometryPool.h"
 #include "TexturePool.h"
 #include "GPUAllocator.h"
+#include "RenderConstants.h"
 
 #include "Candle/Render/Pipelines/TrianglePipeline.h"
 #include "Candle/Render/Pipelines/TriangleInterop.h"
@@ -25,7 +26,7 @@ namespace Candle {
 		vk::Format FindDepthFormat(RenderDevice& device)
 		{
 			// Depth-only, so the depth-aspect view and barrier stay valid without separateDepthStencilLayouts. The spec requires
-			// D16 and one of the first two as attachments, so the throw below can't be reached on a conformant device.
+			// D16 and one of the first two as attachments, so the panic below can't be reached on a conformant device.
 			const std::vector<vk::Format> preferredFormats = {
 				vk::Format::eD32Sfloat,
 				vk::Format::eX8D24UnormPack32,
@@ -37,7 +38,7 @@ namespace Candle {
 				if (formatProperties.optimalTilingFeatures & vk::FormatFeatureFlagBits::eDepthStencilAttachment)
 					return format;
 			}
-			throw std::runtime_error("No suitable depth format found.");
+			CDL_CORE_PANIC(LogChannel::Render, "No suitable depth format found");
 		}
 	}
 
@@ -48,10 +49,11 @@ namespace Candle {
 		, m_BindlessTable(bindlessTable)
 		, m_TargetFormat(targetFormat)
 		, m_DepthFormat(FindDepthFormat(renderDevice))
-		, m_DepthImage({ .m_Extent = { targetExtent.width, targetExtent.height }, // Sized to the colour target; the render graph will eventually own this per target
-			.m_Format = m_DepthFormat,
-			.m_Usage = vk::ImageUsageFlagBits::eDepthStencilAttachment, 
-			.m_Aspect = vk::ImageAspectFlagBits::eDepth }, allocator)
+		, m_DepthImage({ .Extent = { targetExtent.width, targetExtent.height }, // Sized to the colour target
+			.Format = m_DepthFormat,
+			.Usage = vk::ImageUsageFlagBits::eDepthStencilAttachment,
+			.Aspect = vk::ImageAspectFlagBits::eDepth,
+			.DebugName = "Depth Target" }, allocator)
 	{
 		CreatePipeline(TrianglePipeline{});
 	}
@@ -61,7 +63,14 @@ namespace Candle {
 		CDL_PROFILE_SCOPE("Renderer::Render");
 
 		// Write the transform data into the frame's TransformData buffer, if any
-		const std::span<const glm::mat4> transforms = packet.TransformData;
+		std::span<const glm::mat4> transforms = packet.TransformData;
+		if (transforms.size() > kMaxTransforms)
+		{
+			// Checked in every config, since the write below would run past the end of the buffer
+			CDL_CORE_ASSERT(false, "FramePacket has more transforms than kMaxTransforms");
+			transforms = transforms.first(kMaxTransforms);
+		}
+
 		if (!transforms.empty())
 			frame.TransformData.Write(std::as_bytes(transforms));
 
@@ -78,8 +87,8 @@ namespace Candle {
 			.Frame = frame.FrameData.GetDeviceAddress() 
 		};
 
-		// For now, just record a command buffer that draws a triangle to the target image using the first pipeline in m_Pipelines
-		// In the future, this will be more complex and involve a render graph and multiple pipelines
+		// TODO: The render graph will own the passes, their pipelines, the depth target and the barriers between them;
+		//	until then the one pass is recorded here by hand
 		frame.CommandBuffer.begin({ .flags = vk::CommandBufferUsageFlagBits::eOneTimeSubmit });
 
 		// Before starting rendering, transition the swapchain image to COLOR_ATTACHMENT_OPTIMAL
@@ -90,7 +99,6 @@ namespace Candle {
 			}, frame.CommandBuffer);
 
 		// Transition the depth image to DEPTH_ATTACHMENT_OPTIMAL
-		// This will be done in the render graph in the future, but for now we do it here
 		vk::ImageMemoryBarrier2 depthBarrier = MakeImageBarrier(
 			m_DepthImage.GetImage(),
 			// Undefined discards the old contents, which the clear would overwrite anyway. Every frame in flight shares this one image,
@@ -137,41 +145,46 @@ namespace Candle {
 			.pDepthAttachment = &depthAttachmentInfo
 		};
 
-		frame.CommandBuffer.beginRendering(renderingInfo);
-
-		// Only one pipeline for now, but eventually this will be chosen based on the packet and the render graph
-		frame.CommandBuffer.bindPipeline(vk::PipelineBindPoint::eGraphics, m_Pipelines[0].GetPipeline());
-
-		frame.CommandBuffer.setViewport(0, vk::Viewport(0.0f, static_cast<float>(swapChainExtent.height), static_cast<float>(swapChainExtent.width), -static_cast<float>(swapChainExtent.height), 0.0f, 1.0f));
-		frame.CommandBuffer.setScissor(0, vk::Rect2D(vk::Offset2D(0, 0), swapChainExtent));
-
-		// Bind the bindless descriptor set to the pipeline layout
-		vk::PipelineLayout pipelineLayout = m_Pipelines[0].GetLayout();
-		m_BindlessTable.BindSet(*frame.CommandBuffer, vk::PipelineBindPoint::eGraphics, pipelineLayout);
-
-		// Draw each item
-		for (const DrawItem& item : packet.DrawItems)
 		{
-			// The GPU doesn't bounds-check a read through a device address, so catch a bad index here
-			CDL_CORE_ASSERT(item.TransformIndex < transforms.size(), "DrawItem's TransformIndex is past the packet's TransformData");
+			GPUDebugScope mainPass(m_RenderDevice, frame.CommandBuffer, "Main Pass");
+			frame.CommandBuffer.beginRendering(renderingInfo);
 
-			MeshDrawInfo drawInfo = m_GeometryPool.GetMeshInfo(item.Mesh);
-			TextureInfo textureInfo = m_TexturePool.GetTextureInfo(item.Material);
+			frame.CommandBuffer.bindPipeline(vk::PipelineBindPoint::eGraphics, m_Pipelines[0].GetPipeline());
 
-			GPU::MeshDrawPushConstants pushConstants{
-				.Global = global,
-				.Vertices = drawInfo.VerticesAddr,
-				.TextureIndex = textureInfo.Index,
-				.SamplerIndex = static_cast<uint32_t>(item.Sampler),
-				.TransformIndex = item.TransformIndex
-			};
-			m_Pipelines[0].PushConstants(*frame.CommandBuffer, pushConstants);
-			frame.CommandBuffer.bindIndexBuffer(drawInfo.Indices, 0, vk::IndexType::eUint32);
-			frame.CommandBuffer.drawIndexed(drawInfo.IndexCount, 1, 0, 0, 0);
+			frame.CommandBuffer.setViewport(0, vk::Viewport(0.0f, static_cast<float>(swapChainExtent.height), static_cast<float>(swapChainExtent.width), -static_cast<float>(swapChainExtent.height), 0.0f, 1.0f));
+			frame.CommandBuffer.setScissor(0, vk::Rect2D(vk::Offset2D(0, 0), swapChainExtent));
+
+			// Bind the bindless descriptor set to the pipeline layout
+			vk::PipelineLayout pipelineLayout = m_Pipelines[0].GetLayout();
+			m_BindlessTable.BindSet(*frame.CommandBuffer, vk::PipelineBindPoint::eGraphics, pipelineLayout);
+
+			// Draw each item
+			for (const DrawItem& item : packet.DrawItems)
+			{
+				// The GPU doesn't bounds-check a read through a device address, so skip a bad index in every config
+				if (item.TransformIndex >= transforms.size())
+				{
+					CDL_CORE_ASSERT(false, "DrawItem's TransformIndex is past the packet's TransformData");
+					continue;
+				}
+
+				MeshDrawInfo drawInfo = m_GeometryPool.GetMeshInfo(item.Mesh);
+				TextureInfo textureInfo = m_TexturePool.GetTextureInfo(item.Texture);
+
+				GPU::MeshDrawPushConstants pushConstants{
+					.Global = global,
+					.Vertices = drawInfo.VerticesAddr,
+					.TextureIndex = textureInfo.Index,
+					.SamplerIndex = static_cast<uint32_t>(item.Sampler),
+					.TransformIndex = item.TransformIndex
+				};
+				m_Pipelines[0].PushConstants(*frame.CommandBuffer, pushConstants);
+				frame.CommandBuffer.bindIndexBuffer(drawInfo.Indices, 0, vk::IndexType::eUint32);
+				frame.CommandBuffer.drawIndexed(drawInfo.IndexCount, 1, 0, 0, 0);
+			}
+
+			frame.CommandBuffer.endRendering();
 		}
-
-		// End the render pass.
-		frame.CommandBuffer.endRendering();
 
 		target.Transition({
 			.Layout = vk::ImageLayout::ePresentSrcKHR,
@@ -184,15 +197,18 @@ namespace Candle {
 
 	void Renderer::RecreateTargets(vk::Extent2D targetExtent, GPUAllocator& allocator)
 	{
-		m_DepthImage.Recreate({ .m_Extent = { targetExtent.width, targetExtent.height },
-			.m_Format = m_DepthFormat,
-			.m_Usage = vk::ImageUsageFlagBits::eDepthStencilAttachment,
-			.m_Aspect = vk::ImageAspectFlagBits::eDepth }, allocator);
+		m_DepthImage.Recreate({ .Extent = { targetExtent.width, targetExtent.height },
+			.Format = m_DepthFormat,
+			.Usage = vk::ImageUsageFlagBits::eDepthStencilAttachment,
+			.Aspect = vk::ImageAspectFlagBits::eDepth,
+			.DebugName = "Depth Target" }, allocator);
 	}
 
 	void Renderer::CreatePipeline(const RenderPipeline& pipeline)
 	{
-		m_Pipelines.emplace_back(pipeline.CreateSpecification(m_RenderDevice, m_TargetFormat, m_DepthFormat), m_RenderDevice, m_BindlessTable, m_TargetFormat);
+		PipelineSpecification spec = pipeline.CreateSpecification(m_RenderDevice, m_TargetFormat, m_DepthFormat);
+		spec.DebugName = pipeline.GetName();
+		m_Pipelines.emplace_back(spec, m_RenderDevice, m_BindlessTable);
 	}
 
 }

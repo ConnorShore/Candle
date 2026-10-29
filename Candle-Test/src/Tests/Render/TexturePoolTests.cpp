@@ -28,7 +28,7 @@ namespace {
 	GPUTextureHandle CreateTexel(TexturePool& pool)
 	{
 		return pool.CreateTexture({
-			.Data = std::as_bytes(std::span(&kWhite, 1)), .Extent = { 1, 1 }, .Format = TextureFormat::eRgba8, .ColorSpace = TextureColorSpace::eLinear });
+			.Data = std::as_bytes(std::span(&kWhite, 1)), .Extent = { 1, 1 }, .Format = TextureFormat::Rgba8, .ColorSpace = TextureColorSpace::Linear });
 	}
 
 	// Each texel's centre in row order, read with no filtering, so the result is exactly the texel stored there.
@@ -50,10 +50,10 @@ namespace {
 	};
 
 	constexpr FormatCase kFormatCases[] = {
-		{ TextureFormat::eRgba8, TextureColorSpace::eSrgb, "RGBA8 sRGB" },
-		{ TextureFormat::eRgba8, TextureColorSpace::eLinear, "RGBA8 linear" },
-		{ TextureFormat::eRg8, TextureColorSpace::eLinear, "RG8" },
-		{ TextureFormat::eR8, TextureColorSpace::eLinear, "R8" } };
+		{ TextureFormat::Rgba8, TextureColorSpace::Srgb, "RGBA8 sRGB" },
+		{ TextureFormat::Rgba8, TextureColorSpace::Linear, "RGBA8 linear" },
+		{ TextureFormat::Rg8, TextureColorSpace::Linear, "RG8" },
+		{ TextureFormat::R8, TextureColorSpace::Linear, "R8" } };
 
 }
 
@@ -216,8 +216,8 @@ CDL_TEST_CASE(TexturePool, ColorSpacePicksHowSamplesAreDecoded, Gpu)
 	{
 		TestTextures gpu;
 		constexpr Texel kGrey{ 188, 188, 188, 188 };
-		const GPUTextureHandle srgb = CreateBoundTexture(gpu, { 1, 1 }, std::array<Texel, 1>{ kGrey }, TextureColorSpace::eSrgb);
-		const GPUTextureHandle linear = CreateBoundTexture(gpu, { 1, 1 }, std::array<Texel, 1>{ kGrey }, TextureColorSpace::eLinear);
+		const GPUTextureHandle srgb = CreateBoundTexture(gpu, { 1, 1 }, std::array<Texel, 1>{ kGrey }, TextureColorSpace::Srgb);
+		const GPUTextureHandle linear = CreateBoundTexture(gpu, { 1, 1 }, std::array<Texel, 1>{ kGrey }, TextureColorSpace::Linear);
 
 		const std::array probes = {
 			TextureProbe{ .Texture = srgb, .Sampler = SamplerType::PointClamp, .UV = { 0.5f, 0.5f } },
@@ -265,9 +265,9 @@ CDL_TEST_CASE(TexturePool, SamplesBackSingleAndDualChannelTexels, Gpu)
 		const std::vector<std::byte> red = BytePattern(kTexels, 50);
 		const std::vector<std::byte> redGreen = BytePattern(kTexels * 2, 100);
 		const GPUTextureHandle r8 = CreateBoundTexture(gpu, {
-			.Data = red, .Extent = kExtent, .Format = TextureFormat::eR8, .ColorSpace = TextureColorSpace::eLinear });
+			.Data = red, .Extent = kExtent, .Format = TextureFormat::R8, .ColorSpace = TextureColorSpace::Linear });
 		const GPUTextureHandle rg8 = CreateBoundTexture(gpu, {
-			.Data = redGreen, .Extent = kExtent, .Format = TextureFormat::eRg8, .ColorSpace = TextureColorSpace::eLinear });
+			.Data = redGreen, .Extent = kExtent, .Format = TextureFormat::Rg8, .ColorSpace = TextureColorSpace::Linear });
 
 		std::vector<TextureProbe> probes = ProbeEveryTexel(r8, kExtent);
 		const std::vector<TextureProbe> rg8Probes = ProbeEveryTexel(rg8, kExtent);

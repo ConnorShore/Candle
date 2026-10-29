@@ -19,7 +19,7 @@ namespace Candle {
 	};
 
 	// Holds the vulkan instance, context and debug messenger
-	// Created and destroyed on the main thread (immutable)
+	// Threading: created and destroyed on the main thread; immutable in between, so any thread may read it
 	class RenderInstance
 	{
 	public:
@@ -31,6 +31,7 @@ namespace Candle {
 		RenderInstance& operator=(const RenderInstance&) = delete;
 
 		vk::raii::Instance& GetVulkanInstance() { return m_Instance; }
+		inline bool IsDebugUtilsEnabled() const { return m_DebugUtilsEnabled; }
 
 	private:
 		void CreateInstance();
@@ -38,6 +39,7 @@ namespace Candle {
 
 	private:
 		RenderInstanceSpecification m_Specification;
+		bool m_DebugUtilsEnabled{ false };
 
 		vk::raii::Context m_Context{ };
 		vk::raii::Instance m_Instance{ nullptr };

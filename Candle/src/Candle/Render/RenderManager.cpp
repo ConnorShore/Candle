@@ -35,32 +35,27 @@ namespace Candle {
 
 	RenderManager::RenderManager(const RenderSpecification& renderSpec, const ApplicationInfo& appInfo, Window& window, JobSystem& jobSystem)
 		: m_Specification(renderSpec)
-		, m_Window(window)
-		, m_JobSystem(jobSystem)
 		, m_RenderInstance(CreateRenderInstanceSpec(renderSpec, appInfo))
 		, m_RenderDevice(m_RenderInstance, m_Specification)
-		, m_SwapChain(m_RenderInstance, m_RenderDevice, window)
+		, m_SwapChain(m_RenderInstance, m_RenderDevice, window, renderSpec.EnableVSync)
 		, m_GPUAllocator({ renderSpec.VulkanVersion, &m_RenderDevice, &m_RenderInstance })
 		, m_GPUUploader(m_RenderDevice, m_GPUAllocator)
 		, m_BindlessTable(m_RenderDevice)
 		, m_GeometryPool(m_GPUAllocator, m_GPUUploader, m_ResourceRegistry)
-		, m_TexturePool(m_GPUAllocator, m_GPUUploader, m_ResourceRegistry)
+		, m_TexturePool(m_GPUAllocator, m_GPUUploader, m_ResourceRegistry, m_BindlessTable)
 		, m_Renderer(m_RenderDevice, m_GeometryPool, m_TexturePool, m_BindlessTable, m_GPUAllocator, m_SwapChain.GetSurfaceFormat().format, m_SwapChain.GetExtent())
-		, m_CommandPoolManager(m_RenderDevice, m_JobSystem.GetNumWorkers())
+		, m_CommandPoolManager(m_RenderDevice, jobSystem.GetNumWorkers())
 		, m_RenderThread({ .Name = "Candle-RenderThread", .Priority = ThreadPriority::High })
 	{
-		// Before any packet exists, since any frame may resolve a missing texture to the error texture
-		m_BindlessTable.WriteDefaultTextures(m_TexturePool);
-
 		CreateFrameContexts();
 	}
 
 	RenderManager::~RenderManager()
 	{
+		JoinRenderThread();
+
 		// Members are destroyed after this body returns, and the GPU may still be using them
 		m_RenderDevice.WaitIdle();
-
-		JoinRenderThread();
 	}
 
 	void RenderManager::SpawnRenderThread()
@@ -87,17 +82,17 @@ namespace Candle {
 		// The main thread has stopped submitting packets, so wake the render thread if it is waiting for one
 		m_FramePump.Close();
 
-		// Wait for render related GPU work to finish
-		m_RenderDevice.WaitIdle();
-
 		m_RenderThread.Join();
 		CDL_CORE_INFO(LogChannel::Render, "Render Thread Joined");
+
+		// After the join, so no frame can be submitted once the wait returns
+		m_RenderDevice.WaitIdle();
 	}
 
 	void RenderManager::RegisterAssetHandlers(AssetManager& assetManager)
 	{
 		assetManager.RegisterAssetHandler(ScopedPtr<MeshAssetHandler>::Create(m_GeometryPool));
-		assetManager.RegisterAssetHandler(ScopedPtr<TextureHandler>::Create(m_TexturePool, m_BindlessTable));
+		assetManager.RegisterAssetHandler(ScopedPtr<TextureHandler>::Create(m_TexturePool));
 	}
 
 	FramePacket& RenderManager::BeginFramePacket()
@@ -159,13 +154,9 @@ namespace Candle {
 		}
 		else if (result != vk::Result::eSuccess && result != vk::Result::eSuboptimalKHR)
 		{
-			// On other success codes than eSuccess and eSuboptimalKHR we just throw an exception.
-			// On any error code, aquireNextImage already threw an exception.
-			CDL_CORE_ASSERT(result == vk::Result::eTimeout || result == vk::Result::eNotReady, "Failed to quire swap chain image!");
-			throw std::runtime_error("Failed to acquire swap chain image!");
+			// Error codes already threw inside acquireNextImage, and eTimeout or eNotReady can't happen with no timeout
+			CDL_CORE_PANIC(LogChannel::Render, "Failed to acquire swap chain image: {}", vk::to_string(result));
 		}
-
-		// IN FUTURE: Kick of compute jobs async from rendering (usually for frame N+1) while gpu renders frame N
 
 		// Record command buffers for rendering
 		m_Renderer.Render(*packet, frameContext, m_SwapChain.GetImage(imageIndex));
@@ -209,9 +200,11 @@ namespace Candle {
 		vk::raii::Device& device = m_RenderDevice.GetDevice();
 		vk::CommandPoolCreateInfo poolInfo{ .queueFamilyIndex = m_RenderDevice.GetQueueFamily(QueueType::Graphics) };
 
-		for (FrameContext& frameContext : m_FrameContexts)
+		for (uint32_t i = 0; i < kMaxFramesInFlight; ++i)
 		{
+			FrameContext& frameContext = m_FrameContexts[i];
 			frameContext.CommandPool = vk::raii::CommandPool(device, poolInfo);
+			m_RenderDevice.SetDebugName(*frameContext.CommandPool, std::format("Command Pool [frame {}]", i));
 
 			vk::CommandBufferAllocateInfo allocInfo{
 				.commandPool = *frameContext.CommandPool,
@@ -219,22 +212,26 @@ namespace Candle {
 				.commandBufferCount = 1
 			};
 			frameContext.CommandBuffer = std::move(vk::raii::CommandBuffers(device, allocInfo).front());
+			m_RenderDevice.SetDebugName(*frameContext.CommandBuffer, std::format("Command Buffer [frame {}]", i));
 
 			// Written by the CPU every frame and read once per draw, so host-visible rather than staged into device memory
 			frameContext.FrameData = m_GPUAllocator.CreateBuffer({
-				.m_Size = sizeof(GPU::FrameData),
-				.m_Usage = vk::BufferUsageFlagBits::eShaderDeviceAddress,
-				.m_Flags = VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT | VMA_ALLOCATION_CREATE_MAPPED_BIT });
+				.Size = sizeof(GPU::FrameData),
+				.Usage = vk::BufferUsageFlagBits::eShaderDeviceAddress,
+				.Flags = VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT | VMA_ALLOCATION_CREATE_MAPPED_BIT,
+				.DebugName = std::format("FrameData [frame {}]", i) });
 
 			frameContext.TransformData = m_GPUAllocator.CreateBuffer({
-				.m_Size = kMaxTransforms * sizeof(glm::mat4),
-				.m_Usage = vk::BufferUsageFlagBits::eShaderDeviceAddress,
-				.m_Flags = VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT | VMA_ALLOCATION_CREATE_MAPPED_BIT });
+				.Size = kMaxTransforms * sizeof(glm::mat4),
+				.Usage = vk::BufferUsageFlagBits::eShaderDeviceAddress,
+				.Flags = VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT | VMA_ALLOCATION_CREATE_MAPPED_BIT,
+				.DebugName = std::format("TransformData [frame {}]", i) });
 		}
 	}
 
 	void RenderManager::RecreateResources(const glm::uvec2& surfaceExtent)
 	{
+		// The one idle outside shutdown: resizes are rare, and the old swapchain's presents have no fence to wait on instead
 		m_RenderDevice.WaitIdle();
 
 		// The reported extent, not Window::GetSize(): Window is main thread only, and this will run on the render thread

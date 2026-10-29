@@ -4,6 +4,8 @@
 
 #include <filesystem>
 #include <expected>
+#include <string>
+#include <vector>
 
 namespace Candle {
 

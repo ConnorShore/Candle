@@ -49,25 +49,34 @@ namespace Candle {
 			colorBlendAttachment.colorWriteMask = vk::ColorComponentFlagBits::eR | vk::ColorComponentFlagBits::eG | vk::ColorComponentFlagBits::eB | vk::ColorComponentFlagBits::eA;
 			switch (blendMode)
 			{
-			case BlendMode::None:
+			case BlendMode::Opaque:
 				colorBlendAttachment.blendEnable = vk::False;
 				break;
-			case BlendMode::SrcAlpha:
+			case BlendMode::AlphaBlend:
 				colorBlendAttachment.blendEnable = vk::True;
 				colorBlendAttachment.srcColorBlendFactor = vk::BlendFactor::eSrcAlpha;
 				colorBlendAttachment.dstColorBlendFactor = vk::BlendFactor::eOneMinusSrcAlpha;
 				colorBlendAttachment.colorBlendOp = vk::BlendOp::eAdd;
 				colorBlendAttachment.srcAlphaBlendFactor = vk::BlendFactor::eOne;
-				colorBlendAttachment.dstAlphaBlendFactor = vk::BlendFactor::eZero;
+				colorBlendAttachment.dstAlphaBlendFactor = vk::BlendFactor::eOneMinusSrcAlpha;
 				colorBlendAttachment.alphaBlendOp = vk::BlendOp::eAdd;
 				break;
-			case BlendMode::OneMinusSrcAlpha:
+			case BlendMode::PremultipliedAlpha:
 				colorBlendAttachment.blendEnable = vk::True;
-				colorBlendAttachment.srcColorBlendFactor = vk::BlendFactor::eOneMinusSrcAlpha;
-				colorBlendAttachment.dstColorBlendFactor = vk::BlendFactor::eSrcAlpha;
+				colorBlendAttachment.srcColorBlendFactor = vk::BlendFactor::eOne;
+				colorBlendAttachment.dstColorBlendFactor = vk::BlendFactor::eOneMinusSrcAlpha;
 				colorBlendAttachment.colorBlendOp = vk::BlendOp::eAdd;
 				colorBlendAttachment.srcAlphaBlendFactor = vk::BlendFactor::eOne;
-				colorBlendAttachment.dstAlphaBlendFactor = vk::BlendFactor::eZero;
+				colorBlendAttachment.dstAlphaBlendFactor = vk::BlendFactor::eOneMinusSrcAlpha;
+				colorBlendAttachment.alphaBlendOp = vk::BlendOp::eAdd;
+				break;
+			case BlendMode::Additive:
+				colorBlendAttachment.blendEnable = vk::True;
+				colorBlendAttachment.srcColorBlendFactor = vk::BlendFactor::eOne;
+				colorBlendAttachment.dstColorBlendFactor = vk::BlendFactor::eOne;
+				colorBlendAttachment.colorBlendOp = vk::BlendOp::eAdd;
+				colorBlendAttachment.srcAlphaBlendFactor = vk::BlendFactor::eOne;
+				colorBlendAttachment.dstAlphaBlendFactor = vk::BlendFactor::eOne;
 				colorBlendAttachment.alphaBlendOp = vk::BlendOp::eAdd;
 				break;
 			default:
@@ -83,7 +92,7 @@ namespace Candle {
 		{
 			for (const ShaderEntryPoint& entryPoint : entryPoints)
 			{
-				const PushConstantBlock& block = entryPoint.m_PushConstantBlock;
+				const PushConstantBlock& block = entryPoint.PushConstants;
 				if (block.Size == 0)
 					continue;
 
@@ -97,25 +106,24 @@ namespace Candle {
 	}
 	
 
-	Pipeline::Pipeline(PipelineSpecification spec, RenderDevice& renderDevice, BindlessTable& bindlessTable, vk::Format format)
-		: m_Specification(std::move(spec))
+	Pipeline::Pipeline(const PipelineSpecification& spec, RenderDevice& renderDevice, BindlessTable& bindlessTable)
 	{
-		CreatePipeline(format, renderDevice, bindlessTable);
+		CreatePipeline(spec, renderDevice, bindlessTable);
 	}
 
-	void Pipeline::CreatePipeline(vk::Format format, RenderDevice& renderDevice, BindlessTable& bindlessTable)
+	void Pipeline::CreatePipeline(const PipelineSpecification& spec, RenderDevice& renderDevice, BindlessTable& bindlessTable)
 	{
-		bool containsDepthAttachment = m_Specification.DepthAttachmentFormat != vk::Format::eUndefined;
+		bool containsDepthAttachment = spec.DepthAttachmentFormat != vk::Format::eUndefined;
 
 #pragma region Shader Module
 		// Create shader modules and pipeline shader stage create info for each entry point
-		vk::raii::ShaderModule shaderModule = m_Specification.Shader->CreateModule(renderDevice);
-		std::vector<vk::PipelineShaderStageCreateInfo> shaderStages = std::move(CreateShaderStages(shaderModule, m_Specification.Shader->GetEntryPoints()));
+		vk::raii::ShaderModule shaderModule = spec.Shader->CreateModule(renderDevice);
+		std::vector<vk::PipelineShaderStageCreateInfo> shaderStages = std::move(CreateShaderStages(shaderModule, spec.Shader->GetEntryPoints()));
 #pragma endregion
 
 #pragma region Input Assembly State
 		// Input assembly state describes how primitives are assembled from vertices
-		vk::PipelineInputAssemblyStateCreateInfo inputAssembly{ .topology = static_cast<vk::PrimitiveTopology>(m_Specification.Topology) };
+		vk::PipelineInputAssemblyStateCreateInfo inputAssembly{ .topology = static_cast<vk::PrimitiveTopology>(spec.Topology) };
 #pragma endregion
 
 #pragma region Dynamic State
@@ -137,7 +145,7 @@ namespace Candle {
 			.depthClampEnable = vk::False,
 			.rasterizerDiscardEnable = vk::False,
 			.polygonMode = vk::PolygonMode::eFill,
-			.cullMode = m_Specification.CullBackFaces ? vk::CullModeFlagBits::eBack : vk::CullModeFlagBits::eNone,
+			.cullMode = spec.CullBackFaces ? vk::CullModeFlagBits::eBack : vk::CullModeFlagBits::eNone,
 			.frontFace = kDefaultFrontFace,
 			.depthBiasEnable = vk::False,
 			.lineWidth = 1.0f
@@ -164,19 +172,20 @@ namespace Candle {
 
 #pragma region Color Blend State
 		// Color blend state describes how the output from the fragment shader is blended with the existing color in the framebuffer
-		vk::PipelineColorBlendAttachmentState colorBlendAttachment = CreateColorBlendAttachmentState(m_Specification.Blend);
+		// One blend state per color attachment, as the count must match the rendering info's
+		std::vector<vk::PipelineColorBlendAttachmentState> colorBlendAttachments(spec.ColorAttachmentFormats.size(), CreateColorBlendAttachmentState(spec.Blend));
 		vk::PipelineColorBlendStateCreateInfo colorBlending{
-			.logicOpEnable = vk::False, 
+			.logicOpEnable = vk::False,
 			.logicOp = vk::LogicOp::eCopy,
-			.attachmentCount = 1,
-			.pAttachments = &colorBlendAttachment 
+			.attachmentCount = static_cast<uint32_t>(colorBlendAttachments.size()),
+			.pAttachments = colorBlendAttachments.data()
 		};
 #pragma endregion
 
 #pragma region Pipeline Layout
 		// Create pipeline layout (descriptor set layouts, push constants)
 		// Every layout declares the same range whatever its shader uses, so all are compatible for push constants
-		ValidatePushConstants(m_Specification.Shader->GetEntryPoints());
+		ValidatePushConstants(spec.Shader->GetEntryPoints());
 		vk::PushConstantRange pushConstantRange{ 
 			.stageFlags = kPushConstantStages, 
 			.offset = 0, 
@@ -191,17 +200,19 @@ namespace Candle {
 			.pPushConstantRanges = &pushConstantRange
 		};
 		m_Layout = vk::raii::PipelineLayout{ renderDevice.GetDevice(), pipelineLayoutInfo };
+		if (!spec.DebugName.empty())
+			renderDevice.SetDebugName(*m_Layout, spec.DebugName + " Layout");
 #pragma endregion
 
 #pragma region Graphics Pipeline Creation
 		vk::PipelineRenderingCreateInfo pipelineRenderingCreateInfo{
-			.colorAttachmentCount = static_cast<uint32_t>(m_Specification.ColorAttachmentFormats.size()),
-			.pColorAttachmentFormats = m_Specification.ColorAttachmentFormats.data(),
-			.depthAttachmentFormat = m_Specification.DepthAttachmentFormat
+			.colorAttachmentCount = static_cast<uint32_t>(spec.ColorAttachmentFormats.size()),
+			.pColorAttachmentFormats = spec.ColorAttachmentFormats.data(),
+			.depthAttachmentFormat = spec.DepthAttachmentFormat
 		};
 
 		// Create the graphics pipeline
-		vk::PipelineVertexInputStateCreateInfo vertexInputInfo{};	// No vertex input for now, will revisit later once I get to the vertex input chapter
+		vk::PipelineVertexInputStateCreateInfo vertexInputInfo{};	// Empty by design: shaders pull vertices through a device address in the push constants
 		vk::StructureChain<vk::GraphicsPipelineCreateInfo, vk::PipelineRenderingCreateInfo> pipelineCreateInfoChain = {
 													{
 													 .stageCount = static_cast<uint32_t>(shaderStages.size()),
@@ -219,6 +230,8 @@ namespace Candle {
 													 .subpass = 0 
 													}, pipelineRenderingCreateInfo };
 		m_Pipeline = vk::raii::Pipeline(renderDevice.GetDevice(), nullptr, pipelineCreateInfoChain.get<vk::GraphicsPipelineCreateInfo>());
+		if (!spec.DebugName.empty())
+			renderDevice.SetDebugName(*m_Pipeline, spec.DebugName);
 	}
 
 }

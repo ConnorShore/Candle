@@ -13,6 +13,14 @@ namespace Candle {
 #else
 		bool EnableValidation = false;
 #endif
+		bool EnableSynchronizationValidation = true;	// Only applies with validation on
+
+		// Object names and command buffer labels for RenderDoc and Nsight. Always on with validation, which needs it.
+#ifdef CDL_DIST
+		bool EnableDebugUtils = false;
+#else
+		bool EnableDebugUtils = true;
+#endif
 
 		// A minimum, like LogLevel: Warning reports warnings and errors. Ordered, so it compares as a threshold.
 		enum class ValidationSeverity : uint8_t

@@ -109,7 +109,7 @@ namespace {
 			FramePacket& packet = manager.BeginFramePacket();
 			packet.DrawItems = { {
 				.Mesh = mesh,
-				.Material = texture.IsValid() ? texture : test.DefaultTexture,
+				.Texture = texture.IsValid() ? texture : test.DefaultTexture,
 				.Sampler = SamplerType::LinearWrap,
 				.TransformIndex = 0 } };
 			packet.TransformData = { glm::mat4(1.0f) };

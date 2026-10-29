@@ -31,16 +31,19 @@ namespace Candle {
 		}
 
 		// See for more options: https://docs.vulkan.org/tutorial/latest/03_Drawing_a_triangle/01_Presentation/01_Swap_chain.html#_presentation_mode
-		// eFifo because is always guaranteed to be available, but other modes may offer better performance.
-		vk::PresentModeKHR ChooseSwapPresentMode(std::vector<vk::PresentModeKHR> const& availablePresentModes)
+		// eFifo is the only mode every device must support, and the only one that waits for vertical blank.
+		// Without vsync prefer eMailbox, which doesn't tear, then eImmediate.
+		vk::PresentModeKHR ChooseSwapPresentMode(std::vector<vk::PresentModeKHR> const& availablePresentModes, bool enableVSync)
 		{
-			// Opt for eMailbox if available, otherwise fall back to eFifo. 
-			// eMailbox is a low-latency mode that allows for triple buffering, while eFifo is a more traditional mode that uses double buffering.
-			assert(std::ranges::any_of(availablePresentModes, [](auto presentMode) { return presentMode == vk::PresentModeKHR::eFifo; }));
-			return std::ranges::any_of(availablePresentModes,
-				[](const vk::PresentModeKHR value) { return vk::PresentModeKHR::eMailbox == value; }) ?
-				vk::PresentModeKHR::eMailbox :
-				vk::PresentModeKHR::eFifo;
+			if (enableVSync)
+				return vk::PresentModeKHR::eFifo;
+
+			if (std::ranges::contains(availablePresentModes, vk::PresentModeKHR::eMailbox))
+				return vk::PresentModeKHR::eMailbox;
+			if (std::ranges::contains(availablePresentModes, vk::PresentModeKHR::eImmediate))
+				return vk::PresentModeKHR::eImmediate;
+
+			return vk::PresentModeKHR::eFifo;
 		}
 
 		// The swap extent is the resolution of the images in the swap chain. The swap extent is determined by the surface capabilities and the window size.
@@ -73,8 +76,8 @@ namespace Candle {
 	}
 
 
-	SwapChain::SwapChain(RenderInstance& renderInstance, RenderDevice& renderDevice, Window& window)
-		: m_RenderDevice(renderDevice), m_Surface(std::move(Platform::CreateVulkanSurface(window, renderInstance)))
+	SwapChain::SwapChain(RenderInstance& renderInstance, RenderDevice& renderDevice, Window& window, bool enableVSync)
+		: m_RenderDevice(renderDevice), m_Surface(std::move(Platform::CreateVulkanSurface(window, renderInstance))), m_EnableVSync(enableVSync)
 	{
 		// Only query the available formats once, as they are unlikely to change during the lifetime of the application.
 		std::vector<vk::SurfaceFormatKHR> availableFormats = m_RenderDevice.GetPhysicalDevice().getSurfaceFormatsKHR(*m_Surface);
@@ -84,7 +87,10 @@ namespace Candle {
 
 		m_AcquireSemaphores.reserve(kMaxFramesInFlight);
 		for (uint32_t i = 0; i < kMaxFramesInFlight; ++i)
+		{
 			m_AcquireSemaphores.emplace_back(m_RenderDevice.GetDevice(), vk::SemaphoreCreateInfo{});
+			m_RenderDevice.SetDebugName(*m_AcquireSemaphores.back(), std::format("Acquire Semaphore [frame {}]", i));
+		}
 	}
 
 	ImageResult SwapChain::AquireNextImage(uint32_t frameIndex, uint64_t timeout /*= UINT64_MAX*/)
@@ -158,11 +164,12 @@ namespace Candle {
 											   .imageSharingMode = vk::SharingMode::eExclusive,
 											   .preTransform = surfaceCapabilities.currentTransform,
 											   .compositeAlpha = vk::CompositeAlphaFlagBitsKHR::eOpaque,
-											   .presentMode = ChooseSwapPresentMode(availablePresentModes),
+											   .presentMode = ChooseSwapPresentMode(availablePresentModes, m_EnableVSync),
 											   .clipped = true,
 											   .oldSwapchain = *m_SwapChain};
 
 		m_SwapChain = vk::raii::SwapchainKHR(m_RenderDevice.GetDevice(), swapChainCreateInfo);
+		m_RenderDevice.SetDebugName(*m_SwapChain, "Swapchain");
 	}
 
 	void SwapChain::CreateImages(const vk::Extent2D& extent)
@@ -176,14 +183,19 @@ namespace Candle {
 		m_PresentSemaphores.clear();
 		m_SwapChainImages.reserve(swapChainImages.size());
 		m_PresentSemaphores.reserve(swapChainImages.size());
-		for (const auto& image : swapChainImages)
+		for (uint32_t i = 0; i < swapChainImages.size(); ++i)
 		{
+			vk::Image image = swapChainImages[i];
 			imageViewCreateInfo.image = image;
 
 			vk::raii::ImageView imageView(m_RenderDevice.GetDevice(), imageViewCreateInfo);
+			m_RenderDevice.SetDebugName(image, std::format("Swapchain Image {}", i));
+			m_RenderDevice.SetDebugName(*imageView, std::format("Swapchain Image {} View", i));
+
 			ImageDesc desc{ .Extent = extent, .Format = m_SwapChainSurfaceFormat.format };
 			m_SwapChainImages.emplace_back(image, std::move(imageView), desc);
 			m_PresentSemaphores.emplace_back(m_RenderDevice.GetDevice(), vk::SemaphoreCreateInfo{});
+			m_RenderDevice.SetDebugName(*m_PresentSemaphores.back(), std::format("Present Semaphore [image {}]", i));
 		}
 	}
 

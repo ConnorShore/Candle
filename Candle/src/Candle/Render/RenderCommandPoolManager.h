@@ -3,23 +3,22 @@
 #include "RenderConstants.h"
 
 #include <array>
+#include <string>
 #include <vector>
 
 #include <vulkan/vulkan_raii.hpp>
 
 namespace Candle {
 
-	// TODO: Probably only want to pass vk::raii::Device to these classes to keep it more lightweight
-	// but we may need additional fucntionality from this so keeping it just in case for now
 	class RenderDevice;
 
 	// Manages command pools and buffers for a single queue family and frame
 	// Threading: render thread only; command buffers are aquired and recorded on worker threads, but the pool is created and destroyed on the render thread
-	
+
 	class ThreadFrameCommands
 	{
 	public:
-		ThreadFrameCommands(RenderDevice& renderDevice, uint32_t queueFamilyIndex);
+		ThreadFrameCommands(RenderDevice& renderDevice, uint32_t queueFamilyIndex, const std::string& debugName = "Thread Command Pool");
 
 		vk::raii::CommandBuffer& AquireCommandBuffer(); // Returns a command buffer for recording (usually for a thread to record commands for a frame)
 		void Reset(); // Resets the command pool and all command buffers; called at the start of a frame

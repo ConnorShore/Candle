@@ -38,8 +38,8 @@ namespace {
 	Pipeline CreatePipeline(TestTextures& gpu, const std::filesystem::path& shaderPath)
 	{
 		return Pipeline(PipelineSpecification{
-			.Shader = ShaderLoader::LoadShader(shaderPath.stem().string(), shaderPath, gpu.Device),
-			.ColorAttachmentFormats = { kColorFormat } }, gpu.Device, gpu.Bindless, kColorFormat);
+			.Shader = LoadTestShader(shaderPath.stem().string(), shaderPath),
+			.ColorAttachmentFormats = { kColorFormat } }, gpu.Device, gpu.Bindless);
 	}
 
 	// Each SamplerType's address mode and filter, told apart on a red | blue texture. Half a texel left of the edge is

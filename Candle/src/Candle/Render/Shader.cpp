@@ -12,7 +12,7 @@ namespace Candle {
 	{
 	}
 
-	const vk::raii::ShaderModule Shader::CreateModule(RenderDevice& renderDevice)
+	vk::raii::ShaderModule Shader::CreateModule(RenderDevice& renderDevice)
 	{
 		// pCode must be 4-byte aligned; the vector's storage comes from operator new, which aligns to at least this.
 		CDL_STATIC_ASSERT(__STDCPP_DEFAULT_NEW_ALIGNMENT__ >= alignof(uint32_t));
@@ -25,6 +25,7 @@ namespace Candle {
 			renderDevice.GetDevice(),
 			createInfo
 		};
+		renderDevice.SetDebugName(*shaderModule, m_Name);
 
 		return shaderModule;
 	}

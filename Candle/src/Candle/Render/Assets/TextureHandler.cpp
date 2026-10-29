@@ -3,12 +3,11 @@
 
 #include "Candle/Render/TexturePool.h"
 #include "Candle/Render/TextureLoader.h"
-#include "Candle/Render/BindlessTable.h"
 
 namespace Candle {
 
-	TextureHandler::TextureHandler(TexturePool& texturePool, BindlessTable& bindlessTable)
-		: m_TexturePool(texturePool), m_BindlessTable(bindlessTable)
+	TextureHandler::TextureHandler(TexturePool& texturePool)
+		: m_TexturePool(texturePool)
 	{
 	}
 
@@ -31,13 +30,10 @@ namespace Candle {
 			.Data = info.Data,
 			.Extent = info.Extent,
 			.Format = info.Format,
-			.ColorSpace = textureData.ColorSpace
+			.ColorSpace = textureData.ColorSpace,
+			.DebugName = asset.GetName()
 		};
 		asset.m_GPUHandle = m_TexturePool.CreateTexture(std::move(spec));
-		TextureInfo texInfo = m_TexturePool.GetTextureInfo(asset.m_GPUHandle);
-
-		// Write the texture's image view to the bindless table at the index corresponding to its GPU handle
-		m_BindlessTable.WriteTexture(texInfo.Index, texInfo.ImageView);
 	}
 
 	void TextureHandler::Unload(Texture& asset)

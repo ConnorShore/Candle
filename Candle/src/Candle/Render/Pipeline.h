@@ -20,10 +20,11 @@ namespace Candle {
 	inline constexpr vk::ShaderStageFlags kPushConstantStages = vk::ShaderStageFlagBits::eAll;
 	inline constexpr uint32_t kPushConstantsSize = 128;
 
+	// Threading: immutable once created, so the render thread may bind it after creation on another thread
 	class Pipeline
 	{
 	public:
-		Pipeline(PipelineSpecification spec, RenderDevice& renderDevice, BindlessTable& bindlessTable, vk::Format format);
+		Pipeline(const PipelineSpecification& spec, RenderDevice& renderDevice, BindlessTable& bindlessTable);
 		~Pipeline() = default;
 
 		// Delete copy constructor and assignment operator
@@ -48,11 +49,9 @@ namespace Candle {
 		}
 
 	private:
-		void CreatePipeline(vk::Format format, RenderDevice& renderDevice, BindlessTable& bindlessTable);
+		void CreatePipeline(const PipelineSpecification& spec, RenderDevice& renderDevice, BindlessTable& bindlessTable);
 
 	private:
-		PipelineSpecification m_Specification;
-
 		vk::raii::PipelineLayout m_Layout{ nullptr };
 		vk::raii::Pipeline m_Pipeline{ nullptr };
 	};

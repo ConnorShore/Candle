@@ -1,6 +1,5 @@
 #include "cdlpch.h"
 #include "ShaderLoader.h"
-#include "RenderDevice.h"
 #include "Shader.h"
 
 #include "Candle/Platform/Platform.h"
@@ -33,17 +32,16 @@ namespace Candle {
 			return { reinterpret_cast<const char*>(utf8.data()), utf8.size() };
 		}
 
-		// TODO: Don't crash program if a load fails
-		std::vector<std::byte> ReadShaderFile(const std::filesystem::path& filePath)
+		std::expected<std::vector<std::byte>, std::string> ReadShaderFile(const std::filesystem::path& filePath)
 		{
 			auto code = Platform::ReadFile(filePath);
 			if (!code) {
-				throw std::runtime_error(std::format("Failed to read shader file '{}': {} (OS error {})",
+				return std::unexpected(std::format("Failed to read shader file '{}': {} (OS error {})",
 					ToUtf8(filePath), ToString(code.error().Code), code.error().OSError));
 			}
 
 			if (code->empty() || code->size() % sizeof(uint32_t) != 0) {
-				throw std::runtime_error(std::format("Shader file '{}' is {} bytes; SPIR-V must be a non-empty multiple of 4",
+				return std::unexpected(std::format("Shader file '{}' is {} bytes; SPIR-V must be a non-empty multiple of 4",
 					ToUtf8(filePath), code->size()));
 			}
 
@@ -72,13 +70,12 @@ namespace Candle {
 			return pushConstantBlock;
 		}
 
-		std::vector<ShaderEntryPoint> ExtractShaderSourceInfo(std::span<const std::byte> shaderCode, const std::filesystem::path& filePath)
+		std::expected<std::vector<ShaderEntryPoint>, std::string> ExtractShaderSourceInfo(std::span<const std::byte> shaderCode, const std::filesystem::path& filePath)
 		{
 			auto shaderModule = spv_reflect::ShaderModule(shaderCode.size(), shaderCode.data());
 
-			// TODO: Eventually just return error and such
 			if (shaderModule.GetResult() != SPV_REFLECT_RESULT_SUCCESS) {
-				throw std::runtime_error(std::format("Failed to reflect shader file '{}' (SpvReflectResult {})",
+				return std::unexpected(std::format("Failed to reflect shader file '{}' (SpvReflectResult {})",
 					ToUtf8(filePath), static_cast<int>(shaderModule.GetResult())));
 			}
 
@@ -98,7 +95,7 @@ namespace Candle {
 				entryPoints.push_back({ 
 					.Name = entryPointName,
 					.Stage = stage, 
-					.m_PushConstantBlock = std::move(ExtractPushConstantBlock(shaderModule, entryPointName))
+					.PushConstants = std::move(ExtractPushConstantBlock(shaderModule, entryPointName))
 				});
 			}
 
@@ -107,25 +104,30 @@ namespace Candle {
 
 	}
 
-	SharedPtr<Shader> ShaderLoader::LoadShader(const std::string& name, const std::filesystem::path& filePath, RenderDevice& device)
+	std::expected<SharedPtr<Shader>, std::string> ShaderLoader::LoadShader(const std::string& name, const std::filesystem::path& filePath)
 	{
-		std::vector<std::byte> shaderCode = ReadShaderFile(filePath);
+		auto shaderCode = ReadShaderFile(filePath);
+		if (!shaderCode)
+			return std::unexpected(shaderCode.error());
 
 		// ReadShaderFile guarantees at least one word; memcpy because the buffer holds bytes, not uint32_t objects.
 		uint32_t magic = 0;
-		std::memcpy(&magic, shaderCode.data(), sizeof(magic));
-		if (magic != SpvMagicNumber) {
-			throw std::runtime_error(std::format("Shader file '{}' is not SPIR-V (bad magic number)", ToUtf8(filePath)));
-		}
+		std::memcpy(&magic, shaderCode->data(), sizeof(magic));
+		if (magic != SpvMagicNumber)
+			return std::unexpected(std::format("Shader file '{}' is not SPIR-V (bad magic number)", ToUtf8(filePath)));
 
 		// Reflect first since it bounds-checks every instruction whereas creating vulkan shader module on malformed SPIR-V is undefined
+		auto entryPoints = ExtractShaderSourceInfo(*shaderCode, filePath);
+		if (!entryPoints)
+			return std::unexpected(entryPoints.error());
+
 		ShaderCreationInfo shaderInfo{
 			.Name = name,
 			.FilePath = filePath,
-			.EntryPoints = ExtractShaderSourceInfo(shaderCode, filePath)
+			.EntryPoints = std::move(*entryPoints)
 		};
 
-		return SharedPtr<Shader>::Create(std::move(shaderInfo), std::move(shaderCode));
+		return SharedPtr<Shader>::Create(std::move(shaderInfo), std::move(*shaderCode));
 	}
 
 }

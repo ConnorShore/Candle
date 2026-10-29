@@ -57,7 +57,7 @@ CDL_TEST_CASE(ShaderInterop, ShaderLaysOutTheFixtureExactlyAsCppDoes, Gpu)
 	LoggerFixture logs(LogLevel::Warn, kRenderChannelMask);
 	{
 		TestDevice gpu;
-		SharedPtr<Shader> shader = ShaderLoader::LoadShader("ShaderInteropFixture", kFixturePath, gpu.Device);
+		SharedPtr<Shader> shader = LoadTestShader("ShaderInteropFixture", kFixturePath);
 
 		using Fixture = GPU::InteropFixturePushConstants;
 		const std::array members = {
@@ -74,7 +74,7 @@ CDL_TEST_CASE(ShaderInterop, ShaderLaysOutTheFixtureExactlyAsCppDoes, Gpu)
 		for (const ShaderEntryPoint& entryPoint : shader->GetEntryPoints())
 		{
 			CDL_NOTE(entryPoint.Name);
-			ExpectPushBlockMatches<Fixture>(entryPoint.m_PushConstantBlock, members);
+			ExpectPushBlockMatches<Fixture>(entryPoint.PushConstants, members);
 		}
 	}
 	ExpectNoVulkanDebugMessages(logs);

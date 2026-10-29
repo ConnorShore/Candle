@@ -6,12 +6,12 @@
 namespace Candle {
 
 	class TexturePool;
-	class BindlessTable;
 
+	// Threading: main thread only, like the AssetManager calling it
 	class TextureHandler : public AssetHandler<Texture>
 	{
 	public:
-		TextureHandler(TexturePool& texturePool, BindlessTable& bindlessTable);
+		TextureHandler(TexturePool& texturePool);
 		virtual ~TextureHandler() = default;
 
 	protected:
@@ -20,7 +20,6 @@ namespace Candle {
 
 	private:
 		TexturePool& m_TexturePool;
-		BindlessTable& m_BindlessTable;
 	};
 
 }

@@ -24,17 +24,6 @@
 
 namespace Candle {
 
-	// TODO: Figure out FrameContext for command buffer recording and submission
-	//  Read khronos tutorial for recording command buffer + multi-threaded rendering to help drive design
-
-	// NOTES //
-	/*
-	* RenderPassManager to manage render graph and synchronization between passes
-	* Command pools and buffers are associated with a queue family
-	* Will have command pools/buffers per queue family (graphics, transfer, etc) as well as per frame (double/triple buffering) and per thread (multi-threaded command buffer recording)
-	*/
-	////
-
 	class Window;
 	class JobSystem;
 	class RenderCommandPoolManager;
@@ -60,7 +49,7 @@ namespace Candle {
 		void SubmitFramePacket(FramePacket& packet);
 
 		inline RenderDevice& GetRenderDevice() { return m_RenderDevice; }
-		inline GeometryPool& GetGeometryPool() { return m_GeometryPool; }	// Temporary (applicaiton shouldn't see geometry pool)
+		inline GeometryPool& GetGeometryPool() { return m_GeometryPool; }	// For tests only; the application goes through asset handlers
 
 	private:
 		void RenderThreadMain();   // Wait for a frame slot → acquire → Renderer::Render → submit → present
@@ -71,8 +60,6 @@ namespace Candle {
 
 	private:
 		RenderSpecification m_Specification;
-		Window& m_Window;
-		JobSystem& m_JobSystem;
 		FramePump m_FramePump;	// Owned here, so a pump never exists without a render thread to drain it
 		RenderInstance m_RenderInstance;
 		RenderDevice m_RenderDevice;

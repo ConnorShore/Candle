@@ -54,11 +54,7 @@ namespace Candle {
 		{
 			// Fatal in every configuration, since Dist compiles asserts out and would write past the end
 			if (m_NextUnused == m_Handles.size())
-			{
-				CDL_CORE_FATAL(LogChannel::Render, "GPUResourcePool is full at {} slots; raise its capacity", m_Handles.size());
-				Logger::Flush();
-				std::abort();
-			}
+				CDL_CORE_PANIC(LogChannel::Render, "GPUResourcePool is full at {} slots; raise its capacity", m_Handles.size());
 			index = m_NextUnused++;
 		}
 
