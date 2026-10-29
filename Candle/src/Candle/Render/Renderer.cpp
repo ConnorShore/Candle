@@ -24,10 +24,11 @@ namespace Candle {
 
 		vk::Format FindDepthFormat(RenderDevice& device)
 		{
-			// Prefer 32-bit float depth, but fall back to 24-bit or 16-bit if not available
+			// Depth-only, so the depth-aspect view and barrier stay valid without separateDepthStencilLayouts. The spec requires
+			// D16 and one of the first two as attachments, so the throw below can't be reached on a conformant device.
 			const std::vector<vk::Format> preferredFormats = {
 				vk::Format::eD32Sfloat,
-				vk::Format::eD24UnormS8Uint,
+				vk::Format::eX8D24UnormPack32,
 				vk::Format::eD16Unorm
 			};
 			for (const auto& format : preferredFormats)
@@ -46,8 +47,9 @@ namespace Candle {
 		, m_TexturePool(texturePool)
 		, m_BindlessTable(bindlessTable)
 		, m_TargetFormat(targetFormat)
+		, m_DepthFormat(FindDepthFormat(renderDevice))
 		, m_DepthImage({ .m_Extent = { targetExtent.width, targetExtent.height }, // Sized to the colour target; the render graph will eventually own this per target
-			.m_Format = FindDepthFormat(renderDevice), 
+			.m_Format = m_DepthFormat,
 			.m_Usage = vk::ImageUsageFlagBits::eDepthStencilAttachment, 
 			.m_Aspect = vk::ImageAspectFlagBits::eDepth }, allocator)
 	{
@@ -183,14 +185,14 @@ namespace Candle {
 	void Renderer::RecreateTargets(vk::Extent2D targetExtent, GPUAllocator& allocator)
 	{
 		m_DepthImage.Recreate({ .m_Extent = { targetExtent.width, targetExtent.height },
-			.m_Format = FindDepthFormat(m_RenderDevice),
+			.m_Format = m_DepthFormat,
 			.m_Usage = vk::ImageUsageFlagBits::eDepthStencilAttachment,
 			.m_Aspect = vk::ImageAspectFlagBits::eDepth }, allocator);
 	}
 
 	void Renderer::CreatePipeline(const RenderPipeline& pipeline)
 	{
-		m_Pipelines.emplace_back(pipeline.CreateSpecification(m_RenderDevice, m_TargetFormat), m_RenderDevice, m_BindlessTable, m_TargetFormat);
+		m_Pipelines.emplace_back(pipeline.CreateSpecification(m_RenderDevice, m_TargetFormat, m_DepthFormat), m_RenderDevice, m_BindlessTable, m_TargetFormat);
 	}
 
 }

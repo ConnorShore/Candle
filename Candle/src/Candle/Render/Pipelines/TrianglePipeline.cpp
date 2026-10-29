@@ -6,7 +6,7 @@
 
 namespace Candle {
 
-	PipelineSpecification TrianglePipeline::CreateSpecification(RenderDevice& renderDevice, vk::Format format) const
+	PipelineSpecification TrianglePipeline::CreateSpecification(RenderDevice& renderDevice, vk::Format colorFormat, vk::Format depthFormat) const
 	{
 		// Create triangle pipeline here for now, will eventually be created on demand when a pipeline is needed
 		// TODO: Once asset manager is fully implemented, will see if we load the shader from the asset manager
@@ -20,8 +20,8 @@ namespace Candle {
 
 		return {
 			.Shader = shader,
-			.ColorAttachmentFormats = {format},
-			.DepthAttachmentFormat = vk::Format::eD32Sfloat
+			.ColorAttachmentFormats = {colorFormat},
+			.DepthAttachmentFormat = depthFormat
 			// Rest are defaults for now
 		};
 	}
