@@ -62,6 +62,10 @@ namespace Candle {
 				{
 					CDL_CORE_PANIC(LogChannel::Thread, "Unhandled exception on thread '{}': {}", descriptor.Name, e.what());
 				}
+				catch (...)
+				{
+					CDL_CORE_PANIC(LogChannel::Thread, "Unhandled non-standard exception on thread '{}'", descriptor.Name);
+				}
 				}, std::forward<Args>(args)...);
 		}
 
