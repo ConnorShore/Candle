@@ -12,8 +12,8 @@ struct VertexOutput {
 VertexOutput VertMain(uint vid : SV_VertexID) {
     VertexOutput output;
     Vertex vertex = pushConstants->Vertices[vid];
-    float4x4 viewProj = pushConstants->Global.Frame.ViewProjection;
-    float4x4 model = pushConstants->Global.Frame.TransformData[pushConstants->TransformIndex];
+    float4x4 viewProj = pushConstants->Global.Frame->ViewProjection;
+    float4x4 model = pushConstants->Global.Frame->TransformData[pushConstants->TransformIndex];
     output.position = mul(viewProj, mul(model, float4(vertex.Position, 1.0)));
     output.uv = float2(vertex.UVx, 1.0 - vertex.UVy);
     return output;
