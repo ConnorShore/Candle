@@ -88,6 +88,30 @@ CDL_TEST_CASE(MeshAssetHandler, AssetManagerLoadsMeshesThroughIt, Gpu)
 	ExpectNoVulkanDebugMessages(logs);
 }
 
+// Loading an instance that is already loaded unloads it first, so the reload must upload again from the asset's own data
+CDL_TEST_CASE(MeshAssetHandler, AssetManagerReloadsTheSameInstance, Gpu)
+{
+	LoggerFixture logs(LogLevel::Warn, kRenderChannelMask);
+	{
+		TestGeometry gpu;
+		AssetManager assets;
+		assets.RegisterAssetHandler(ScopedPtr<MeshAssetHandler>::Create(gpu.Pool));
+		SharedPtr<MeshAsset> asset = CreateTriangleAsset();
+		assets.LoadAsset(asset);
+		const GPUMeshHandle firstMesh = asset->GetGPUHandle();
+
+		assets.LoadAsset(asset);
+
+		CDL_CHECK(asset->GetGPUHandle().IsValid());
+		CDL_EXPECT_FALSE(gpu.Pool.IsAlive(firstMesh));
+		CDL_EXPECT_EQ(gpu.Pool.GetMeshInfo(asset->GetGPUHandle()).IndexCount, 3u);
+
+		RunReleaseFrame(gpu);
+		CDL_EXPECT_EQ(LiveAllocations(gpu.Allocator), 2u);
+	}
+	ExpectNoVulkanDebugMessages(logs);
+}
+
 CDL_TEST_CASE(MeshAssetHandler, AssetManagerUnloadsMeshesThroughIt, Gpu)
 {
 	LoggerFixture logs(LogLevel::Warn, kRenderChannelMask);
