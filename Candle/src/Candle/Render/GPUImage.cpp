@@ -6,7 +6,6 @@
 namespace Candle {
 
 	GPUImage::GPUImage(const GPUImageSpec& spec, GPUAllocator& allocator)
-		: m_Allocator(allocator.GetAllocator())
 	{
 		Create(spec, allocator);
 	}
@@ -24,6 +23,9 @@ namespace Candle {
 
 	void GPUImage::Create(const GPUImageSpec& spec, GPUAllocator& allocator)
 	{
+		// From the argument, not the constructor: a default-constructed or moved-from image has none until Recreate gives it one
+		m_Allocator = allocator.GetAllocator();
+
 		vk::ImageCreateInfo imageInfo{
 			.imageType = vk::ImageType::e2D,
 			.format = spec.m_Format,

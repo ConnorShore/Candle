@@ -14,6 +14,7 @@
 using namespace Candle;
 using namespace Candle::Test;
 using Candle::Test::Type::Gpu;
+using Candle::Test::Type::Unit;
 
 // A copy would be a second owner destroying the same VkImage and VmaAllocation.
 CDL_STATIC_ASSERT(!std::is_copy_constructible_v<GPUImage>);
@@ -28,6 +29,96 @@ namespace {
 		return allocator.CreateImage({ .m_Extent = { 4, 2 }, .m_Format = vk::Format::eR8G8B8A8Unorm });
 	}
 
+	// Every implementation must support D32 or X8_D24 as a depth attachment; desktop GPUs all have D32, as Renderer assumes.
+	const GPUImageSpec kDepthSpec{
+		.m_Extent = { 4, 2 },
+		.m_Format = vk::Format::eD32Sfloat,
+		.m_Usage = vk::ImageUsageFlagBits::eDepthStencilAttachment,
+		.m_Aspect = vk::ImageAspectFlagBits::eDepth };
+
+	VkDeviceSize AllocationSize(GPUAllocator& allocator, const GPUImage& image)
+	{
+		VmaAllocationInfo info{};
+		vmaGetAllocationInfo(allocator.GetAllocator(), image.GetAllocation(), &info);
+		return info.size;
+	}
+
+}
+
+// TexturePool names neither field, so a texture is only sampleable and uploadable while these stay the defaults.
+CDL_TEST_CASE(GPUImage, DefaultSpecIsAnUploadableSampledColorImage, Unit)
+{
+	const GPUImageSpec spec;
+
+	CDL_EXPECT(spec.m_Usage == (vk::ImageUsageFlagBits::eSampled | vk::ImageUsageFlagBits::eTransferDst));
+	CDL_EXPECT(spec.m_Aspect == vk::ImageAspectFlags{ vk::ImageAspectFlagBits::eColor });
+}
+
+// A depth view with the colour aspect fails validation, so this fails if the spec's usage or aspect stops reaching Vulkan.
+CDL_TEST_CASE(GPUImage, CreatesADepthImageFromItsSpec, Gpu)
+{
+	LoggerFixture logs(LogLevel::Warn, kRenderChannelMask);
+	{
+		TestAllocator gpu;
+		{
+			GPUImage depth = gpu.Allocator.CreateImage(kDepthSpec);
+
+			CDL_EXPECT(depth.GetImage());
+			CDL_EXPECT(depth.GetImageView());
+			CDL_EXPECT_EQ(LiveAllocations(gpu.Allocator), 1u);
+		}
+		CDL_EXPECT_EQ(LiveAllocations(gpu.Allocator), 0u);
+	}
+	ExpectNoVulkanDebugMessages(logs);
+}
+
+// Renderer resizes its depth target this way on every swapchain rebuild, so the old image must go and the new one take
+// the new spec. Grown far past the original, so an allocation too small for it means the old extent was kept.
+CDL_TEST_CASE(GPUImage, RecreateFreesTheOldImageAndTakesTheNewSpec, Gpu)
+{
+	const glm::uvec2 kGrownExtent{ 256, 256 };
+
+	LoggerFixture logs(LogLevel::Warn, kRenderChannelMask);
+	{
+		TestAllocator gpu;
+		{
+			GPUImage image = gpu.Allocator.CreateImage(kDepthSpec);
+			GPUImageSpec grown = kDepthSpec;
+			grown.m_Extent = kGrownExtent;
+
+			image.Recreate(grown, gpu.Allocator);
+
+			CDL_EXPECT(image.GetImage());
+			CDL_EXPECT(image.GetImageView());
+			CDL_EXPECT_EQ(LiveAllocations(gpu.Allocator), 1u);
+			CDL_EXPECT_GE(AllocationSize(gpu.Allocator, image), VkDeviceSize{ kGrownExtent.x } * kGrownExtent.y * sizeof(float));
+		}
+		CDL_EXPECT_EQ(LiveAllocations(gpu.Allocator), 0u);
+	}
+	ExpectNoVulkanDebugMessages(logs);
+}
+
+// Neither image has a VmaAllocator until Recreate hands it one; VMA asserts on a null one, so a regression aborts the run.
+CDL_TEST_CASE(GPUImage, RecreateWorksOnAnImageThatOwnsNothing, Gpu)
+{
+	LoggerFixture logs(LogLevel::Warn, kRenderChannelMask);
+	{
+		TestAllocator gpu;
+		{
+			GPUImage defaulted;
+			GPUImage movedFrom = CreateImage(gpu.Allocator);
+			const GPUImage keeper(std::move(movedFrom));
+
+			defaulted.Recreate(kDepthSpec, gpu.Allocator);
+			movedFrom.Recreate(kDepthSpec, gpu.Allocator);
+
+			CDL_EXPECT(defaulted.GetImage());
+			CDL_EXPECT(movedFrom.GetImage());
+			CDL_EXPECT_EQ(LiveAllocations(gpu.Allocator), 3u);
+		}
+		CDL_EXPECT_EQ(LiveAllocations(gpu.Allocator), 0u);
+	}
+	ExpectNoVulkanDebugMessages(logs);
 }
 
 CDL_TEST_CASE(GPUImage, CreatesAnImageWithAViewInOneAllocation, Gpu)
