@@ -44,9 +44,9 @@ namespace {
 	Pipeline CreatePipeline(RenderDevice& device, BindlessTable& bindless, const std::filesystem::path& shaderPath)
 	{
 		PipelineSpecification spec{
-			.Shader = ShaderLoader::LoadShader(shaderPath.stem().string(), shaderPath, device),
+			.Shader = LoadTestShader(shaderPath.stem().string(), shaderPath),
 			.ColorAttachmentFormats = { kColorFormat } };
-		return Pipeline(spec, device, bindless, kColorFormat);
+		return Pipeline(spec, device, bindless);
 	}
 
 }
@@ -104,8 +104,7 @@ CDL_TEST_CASE(Pipeline, PushConstantsRecordAgainstTheSharedRange, Gpu)
 	ExpectNoVulkanDebugMessages(logs);
 }
 
-// Every blend mode Pipeline implements, with and without culling. DstAlpha and OneMinusDstAlpha hit its
-// unknown-blend-mode assert, so they are left out until they exist.
+// Every blend mode, with and without culling.
 CDL_TEST_CASE(Pipeline, CreatesForEachBlendModeWithoutValidationMessages, Gpu)
 {
 	SkipUnlessCompiled(kFixturePath);
@@ -114,9 +113,9 @@ CDL_TEST_CASE(Pipeline, CreatesForEachBlendModeWithoutValidationMessages, Gpu)
 	{
 		TestDevice gpu;
 		BindlessTable bindless(gpu.Device);
-		SharedPtr<Shader> shader = ShaderLoader::LoadShader("PipelineFixture", kFixturePath, gpu.Device);
+		SharedPtr<Shader> shader = LoadTestShader("PipelineFixture", kFixturePath);
 
-		for (BlendMode blend : { BlendMode::None, BlendMode::SrcAlpha, BlendMode::OneMinusSrcAlpha })
+		for (BlendMode blend : { BlendMode::Opaque, BlendMode::AlphaBlend, BlendMode::PremultipliedAlpha, BlendMode::Additive })
 		{
 			for (bool cullBackFaces : { true, false })
 			{
@@ -125,7 +124,7 @@ CDL_TEST_CASE(Pipeline, CreatesForEachBlendModeWithoutValidationMessages, Gpu)
 					.Blend = blend,
 					.ColorAttachmentFormats = { kColorFormat },
 					.CullBackFaces = cullBackFaces };
-				Pipeline pipeline(spec, gpu.Device, bindless, kColorFormat);
+				Pipeline pipeline(spec, gpu.Device, bindless);
 
 				const std::string label = std::format("blend {}, cull {}", std::to_underlying(blend), cullBackFaces);
 				CDL_EXPECT_MSG(*pipeline.GetPipeline(), label);

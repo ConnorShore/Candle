@@ -85,64 +85,127 @@ namespace Candle {
 			QueueFamilyIndices QueueFamilies;
 		};
 
-		std::optional<QueueFamilyIndices> IsPhysicalDeviceSuitable(RenderInstance& instance, RenderSpecification renderSpec, vk::raii::PhysicalDevice const& physicalDevice)
+		// Returns the queue families to use, or why the device can't be used
+		std::expected<QueueFamilyIndices, std::string> CheckPhysicalDevice(RenderInstance& instance, const RenderSpecification& renderSpec, vk::raii::PhysicalDevice const& physicalDevice)
 		{
 			// Checked first: querying the 1.3 feature structs below is invalid on an older device
 			if (physicalDevice.getProperties().apiVersion < ToVulkanApiVersion(renderSpec.VulkanVersion))
-				return std::nullopt;
-
-			// TODO: Fix: If user sets DevicePreference to DiscreteGPU, but the only available GPU is an IntegratedGPU, we need to fall back to it or throw an error
-			bool isPreferredDeviceType = false;
-			if (renderSpec.DevicePreference == RenderDevicePreference::DiscreteGPU)
-				isPreferredDeviceType = physicalDevice.getProperties().deviceType == vk::PhysicalDeviceType::eDiscreteGpu;
-			else if (renderSpec.DevicePreference == RenderDevicePreference::IntegratedGPU)
-				isPreferredDeviceType = physicalDevice.getProperties().deviceType == vk::PhysicalDeviceType::eIntegratedGpu;
-			else
-				isPreferredDeviceType = true;
+				return std::unexpected("Vulkan version is too old");
 
 			auto availableDeviceExtensions = physicalDevice.enumerateDeviceExtensionProperties();
 			bool supportsAllRequiredExtensions = std::ranges::all_of(kRequiredDeviceExtensions,
 				[&availableDeviceExtensions](const char* extension) { return HasExtension(availableDeviceExtensions, extension); });
+			if (!supportsAllRequiredExtensions)
+				return std::unexpected("missing a required extension");
 
 			FeatureChain supportedFeatures;
 			QueryFeatures(physicalDevice, supportedFeatures);
 			bool supportsRequiredFeatures = std::ranges::all_of(kRequiredFeatures,
 				[&supportedFeatures](FeatureField field) { return field(supportedFeatures) == vk::True; });
-
-			// Suitable devices also report the queue families to use, so selection and creation can't disagree
-			if (!supportsAllRequiredExtensions || !supportsRequiredFeatures || !isPreferredDeviceType)
-				return std::nullopt;
+			if (!supportsRequiredFeatures)
+				return std::unexpected("missing a required feature");
 
 			// Find queue families that support graphics + present, and a dedicated transfer queue if available
 			const std::vector<vk::QueueFamilyProperties> families = physicalDevice.getQueueFamilyProperties();
 			std::vector<vk::Bool32> presentSupport(families.size());
 			for (uint32_t i = 0; i < families.size(); ++i)
 				presentSupport[i] = Platform::GetVulkanPresentationSupport(instance, physicalDevice, i);
-			return FindQueueFamilies(families, presentSupport);
+
+			std::optional<QueueFamilyIndices> queueFamilies = FindQueueFamilies(families, presentSupport);
+			if (!queueFamilies)
+				return std::unexpected("no graphics queue family that can present");
+
+			return *queueFamilies;
 		}
 
-		PhysicalDeviceSelection SelectPhysicalDevice(RenderInstance& instance, const RenderSpecification& renderSpec)
+		bool IsPreferredDeviceType(RenderDevicePreference preference, vk::PhysicalDeviceType type)
 		{
+			switch (preference)
+			{
+			case RenderDevicePreference::DiscreteGPU:	return type == vk::PhysicalDeviceType::eDiscreteGpu;
+			case RenderDevicePreference::IntegratedGPU:	return type == vk::PhysicalDeviceType::eIntegratedGpu;
+			default:									return true;
+			}
+		}
+
+		// The preference only ranks suitable devices, so a machine without the preferred type still gets one
+		std::expected<PhysicalDeviceSelection, std::string> SelectPhysicalDevice(RenderInstance& instance, const RenderSpecification& renderSpec)
+		{
+			std::optional<PhysicalDeviceSelection> fallback;
+			std::string rejectedDevices;
+
 			for (vk::raii::PhysicalDevice& physicalDevice : instance.GetVulkanInstance().enumeratePhysicalDevices())
 			{
-				if (auto queueFamilies = IsPhysicalDeviceSuitable(instance, renderSpec, physicalDevice))
+				std::string deviceName = physicalDevice.getProperties().deviceName;
+				auto queueFamilies = CheckPhysicalDevice(instance, renderSpec, physicalDevice);
+				if (!queueFamilies)
 				{
-					std::string deviceName = physicalDevice.getProperties().deviceName;
-					CDL_CORE_INFO(LogChannel::Render, "Selected Render Device: {0}", deviceName);
-					return { std::move(physicalDevice), *queueFamilies };
+					rejectedDevices += std::format("\n  {}: {}", deviceName, queueFamilies.error());
+					continue;
 				}
+
+				if (IsPreferredDeviceType(renderSpec.DevicePreference, physicalDevice.getProperties().deviceType))
+				{
+					CDL_CORE_INFO(LogChannel::Render, "Selected Render Device: {0}", deviceName);
+					return PhysicalDeviceSelection{ std::move(physicalDevice), *queueFamilies };
+				}
+
+				if (!fallback)
+					fallback = PhysicalDeviceSelection{ std::move(physicalDevice), *queueFamilies };
 			}
 
-			throw std::runtime_error("Failed to find a suitable GPU!");
+			if (fallback)
+			{
+				std::string deviceName = fallback->PhysicalDevice.getProperties().deviceName;
+				CDL_CORE_WARN(LogChannel::Render, "No device of the preferred type found. Selected Render Device: {0}", deviceName);
+				return std::move(*fallback);
+			}
+
+			return std::unexpected("Failed to find a suitable GPU" + rejectedDevices);
 		}
 	}
 
 	RenderDevice::RenderDevice(RenderInstance& instance, const RenderSpecification& renderSpec)
 	{
-		PhysicalDeviceSelection selection = SelectPhysicalDevice(instance, renderSpec);
-		m_PhysicalDevice = std::move(selection.PhysicalDevice);
-		m_QueueFamilies = selection.QueueFamilies;
+		auto selection = SelectPhysicalDevice(instance, renderSpec);
+		if (!selection)
+			CDL_CORE_PANIC(LogChannel::Render, "{}", selection.error());
+
+		m_PhysicalDevice = std::move(selection->PhysicalDevice);
+		m_QueueFamilies = selection->QueueFamilies;
+		m_DebugUtilsEnabled = instance.IsDebugUtilsEnabled();
 		CreateLogicalDeviceAndQueues();
+	}
+
+	void RenderDevice::SetDebugName(vk::ObjectType type, uint64_t handle, const std::string& name) const
+	{
+		if (!m_DebugUtilsEnabled || handle == 0)
+			return;
+
+		m_LogicalDevice.setDebugUtilsObjectNameEXT({ .objectType = type, .objectHandle = handle, .pObjectName = name.c_str() });
+	}
+
+	void RenderDevice::BeginDebugLabel(vk::raii::CommandBuffer& commandBuffer, const char* label) const
+	{
+		if (m_DebugUtilsEnabled)
+			commandBuffer.beginDebugUtilsLabelEXT({ .pLabelName = label });
+	}
+
+	void RenderDevice::EndDebugLabel(vk::raii::CommandBuffer& commandBuffer) const
+	{
+		if (m_DebugUtilsEnabled)
+			commandBuffer.endDebugUtilsLabelEXT();
+	}
+
+	GPUDebugScope::GPUDebugScope(const RenderDevice& renderDevice, vk::raii::CommandBuffer& commandBuffer, const char* label)
+		: m_RenderDevice(renderDevice), m_CommandBuffer(commandBuffer)
+	{
+		m_RenderDevice.BeginDebugLabel(m_CommandBuffer, label);
+	}
+
+	GPUDebugScope::~GPUDebugScope()
+	{
+		m_RenderDevice.EndDebugLabel(m_CommandBuffer);
 	}
 
 	uint64_t RenderDevice::Submit(QueueType queue, const SubmitDesc& desc)
@@ -243,26 +306,29 @@ namespace Candle {
 												   .ppEnabledExtensionNames = enabledExtensions.data() };
 
 		m_LogicalDevice = vk::raii::Device(m_PhysicalDevice, deviceCreateInfo);
+		SetDebugName(*m_LogicalDevice, "Candle Device");
 
 		vk::SemaphoreTypeCreateInfo timelineType{ .semaphoreType = vk::SemaphoreType::eTimeline, .initialValue = 0 };
 		vk::SemaphoreCreateInfo timelineCreateInfo{ .pNext = &timelineType };
 
 		// Queue index 0 within each family, the only queue created in it
-		auto createQueue = [&](QueueType queue, uint32_t family)
+		auto createQueue = [&](QueueType queue, uint32_t family, const std::string& name)
 		{
 			QueueState& state = m_QueueStates[std::to_underlying(queue)];
 			state.Queue = vk::raii::Queue(m_LogicalDevice, family, 0);
 			state.Timeline = vk::raii::Semaphore(m_LogicalDevice, timelineCreateInfo);
+			SetDebugName(*state.Queue, name + " Queue");
+			SetDebugName(*state.Timeline, name + " Timeline");
 			return &state;
 		};
 
 		constexpr size_t graphicsSlot = std::to_underlying(QueueType::Graphics);
 		constexpr size_t transferSlot = std::to_underlying(QueueType::Transfer);
-		m_Queues[graphicsSlot] = createQueue(QueueType::Graphics, m_QueueFamilies.Graphics);
+		m_Queues[graphicsSlot] = createQueue(QueueType::Graphics, m_QueueFamilies.Graphics, "Graphics");
 		if (m_QueueFamilies.Transfer == m_QueueFamilies.Graphics)
 			m_Queues[transferSlot] = m_Queues[graphicsSlot];
 		else
-			m_Queues[transferSlot] = createQueue(QueueType::Transfer, m_QueueFamilies.Transfer);
+			m_Queues[transferSlot] = createQueue(QueueType::Transfer, m_QueueFamilies.Transfer, "Transfer");
 	}
 
 }

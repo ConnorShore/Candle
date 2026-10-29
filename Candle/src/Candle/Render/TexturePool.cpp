@@ -3,6 +3,7 @@
 #include "GPUAllocator.h"
 #include "GPUUploader.h"
 #include "GPUResourceRegistry.h"
+#include "BindlessTable.h"
 
 #include "VulkanUtils.h"
 
@@ -31,13 +32,14 @@ namespace Candle {
 		}();
 	}
 
-	TexturePool::TexturePool(GPUAllocator& allocator, GPUUploader& uploader, GPUResourceRegistry& registry)
-		: m_Allocator(allocator), m_Uploader(uploader), m_Textures(registry, kMaxTextures)
+	TexturePool::TexturePool(GPUAllocator& allocator, GPUUploader& uploader, GPUResourceRegistry& registry, BindlessTable& bindlessTable)
+		: m_Allocator(allocator), m_Uploader(uploader), m_BindlessTable(bindlessTable), m_Textures(registry, kMaxTextures)
 	{
 		for (size_t i = 0; i < kDefaultTexels.size(); ++i)
 		{
 			m_DefaultTextures[i] = CreateTexture({
-				.Data = kDefaultTexels[i], .Extent = { 1, 1 }, .Format = TextureFormat::eRgba8, .ColorSpace = TextureColorSpace::eLinear });
+				.Data = kDefaultTexels[i], .Extent = { 1, 1 }, .Format = TextureFormat::Rgba8, .ColorSpace = TextureColorSpace::Linear,
+				.DebugName = std::format("Default Texture {}", i) });
 
 			// A fresh pool hands out slots in order, which is what makes each default's bindless index its enum value
 			CDL_CORE_ASSERT(m_DefaultTextures[i].Index == i, "Default textures must occupy the pool's first slots");
@@ -51,8 +53,9 @@ namespace Candle {
 			"Texture data must be Extent.x * Extent.y tightly packed texels of its format");
 
 		GPUImage image = m_Allocator.CreateImage(GPUImageSpec{
-			.m_Extent = spec.Extent,
-			.m_Format = ToVulkanFormat(spec.Format, spec.ColorSpace),
+			.Extent = spec.Extent,
+			.Format = ToVulkanFormat(spec.Format, spec.ColorSpace),
+			.DebugName = spec.DebugName
 			});
 
 		ImageUploadSpec uploadSpec{
@@ -66,7 +69,12 @@ namespace Candle {
 			vk::PipelineStageFlagBits2::eVertexShader | vk::PipelineStageFlagBits2::eComputeShader | vk::PipelineStageFlagBits2::eFragmentShader,
 			vk::AccessFlagBits2::eShaderSampledRead);
 
-		return m_Textures.Insert(TextureEntry{ .Image = std::move(image) });
+		vk::ImageView view = image.GetImageView();
+		GPUTextureHandle handle = m_Textures.Insert(TextureEntry{ .Image = std::move(image) });
+
+		// Published here so no texture can be handed out before a shader can sample it
+		m_BindlessTable.WriteTexture(handle.Index, view);
+		return handle;
 	}
 
 	void TexturePool::ReleaseTexture(GPUTextureHandle handle)

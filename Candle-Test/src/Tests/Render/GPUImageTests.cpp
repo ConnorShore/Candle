@@ -26,15 +26,15 @@ namespace {
 
 	GPUImage CreateImage(GPUAllocator& allocator)
 	{
-		return allocator.CreateImage({ .m_Extent = { 4, 2 }, .m_Format = vk::Format::eR8G8B8A8Unorm });
+		return allocator.CreateImage({ .Extent = { 4, 2 }, .Format = vk::Format::eR8G8B8A8Unorm });
 	}
 
-	// Every implementation must support D32 or X8_D24 as a depth attachment; desktop GPUs all have D32, as Renderer assumes.
+	// D16 is the one depth format every implementation must support as an attachment
 	const GPUImageSpec kDepthSpec{
-		.m_Extent = { 4, 2 },
-		.m_Format = vk::Format::eD32Sfloat,
-		.m_Usage = vk::ImageUsageFlagBits::eDepthStencilAttachment,
-		.m_Aspect = vk::ImageAspectFlagBits::eDepth };
+		.Extent = { 4, 2 },
+		.Format = vk::Format::eD16Unorm,
+		.Usage = vk::ImageUsageFlagBits::eDepthStencilAttachment,
+		.Aspect = vk::ImageAspectFlagBits::eDepth };
 
 	VkDeviceSize AllocationSize(GPUAllocator& allocator, const GPUImage& image)
 	{
@@ -50,8 +50,8 @@ CDL_TEST_CASE(GPUImage, DefaultSpecIsAnUploadableSampledColorImage, Unit)
 {
 	const GPUImageSpec spec;
 
-	CDL_EXPECT(spec.m_Usage == (vk::ImageUsageFlagBits::eSampled | vk::ImageUsageFlagBits::eTransferDst));
-	CDL_EXPECT(spec.m_Aspect == vk::ImageAspectFlags{ vk::ImageAspectFlagBits::eColor });
+	CDL_EXPECT(spec.Usage == (vk::ImageUsageFlagBits::eSampled | vk::ImageUsageFlagBits::eTransferDst));
+	CDL_EXPECT(spec.Aspect == vk::ImageAspectFlags{ vk::ImageAspectFlagBits::eColor });
 }
 
 // A depth view with the colour aspect fails validation, so this fails if the spec's usage or aspect stops reaching Vulkan.
@@ -84,14 +84,14 @@ CDL_TEST_CASE(GPUImage, RecreateFreesTheOldImageAndTakesTheNewSpec, Gpu)
 		{
 			GPUImage image = gpu.Allocator.CreateImage(kDepthSpec);
 			GPUImageSpec grown = kDepthSpec;
-			grown.m_Extent = kGrownExtent;
+			grown.Extent = kGrownExtent;
 
 			image.Recreate(grown, gpu.Allocator);
 
 			CDL_EXPECT(image.GetImage());
 			CDL_EXPECT(image.GetImageView());
 			CDL_EXPECT_EQ(LiveAllocations(gpu.Allocator), 1u);
-			CDL_EXPECT_GE(AllocationSize(gpu.Allocator, image), VkDeviceSize{ kGrownExtent.x } * kGrownExtent.y * sizeof(float));
+			CDL_EXPECT_GE(AllocationSize(gpu.Allocator, image), VkDeviceSize{ kGrownExtent.x } * kGrownExtent.y * sizeof(uint16_t));
 		}
 		CDL_EXPECT_EQ(LiveAllocations(gpu.Allocator), 0u);
 	}

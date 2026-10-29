@@ -7,6 +7,7 @@ namespace Candle {
 
 	class GeometryPool;
 
+	// Threading: main thread only, like the AssetManager calling it
 	class MeshAssetHandler : public AssetHandler<MeshAsset>
 	{
 	public:

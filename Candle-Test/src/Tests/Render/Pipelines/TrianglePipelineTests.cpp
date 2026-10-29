@@ -76,7 +76,7 @@ CDL_TEST_CASE(TrianglePipeline, BuildsAPipelineWithoutValidationMessages, Gpu)
 	{
 		TestDevice gpu;
 		BindlessTable bindless(gpu.Device);
-		Pipeline pipeline(TrianglePipeline{}.CreateSpecification(gpu.Device, kColorFormat, kDepthFormat), gpu.Device, bindless, kColorFormat);
+		Pipeline pipeline(TrianglePipeline{}.CreateSpecification(gpu.Device, kColorFormat, kDepthFormat), gpu.Device, bindless);
 
 		CDL_EXPECT(*pipeline.GetPipeline());
 		CDL_EXPECT(*pipeline.GetLayout());
@@ -104,7 +104,7 @@ CDL_TEST_CASE(TrianglePipeline, ShaderPushBlockMatchesMeshDrawPushConstants, Gpu
 		for (const ShaderEntryPoint& entryPoint : spec.Shader->GetEntryPoints())
 		{
 			CDL_NOTE(entryPoint.Name);
-			ExpectPushBlockMatches<PushConstants>(entryPoint.m_PushConstantBlock, members);
+			ExpectPushBlockMatches<PushConstants>(entryPoint.PushConstants, members);
 		}
 	}
 	ExpectNoVulkanDebugMessages(logs);

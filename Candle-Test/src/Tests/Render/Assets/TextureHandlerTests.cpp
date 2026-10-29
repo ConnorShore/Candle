@@ -21,7 +21,7 @@ using Candle::Test::Type::Gpu;
 
 namespace {
 
-	SharedPtr<Texture> CreateTextureAsset(const std::filesystem::path& path, TextureColorSpace colorSpace = TextureColorSpace::eSrgb)
+	SharedPtr<Texture> CreateTextureAsset(const std::filesystem::path& path, TextureColorSpace colorSpace = TextureColorSpace::Srgb)
 	{
 		return SharedPtr<Texture>::Create(path.stem().string(), path, TextureData{ .Sampler = SamplerType::PointClamp, .ColorSpace = colorSpace });
 	}
@@ -39,7 +39,7 @@ CDL_TEST_CASE(TextureHandler, LoadUploadsTheFileAndStoresItsHandle, Gpu)
 	{
 		TempDirectory dir;
 		TestTextures gpu;
-		TextureHandler handler(gpu.Pool, gpu.Bindless);
+		TextureHandler handler(gpu.Pool);
 		IAssetHandler& untyped = handler;
 		SharedPtr<Texture> asset = CreateTextureAsset(WritePPM(dir, "White.ppm", { 1, 1 }, std::array<Texel, 1>{ kWhite }));
 
@@ -62,22 +62,22 @@ CDL_TEST_CASE(TextureHandler, LoadFillsInTheExtentAndFormatFromTheFile, Gpu)
 	{
 		TempDirectory dir;
 		TestTextures gpu;
-		TextureHandler handler(gpu.Pool, gpu.Bindless);
+		TextureHandler handler(gpu.Pool);
 		IAssetHandler& untyped = handler;
 		const std::array<Texel, 6> texels = { kRed, kGreen, kBlue, kWhite, kRed, kGreen };
 		const std::filesystem::path path = WritePPM(dir, "Wide.ppm", { 3, 2 }, texels);
 
-		// Starts with a format and extent the file disagrees with, since eRgba8 and 0 x 0 are what TextureData defaults to
+		// Starts with a format and extent the file disagrees with, since Rgba8 and 0 x 0 are what TextureData defaults to
 		SharedPtr<Texture> asset = SharedPtr<Texture>::Create("Wide", path, TextureData{
-			.Sampler = SamplerType::PointClamp, .ColorSpace = TextureColorSpace::eLinear, .Format = TextureFormat::eR8, .Extent = { 1, 1 } });
+			.Sampler = SamplerType::PointClamp, .ColorSpace = TextureColorSpace::Linear, .Format = TextureFormat::R8, .Extent = { 1, 1 } });
 
 		untyped.OnLoad(*asset);
 
 		const TextureData& data = asset->GetTextureData();
 		CDL_EXPECT(data.Extent == glm::uvec2(3, 2));
-		CDL_EXPECT_EQ(data.Format, TextureFormat::eRgba8);	// The loader expands RGB, so a PPM comes back as RGBA8
+		CDL_EXPECT_EQ(data.Format, TextureFormat::Rgba8);	// The loader expands RGB, so a PPM comes back as RGBA8
 		CDL_EXPECT_EQ(data.Sampler, SamplerType::PointClamp);
-		CDL_EXPECT_EQ(data.ColorSpace, TextureColorSpace::eLinear);
+		CDL_EXPECT_EQ(data.ColorSpace, TextureColorSpace::Linear);
 	}
 	ExpectNoVulkanDebugMessages(logs);
 }
@@ -91,7 +91,7 @@ CDL_TEST_CASE(TextureHandler, LoadPublishesTheTextureAtItsSlotOfTheBindlessTable
 	{
 		TempDirectory dir;
 		TestTextures gpu;
-		TextureHandler handler(gpu.Pool, gpu.Bindless);
+		TextureHandler handler(gpu.Pool);
 		IAssetHandler& untyped = handler;
 		SharedPtr<Texture> red = CreateTextureAsset(WritePPM(dir, "Red.ppm", { 1, 1 }, std::array<Texel, 1>{ kRed }));
 		SharedPtr<Texture> green = CreateTextureAsset(WritePPM(dir, "Green.ppm", { 1, 1 }, std::array<Texel, 1>{ kGreen }));
@@ -117,11 +117,11 @@ CDL_TEST_CASE(TextureHandler, LoadTakesTheColorSpaceFromTheAsset, Gpu)
 	{
 		TempDirectory dir;
 		TestTextures gpu;
-		TextureHandler handler(gpu.Pool, gpu.Bindless);
+		TextureHandler handler(gpu.Pool);
 		IAssetHandler& untyped = handler;
 		const std::filesystem::path path = WritePPM(dir, "Grey.ppm", { 1, 1 }, std::array<Texel, 1>{ Texel{ 188, 188, 188, 255 } });
-		SharedPtr<Texture> srgb = CreateTextureAsset(path, TextureColorSpace::eSrgb);
-		SharedPtr<Texture> linear = CreateTextureAsset(path, TextureColorSpace::eLinear);
+		SharedPtr<Texture> srgb = CreateTextureAsset(path, TextureColorSpace::Srgb);
+		SharedPtr<Texture> linear = CreateTextureAsset(path, TextureColorSpace::Linear);
 		untyped.OnLoad(*srgb);
 		untyped.OnLoad(*linear);
 		CDL_CHECK(srgb->GetGPUHandle().IsValid() && linear->GetGPUHandle().IsValid());
@@ -142,7 +142,7 @@ CDL_TEST_CASE(TextureHandler, LoadOfAMissingFileLeavesNoTexture, Gpu)
 	{
 		TempDirectory dir;
 		TestTextures gpu;
-		TextureHandler handler(gpu.Pool, gpu.Bindless);
+		TextureHandler handler(gpu.Pool);
 		IAssetHandler& untyped = handler;
 		SharedPtr<Texture> asset = CreateTextureAsset(dir / "Missing.ppm");
 
@@ -161,7 +161,7 @@ CDL_TEST_CASE(TextureHandler, UnloadReleasesTheTextureAndClearsItsHandle, Gpu)
 	{
 		TempDirectory dir;
 		TestTextures gpu;
-		TextureHandler handler(gpu.Pool, gpu.Bindless);
+		TextureHandler handler(gpu.Pool);
 		IAssetHandler& untyped = handler;
 		SharedPtr<Texture> asset = CreateTextureAsset(WritePPM(dir, "White.ppm", { 1, 1 }, std::array<Texel, 1>{ kWhite }));
 		untyped.OnLoad(*asset);
@@ -186,7 +186,7 @@ CDL_TEST_CASE(TextureHandler, AssetManagerLoadsTexturesFromAPathThroughIt, Gpu)
 		TempDirectory dir;
 		TestTextures gpu;
 		AssetManager assets;	// After the pool its handler uploads into, so it is destroyed first
-		assets.RegisterAssetHandler(ScopedPtr<TextureHandler>::Create(gpu.Pool, gpu.Bindless));
+		assets.RegisterAssetHandler(ScopedPtr<TextureHandler>::Create(gpu.Pool));
 
 		const uint64_t uuid = assets.LoadAsset<Texture>("Box", WritePPM(dir, "Box.ppm", { 1, 1 }, std::array<Texel, 1>{ kWhite }));
 		const SharedPtr<Texture> asset = assets.GetAsset<Texture>("Box");
@@ -206,7 +206,7 @@ CDL_TEST_CASE(TextureHandler, AssetManagerUnloadsTexturesThroughIt, Gpu)
 		TempDirectory dir;
 		TestTextures gpu;
 		AssetManager assets;
-		assets.RegisterAssetHandler(ScopedPtr<TextureHandler>::Create(gpu.Pool, gpu.Bindless));
+		assets.RegisterAssetHandler(ScopedPtr<TextureHandler>::Create(gpu.Pool));
 		SharedPtr<Texture> asset = CreateTextureAsset(WritePPM(dir, "White.ppm", { 1, 1 }, std::array<Texel, 1>{ kWhite }));
 		assets.LoadAsset(asset);
 

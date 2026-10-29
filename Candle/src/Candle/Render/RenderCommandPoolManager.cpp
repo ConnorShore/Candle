@@ -6,15 +6,16 @@ namespace Candle {
 
 #pragma region ThreadFrameCommands Impl
 
-	ThreadFrameCommands::ThreadFrameCommands(RenderDevice& renderDevice, uint32_t queueFamilyIndex)
+	ThreadFrameCommands::ThreadFrameCommands(RenderDevice& renderDevice, uint32_t queueFamilyIndex, const std::string& debugName)
 		: m_RenderDevice(renderDevice)
 	{
-		vk::CommandPoolCreateInfo poolInfo{ 
+		vk::CommandPoolCreateInfo poolInfo{
 			.flags = vk::CommandPoolCreateFlagBits::eResetCommandBuffer,
-			.queueFamilyIndex = queueFamilyIndex 
+			.queueFamilyIndex = queueFamilyIndex
 		};
 
 		m_CommandPool = vk::raii::CommandPool(m_RenderDevice.GetDevice(), poolInfo);
+		m_RenderDevice.SetDebugName(*m_CommandPool, debugName);
 	}
 
 	vk::raii::CommandBuffer& ThreadFrameCommands::AquireCommandBuffer()
@@ -48,7 +49,8 @@ namespace Candle {
 
 			for (uint32_t threadIndex = 0; threadIndex < threadCount; ++threadIndex)
 			{
-				m_GraphicsCommands[frameIndex].emplace_back(renderDevice, renderDevice.GetQueueFamily(QueueType::Graphics));
+				std::string debugName = std::format("Worker {} Command Pool [frame {}]", threadIndex, frameIndex);
+				m_GraphicsCommands[frameIndex].emplace_back(renderDevice, renderDevice.GetQueueFamily(QueueType::Graphics), debugName);
 			}
 		}
 	}

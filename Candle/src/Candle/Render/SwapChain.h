@@ -21,11 +21,11 @@ namespace Candle {
 
 	// Holds the vulkan swapchain, surface, images and image views; dynamic rendering needs no framebuffers
 	// Also owns the binary semaphores handing images to and from presentation, which can't use timelines
-	// Can be used on render thread only
+	// Threading: constructed on the main thread, which creates the surface; render thread only after that
 	class SwapChain
 	{
 	public:
-		SwapChain(RenderInstance& renderInstance, RenderDevice& renderDevice, Window& window);
+		SwapChain(RenderInstance& renderInstance, RenderDevice& renderDevice, Window& window, bool enableVSync = true);
 		~SwapChain() = default;
 
 		// Signals GetAcquireWait(frameIndex); the submit that last waited on it must have retired
@@ -62,6 +62,7 @@ namespace Candle {
 		vk::raii::SwapchainKHR	m_SwapChain{ nullptr };
 		vk::SurfaceFormatKHR	m_SwapChainSurfaceFormat;
 		glm::uvec2				m_RequestedExtent;	// Set by Recreate; the real extent is on each image's desc
+		bool					m_EnableVSync;
 
 		std::vector<SwapChainImage> m_SwapChainImages;
 

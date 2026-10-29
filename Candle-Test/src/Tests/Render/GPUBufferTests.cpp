@@ -31,7 +31,7 @@ namespace {
 
 	GPUBuffer CreateStorageBuffer(GPUAllocator& allocator)
 	{
-		return allocator.CreateBuffer({ .m_Size = kSize, .m_Usage = vk::BufferUsageFlagBits::eStorageBuffer });
+		return allocator.CreateBuffer({ .Size = kSize, .Usage = vk::BufferUsageFlagBits::eStorageBuffer });
 	}
 
 	void ExpectEmpty(const GPUBuffer& buffer)
@@ -73,7 +73,7 @@ CDL_TEST_CASE(GPUBuffer, HasADeviceAddressOnlyWhenCreatedForOne, Gpu)
 	LoggerFixture logs(LogLevel::Warn, kRenderChannelMask);
 	{
 		TestAllocator gpu;
-		const GPUBufferSpec addressable{ .m_Size = kSize, .m_Usage = vk::BufferUsageFlagBits::eStorageBuffer | vk::BufferUsageFlagBits::eShaderDeviceAddress };
+		const GPUBufferSpec addressable{ .Size = kSize, .Usage = vk::BufferUsageFlagBits::eStorageBuffer | vk::BufferUsageFlagBits::eShaderDeviceAddress };
 		GPUBuffer first = gpu.Allocator.CreateBuffer(addressable);
 		GPUBuffer second = gpu.Allocator.CreateBuffer(addressable);
 		GPUBuffer plain = CreateStorageBuffer(gpu.Allocator);
@@ -111,8 +111,8 @@ CDL_TEST_CASE(GPUBuffer, MoveConstructTransfersOwnership, Gpu)
 		TestAllocator gpu;
 		{
 			GPUBuffer original = gpu.Allocator.CreateBuffer({
-				.m_Size = kSize,
-				.m_Usage = vk::BufferUsageFlagBits::eStorageBuffer | vk::BufferUsageFlagBits::eShaderDeviceAddress });
+				.Size = kSize,
+				.Usage = vk::BufferUsageFlagBits::eStorageBuffer | vk::BufferUsageFlagBits::eShaderDeviceAddress });
 			const vk::Buffer handle = original.GetBuffer();
 			const vk::DeviceAddress address = original.GetDeviceAddress();
 

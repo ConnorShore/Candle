@@ -44,22 +44,22 @@ CDL_TEST_CASE(Texture, WithoutTextureDataItIsAnSrgbLinearWrapTexture, Unit)
 {
 	const Texture texture(kTextureName, kTexturePath);
 
-	CDL_EXPECT_EQ(texture.GetTextureData().ColorSpace, TextureColorSpace::eSrgb);
+	CDL_EXPECT_EQ(texture.GetTextureData().ColorSpace, TextureColorSpace::Srgb);
 	CDL_EXPECT_EQ(texture.GetTextureData().Sampler, SamplerType::LinearWrap);
 }
 
 CDL_TEST_CASE(Texture, KeepsTheTextureDataItIsGiven, Unit)
 {
-	const Texture texture(kTextureName, kTexturePath, TextureData{ .Sampler = SamplerType::PointClamp, .ColorSpace = TextureColorSpace::eLinear });
+	const Texture texture(kTextureName, kTexturePath, TextureData{ .Sampler = SamplerType::PointClamp, .ColorSpace = TextureColorSpace::Linear });
 
 	CDL_EXPECT_EQ(texture.GetTextureData().Sampler, SamplerType::PointClamp);
-	CDL_EXPECT_EQ(texture.GetTextureData().ColorSpace, TextureColorSpace::eLinear);
+	CDL_EXPECT_EQ(texture.GetTextureData().ColorSpace, TextureColorSpace::Linear);
 }
 
 // TexturePool sizes the data it accepts from this, so a wrong entry fails its assert on every texture of that format.
 CDL_TEST_CASE(TextureData, BytesPerTexelCountsEachFormatsChannels, Unit)
 {
-	CDL_EXPECT_EQ(BytesPerTexel(TextureFormat::eRgba8), 4u);
-	CDL_EXPECT_EQ(BytesPerTexel(TextureFormat::eRg8), 2u);
-	CDL_EXPECT_EQ(BytesPerTexel(TextureFormat::eR8), 1u);
+	CDL_EXPECT_EQ(BytesPerTexel(TextureFormat::Rgba8), 4u);
+	CDL_EXPECT_EQ(BytesPerTexel(TextureFormat::Rg8), 2u);
+	CDL_EXPECT_EQ(BytesPerTexel(TextureFormat::R8), 1u);
 }

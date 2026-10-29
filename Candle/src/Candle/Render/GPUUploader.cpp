@@ -18,6 +18,7 @@ namespace Candle {
 		vk::CommandPoolCreateInfo poolInfo{ .queueFamilyIndex = m_RenderDevice.GetQueueFamily(QueueType::Graphics) };
 
 		m_CommandPool = vk::raii::CommandPool(device, poolInfo);
+		m_RenderDevice.SetDebugName(*m_CommandPool, "Uploader Command Pool");
 
 		vk::CommandBufferAllocateInfo allocInfo{
 			.commandPool = m_CommandPool,
@@ -25,6 +26,7 @@ namespace Candle {
 			.commandBufferCount = 1
 		};
 		m_CommandBuffer = std::move(vk::raii::CommandBuffers(device, allocInfo).front());
+		m_RenderDevice.SetDebugName(*m_CommandBuffer, "Uploader Command Buffer");
 	}
 
 	GPUUploader::~GPUUploader()
@@ -44,9 +46,10 @@ namespace Candle {
 			return;
 
 		GPUBuffer stagingBuffer = m_Allocator.CreateBuffer({
-			.m_Size = totalSize,
-			.m_Usage = vk::BufferUsageFlagBits::eTransferSrc,
-			.m_Flags = VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT
+			.Size = totalSize,
+			.Usage = vk::BufferUsageFlagBits::eTransferSrc,
+			.Flags = VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT,
+			.DebugName = "Buffer Staging"
 			});
 
 		// The pool can't be reset while the previous upload may still be executing
@@ -95,9 +98,10 @@ namespace Candle {
 			return;
 
 		GPUBuffer stagingBuffer = m_Allocator.CreateBuffer({
-			.m_Size = totalSize,
-			.m_Usage = vk::BufferUsageFlagBits::eTransferSrc,
-			.m_Flags = VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT
+			.Size = totalSize,
+			.Usage = vk::BufferUsageFlagBits::eTransferSrc,
+			.Flags = VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT,
+			.DebugName = "Image Staging"
 			});
 
 		// Upload image bytes (cpu) to a staging buffer

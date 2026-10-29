@@ -18,12 +18,6 @@ using namespace Candle;
 using namespace Candle::Test;
 using Candle::Test::Type::Unit;
 
-namespace {
-
-	constexpr uint16_t kAssetChannelMask = static_cast<uint16_t>(LogChannel::Asset);
-
-}
-
 // TexturePool only takes four bytes a texel, so an RGB file must come back with an opaque alpha added.
 CDL_TEST_CASE(TextureLoader, DecodesRgbFilesToOpaqueRgba, Unit)
 {
@@ -34,7 +28,7 @@ CDL_TEST_CASE(TextureLoader, DecodesRgbFilesToOpaqueRgba, Unit)
 
 	CDL_CHECK_MSG(loaded.has_value(), loaded.error());
 	CDL_EXPECT(loaded->Extent == glm::uvec2(2, 1));
-	CDL_EXPECT_EQ(loaded->Format, TextureFormat::eRgba8);
+	CDL_EXPECT_EQ(loaded->Format, TextureFormat::Rgba8);
 	CDL_EXPECT(ToTexels(loaded->Data) == (std::vector<Texel>{ { 10, 20, 30, 255 }, { 40, 50, 60, 255 } }));
 }
 
@@ -50,18 +44,16 @@ CDL_TEST_CASE(TextureLoader, KeepsTheFilesRowOrder, Unit)
 	CDL_EXPECT(ToTexels(loaded->Data) == (std::vector<Texel>{ kRed, kBlue }));
 }
 
-CDL_TEST_CASE(TextureLoader, AMissingFileIsAnErrorAndIsLogged, Unit)
+// The loader only reports the error; TextureHandler is the one that logs it
+CDL_TEST_CASE(TextureLoader, AMissingFileIsAnErrorNamingIt, Unit)
 {
-	LoggerFixture logs(LogLevel::Warn, kAssetChannelMask);
 	TempDirectory dir;
 
 	const auto loaded = TextureLoader::LoadTexture(dir / "Missing.png");
 
-	CDL_EXPECT_FALSE(loaded.has_value());
-	CDL_CHECK(Logger::Flush());
-	CDL_CHECK_EQ(logs.Records.size(), 1u);
-	CDL_EXPECT_EQ(logs.Records[0].Level, LogLevel::Error);
-	CDL_EXPECT(JoinedMessage(logs.Records, 0).contains("Missing.png"));
+	CDL_CHECK_FALSE(loaded.has_value());
+	CDL_EXPECT_MSG(loaded.error().contains("Missing.png"), loaded.error());
+	CDL_EXPECT_MSG(loaded.error().contains("NotFound"), loaded.error());
 }
 
 // An empty file reads successfully, so it reaches the decoder with no bytes; both it and garbage must fail there.

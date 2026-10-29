@@ -8,6 +8,7 @@
 
 namespace Candle {
 
+	// Threading: main thread only; TextureHandler fills in its data and GPU handle when the AssetManager loads it
 	class Texture : public Asset
 	{
 	public:

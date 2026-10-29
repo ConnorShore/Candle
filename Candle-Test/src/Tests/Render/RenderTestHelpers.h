@@ -126,12 +126,11 @@ namespace Candle::Test {
 	struct TestTextures : TestPoolBase
 	{
 		BindlessTable Bindless{ Device };
-		TexturePool Pool{ Allocator, Uploader, Registry };
+		TexturePool Pool{ Allocator, Uploader, Registry, Bindless };
 
-		// Publishes the defaults as RenderManager does, then drains their staging so a test counts only its own allocations
+		// Drains the defaults' staging so a test counts only its own allocations
 		inline TestTextures()
 		{
-			Bindless.WriteDefaultTextures(Pool);
 			Device.WaitIdle();
 			Uploader.FreeCompletedStagingBuffers();
 		}
@@ -177,9 +176,9 @@ namespace Candle::Test {
 	inline GPUBuffer CreateHostBuffer(GPUAllocator& allocator, vk::DeviceSize size)
 	{
 		return allocator.CreateBuffer({
-			.m_Size = size,
-			.m_Usage = vk::BufferUsageFlagBits::eTransferDst,
-			.m_Flags = VMA_ALLOCATION_CREATE_HOST_ACCESS_RANDOM_BIT });
+			.Size = size,
+			.Usage = vk::BufferUsageFlagBits::eTransferDst,
+			.Flags = VMA_ALLOCATION_CREATE_HOST_ACCESS_RANDOM_BIT });
 	}
 
 	// Invalidates first, in case the memory is not host-coherent.
@@ -304,6 +303,13 @@ namespace Candle::Test {
 			CDL_SKIP(std::format("{} is not compiled; run Build.py shaders", spirvPath.string()));
 	}
 
+	inline SharedPtr<Shader> LoadTestShader(const std::string& name, const std::filesystem::path& spirvPath)
+	{
+		auto shader = ShaderLoader::LoadShader(name, spirvPath);
+		CDL_CHECK_MSG(shader.has_value(), shader.error());
+		return *shader;
+	}
+
 	// One RGBA8 texel, the only layout TexturePool takes.
 	using Texel = std::array<uint8_t, 4>;
 	inline constexpr Texel kRed{ 255, 0, 0, 255 };
@@ -328,20 +334,17 @@ namespace Candle::Test {
 		return path;
 	}
 
-	// What TextureHandler does with a decoded file: create the texture, then publish its view at its slot of set 0.
+	// CreateTexture also publishes the view at its slot of set 0, so the texture is ready to sample
 	inline GPUTextureHandle CreateBoundTexture(TestTextures& gpu, const TextureCreateSpec& spec)
 	{
-		const GPUTextureHandle handle = gpu.Pool.CreateTexture(spec);
-		const TextureInfo info = gpu.Pool.GetTextureInfo(handle);
-		gpu.Bindless.WriteTexture(info.Index, info.ImageView);
-		return handle;
+		return gpu.Pool.CreateTexture(spec);
 	}
 
 	// RGBA8, and linear by default, so a sampled texel comes back as the bytes that went in.
 	inline GPUTextureHandle CreateBoundTexture(TestTextures& gpu, glm::uvec2 extent, std::span<const Texel> texels,
-		TextureColorSpace colorSpace = TextureColorSpace::eLinear)
+		TextureColorSpace colorSpace = TextureColorSpace::Linear)
 	{
-		return CreateBoundTexture(gpu, { .Data = std::as_bytes(texels), .Extent = extent, .Format = TextureFormat::eRgba8, .ColorSpace = colorSpace });
+		return CreateBoundTexture(gpu, { .Data = std::as_bytes(texels), .Extent = extent, .Format = TextureFormat::Rgba8, .ColorSpace = colorSpace });
 	}
 
 	inline constexpr vk::ImageSubresourceRange kColorSubresourceRange{
@@ -420,9 +423,9 @@ namespace Candle::Test {
 		const vk::Extent2D extent{ static_cast<uint32_t>(probes.size()), 1 };
 
 		Pipeline pipeline(PipelineSpecification{
-			.Shader = ShaderLoader::LoadShader("BindlessFixture", kBindlessFixturePath, gpu.Device),
+			.Shader = LoadTestShader("BindlessFixture", kBindlessFixturePath),
 			.ColorAttachmentFormats = { kTargetFormat },
-			.CullBackFaces = false }, gpu.Device, gpu.Bindless, kTargetFormat);
+			.CullBackFaces = false }, gpu.Device, gpu.Bindless);
 		vk::PipelineLayout layout = *pipeline.GetLayout();
 
 		OwnedImage target = CreateOwnedImage(gpu.Device, kTargetFormat, extent, 1,

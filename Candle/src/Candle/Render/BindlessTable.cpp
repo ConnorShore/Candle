@@ -2,7 +2,6 @@
 #include "BindlessTable.h"
 #include "RenderDevice.h"
 #include "RenderConstants.h"
-#include "TexturePool.h"
 
 #include "Candle/Platform/Platform.h"
 
@@ -49,6 +48,27 @@ namespace Candle {
 				infos[i] = GetSamplerInfo(static_cast<SamplerType>(i));
 			return infos;
 		}();
+
+		constexpr const char* GetSamplerName(SamplerType type)
+		{
+			switch (type)
+			{
+				case SamplerType::LinearWrap:  return "LinearWrap";
+				case SamplerType::LinearClamp: return "LinearClamp";
+				case SamplerType::PointWrap:   return "PointWrap";
+				case SamplerType::PointClamp:  return "PointClamp";
+				default: break;
+			}
+			std::unreachable();	// Not constexpr, so a SamplerType with no case fails kSamplerNames' constant evaluation
+		}
+
+		// Indexed by SamplerType, like kSamplerInfos
+		constexpr auto kSamplerNames = [] {
+			std::array<const char*, static_cast<size_t>(SamplerType::Count)> names{};
+			for (size_t i = 0; i < names.size(); ++i)
+				names[i] = GetSamplerName(static_cast<SamplerType>(i));
+			return names;
+		}();
 	}
 
 	BindlessTable::BindlessTable(RenderDevice& renderDevice)
@@ -74,6 +94,7 @@ namespace Candle {
 			.pPoolSizes = poolSize.data() 
 		};
 		m_DescriptorPool = vk::raii::DescriptorPool(renderDevice.GetDevice(), poolInfo);
+		renderDevice.SetDebugName(*m_DescriptorPool, "Bindless Descriptor Pool");
 	}
 
 	void BindlessTable::CreateDescriptorSetLayout(RenderDevice& renderDevice)
@@ -103,6 +124,7 @@ namespace Candle {
 		};
 
 		m_DescriptorSetLayout = vk::raii::DescriptorSetLayout(renderDevice.GetDevice(), layoutInfo);
+		renderDevice.SetDebugName(*m_DescriptorSetLayout, "Bindless Set Layout");
 	}
 
 	void BindlessTable::CreateDescriptorSet(RenderDevice& renderDevice)
@@ -115,6 +137,7 @@ namespace Candle {
 			.pSetLayouts = layouts.data() };
 
 		m_DescriptorSet = std::move(vk::raii::DescriptorSets(renderDevice.GetDevice(), allocInfo).front());
+		renderDevice.SetDebugName(*m_DescriptorSet, "Bindless Set");
 
 		// Textures start unwritten, which PartiallyBound allows; TexturePool writes each one through WriteTexture
 
@@ -163,15 +186,6 @@ namespace Candle {
 		m_RenderDevice.GetDevice().updateDescriptorSets({ textureWrite }, {});
 	}
 
-	void BindlessTable::WriteDefaultTextures(const TexturePool& pool)
-	{
-		for (uint32_t i = 0; i < static_cast<uint32_t>(DefaultTexture::Count); ++i)
-		{
-			const TextureInfo info = pool.GetTextureInfo(pool.GetDefaultTexture(static_cast<DefaultTexture>(i)));
-			WriteTexture(info.Index, info.ImageView);
-		}
-	}
-
 	void BindlessTable::BindSet(vk::CommandBuffer commandBuffer, vk::PipelineBindPoint bindPoint, vk::PipelineLayout& pipelineLayout)
 	{
 		commandBuffer.bindDescriptorSets(bindPoint, pipelineLayout, 0, { *m_DescriptorSet }, {});
@@ -180,8 +194,11 @@ namespace Candle {
 	void BindlessTable::CreateSamplers(RenderDevice& renderDevice)
 	{
 		m_Samplers.reserve(kSamplerInfos.size());
-		for (const vk::SamplerCreateInfo& samplerInfo : kSamplerInfos)
-			m_Samplers.emplace_back(renderDevice.GetDevice(), samplerInfo);
+		for (size_t i = 0; i < kSamplerInfos.size(); ++i)
+		{
+			m_Samplers.emplace_back(renderDevice.GetDevice(), kSamplerInfos[i]);
+			renderDevice.SetDebugName(*m_Samplers.back(), std::format("Sampler {}", kSamplerNames[i]));
+		}
 	}
 
 }

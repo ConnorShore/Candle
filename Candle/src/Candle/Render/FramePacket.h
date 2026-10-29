@@ -11,7 +11,7 @@ namespace Candle {
 	struct DrawItem
 	{
 		GPUMeshHandle Mesh;
-		GPUTextureHandle Material;
+		GPUTextureHandle Texture;
 		SamplerType Sampler;
 		uint32_t TransformIndex;	// Index into the FramePacket's TransformData array
 	};

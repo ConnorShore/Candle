@@ -21,7 +21,15 @@ namespace Candle {
 	Application::LoggerScope::LoggerScope(const LoggerSpecification& spec) { Logger::Init(spec); }
 	Application::LoggerScope::~LoggerScope() { Logger::Shutdown(); }
 
-	Application::WindowingScope::WindowingScope(bool enabled) : m_Enabled(enabled) { if (m_Enabled) Platform::InitWindowing(); }
+	Application::WindowingScope::WindowingScope(bool enabled) : m_Enabled(enabled)
+	{
+		if (!m_Enabled)
+			return;
+
+		auto result = Platform::InitWindowing();
+		if (!result)
+			CDL_CORE_PANIC(LogChannel::Window, "Failed to initialize windowing: {}", result.error());
+	}
 	Application::WindowingScope::~WindowingScope() { if (m_Enabled) Platform::ShutdownWindowing(); }
 
 	Application::Application(const ApplicationSpecification& appSpecs)
@@ -114,20 +122,19 @@ namespace Candle {
 		std::vector<DrawItem> drawItems{
 			{
 				.Mesh = meshAsset->GetGPUHandle(),
-				.Material = textureAsset->GetGPUHandle(),
+				.Texture = textureAsset->GetGPUHandle(),
 				.Sampler = textureAsset->GetTextureData().Sampler,
 				.TransformIndex = 0
 			},
 			{
 				.Mesh = meshAsset->GetGPUHandle(),
-				.Material = {},		// The default handle resolves to the flat magenta error texture
+				.Texture = {},		// The default handle resolves to the flat magenta error texture
 				.Sampler = SamplerType::LinearWrap,
 				.TransformIndex = 1
 			}
 		};
 		std::vector<glm::mat4> transforms{ glm::mat4(1.0f), farCube };
 		glm::mat4 viewMatrix = glm::lookAt(eye, target, glm::vec3(0.0f, 1.0f, 0.0f));
-		glm::mat4 projectionMatrix = glm::perspective(glm::radians(45.0f), 16.0f / 9.0f, 0.1f, 100.0f);
 		//
 
 		// Spawn the render thread if we have a render manager
@@ -153,17 +160,25 @@ namespace Candle {
 				const float angle = glm::radians(45.0f) * static_cast<float>(m_FrameStats.TotalTime);
 				transforms[0] = glm::rotate(glm::mat4(1.0f), angle, glm::normalize(glm::vec3(1.0f, 1.0f, 0.0f)));
 
+				const bool minimized = m_Window->IsMinimized();
+				const glm::uvec2 surfaceSize = m_Window->GetSize();
+				const float aspect = surfaceSize.y > 0 ? static_cast<float>(surfaceSize.x) / static_cast<float>(surfaceSize.y) : 1.0f;
+
 				CDL_PROFILE_SCOPE("Application::Run::FramePacket");
 				FramePacket& packet = m_RenderManager->BeginFramePacket();
 				CDL_PROFILE_SCOPE_METADATA(packet.FrameIndex);
 				packet.DrawItems = drawItems;
 				packet.TransformData = transforms;
 				packet.ViewMatrix = viewMatrix;
-				packet.ProjectionMatrix = projectionMatrix;
+				packet.ProjectionMatrix = glm::perspective(glm::radians(45.0f), aspect, 0.1f, 100.0f);
 				packet.Time = m_FrameStats.TotalTime;
-				packet.Minimized = m_Window->IsMinimized();
-				packet.SurfaceSize = m_Window->GetSize();
+				packet.Minimized = minimized;
+				packet.SurfaceSize = surfaceSize;
 				m_RenderManager->SubmitFramePacket(packet);
+
+				// Nothing is presented while minimized, so nothing else holds the loop back
+				if (minimized)
+					Platform::SleepCurrentThread(10);
 			}
 
 			// Update the frame stats

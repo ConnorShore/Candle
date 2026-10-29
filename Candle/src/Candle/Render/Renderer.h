@@ -44,9 +44,7 @@ namespace Candle {
 		BindlessTable& m_BindlessTable;
 		vk::Format m_TargetFormat;
 		vk::Format m_DepthFormat;	// Chosen once, before m_DepthImage; the depth image and every pipeline's spec both take it
-		GPUImage m_DepthImage;	// For now, one depth image for the whole frame; eventually this will be per-pipeline and per-target
-
-		// Eventually this will go in a PipelineLibrary and the RenderPass
+		GPUImage m_DepthImage;	// Shared by every frame in flight, so each frame's first barrier waits for the last one's depth writes
 		std::vector<Pipeline> m_Pipelines;
 	};
 

@@ -62,13 +62,13 @@ namespace {
 		frame.CommandBuffer = std::move(vk::raii::CommandBuffers(gpu.Device.GetDevice(), allocInfo).front());
 
 		frame.FrameData = gpu.Allocator.CreateBuffer({
-			.m_Size = sizeof(GPU::FrameData),
-			.m_Usage = vk::BufferUsageFlagBits::eShaderDeviceAddress,
-			.m_Flags = VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT | VMA_ALLOCATION_CREATE_MAPPED_BIT });
+			.Size = sizeof(GPU::FrameData),
+			.Usage = vk::BufferUsageFlagBits::eShaderDeviceAddress,
+			.Flags = VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT | VMA_ALLOCATION_CREATE_MAPPED_BIT });
 		frame.TransformData = gpu.Allocator.CreateBuffer({
-			.m_Size = kMaxTestTransforms * sizeof(glm::mat4),
-			.m_Usage = vk::BufferUsageFlagBits::eShaderDeviceAddress,
-			.m_Flags = VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT | VMA_ALLOCATION_CREATE_MAPPED_BIT });
+			.Size = kMaxTestTransforms * sizeof(glm::mat4),
+			.Usage = vk::BufferUsageFlagBits::eShaderDeviceAddress,
+			.Flags = VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT | VMA_ALLOCATION_CREATE_MAPPED_BIT });
 		return frame;
 	}
 
@@ -134,7 +134,7 @@ namespace {
 		{
 			packet.DrawItems.push_back({
 				.Mesh = quad,
-				.Material = layer.Texture,
+				.Texture = layer.Texture,
 				.Sampler = SamplerType::PointClamp,
 				.TransformIndex = static_cast<uint32_t>(packet.TransformData.size()) });
 			packet.TransformData.push_back(layer.Transform);

@@ -8,6 +8,7 @@
 #include <array>
 #include <optional>
 #include <span>
+#include <string>
 #include <utility>
 
 namespace Candle {
@@ -69,6 +70,19 @@ namespace Candle {
 		// VK_EXT_memory_budget is optional, so a device without it is still used. Set at construction, readable from any thread.
 		inline bool HasMemoryBudget() const { return m_HasMemoryBudget; }
 
+		// Names an object for RenderDoc, Nsight and validation messages; does nothing without debug utils (Dist).
+		// Threading: the object must not be in use on another thread, so name it right after creating it.
+		template<typename T>
+		inline void SetDebugName(T object, const std::string& name) const
+		{
+			SetDebugName(T::objectType, reinterpret_cast<uint64_t>(static_cast<typename T::CType>(object)), name);
+		}
+		void SetDebugName(vk::ObjectType type, uint64_t handle, const std::string& name) const;
+
+		// Command buffer labels group commands in RenderDoc and Nsight; use GPUDebugScope rather than calling these directly
+		void BeginDebugLabel(vk::raii::CommandBuffer& commandBuffer, const char* label) const;
+		void EndDebugLabel(vk::raii::CommandBuffer& commandBuffer) const;
+
 	private:
 		// One per distinct VkQueue; roles aliasing one VkQueue point at the same state, sharing its lock and timeline.
 		struct QueueState
@@ -86,9 +100,25 @@ namespace Candle {
 		QueueFamilyIndices m_QueueFamilies{};
 		vk::raii::Device m_LogicalDevice{ nullptr };
 		bool m_HasMemoryBudget{ false };
+		bool m_DebugUtilsEnabled{ false };
 
 		std::array<QueueState, std::to_underlying(QueueType::Count)> m_QueueStates;	// The Transfer entry goes unused while Transfer aliases Graphics
 		std::array<QueueState*, std::to_underlying(QueueType::Count)> m_Queues{};	// Indexed by QueueType, every slot filled
+	};
+
+	// Labels the commands recorded while it is alive. Threading: the thread recording the command buffer.
+	class GPUDebugScope
+	{
+	public:
+		GPUDebugScope(const RenderDevice& renderDevice, vk::raii::CommandBuffer& commandBuffer, const char* label);
+		~GPUDebugScope();
+
+		GPUDebugScope(const GPUDebugScope&) = delete;
+		GPUDebugScope& operator=(const GPUDebugScope&) = delete;
+
+	private:
+		const RenderDevice& m_RenderDevice;
+		vk::raii::CommandBuffer& m_CommandBuffer;
 	};
 
 }

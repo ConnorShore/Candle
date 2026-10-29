@@ -41,25 +41,22 @@ namespace Candle {
 		s_RawEventHookData = userData;
 	}
 
-	void Platform::InitWindowing()
+	std::expected<void, std::string> Platform::InitWindowing()
 	{
 		CDL_CORE_ASSERT(IsMainThread(), "SDL video must be initialized on the main thread");
 
 		if (!SDL_Init(SDL_INIT_VIDEO | SDL_INIT_GAMEPAD))
-		{
-			const std::string error = std::format("SDL_Init failed: {}", SDL_GetError());
-			CDL_CORE_ERROR(LogChannel::Window, "{}", error);
-			throw std::runtime_error(error);
-		}
+			return std::unexpected(std::format("SDL_Init failed: {}", SDL_GetError()));
 
 		// SDL's Vulkan queries require its loader loaded; holding a reference for the backend's lifetime makes that true whenever windowing is.
 		if (!SDL_Vulkan_LoadLibrary(nullptr))
 		{
-			const std::string error = std::format("SDL_Vulkan_LoadLibrary failed: {}", SDL_GetError());
-			CDL_CORE_ERROR(LogChannel::Window, "{}", error);
+			std::string error = std::format("SDL_Vulkan_LoadLibrary failed: {}", SDL_GetError());
 			SDL_Quit();
-			throw std::runtime_error(error);
+			return std::unexpected(error);
 		}
+
+		return {};
 	}
 
 	void Platform::ShutdownWindowing()
@@ -139,11 +136,8 @@ namespace Candle {
 
 		const char* const* extensions = SDL_Vulkan_GetInstanceExtensions(&outCount);
 		if (!extensions)
-		{
-			const std::string error = std::format("SDL_Vulkan_GetInstanceExtensions failed: {}", SDL_GetError());
-			CDL_CORE_ERROR(LogChannel::Render, "{}", error);
-			throw std::runtime_error(error);
-		}
+			CDL_CORE_PANIC(LogChannel::Render, "SDL_Vulkan_GetInstanceExtensions failed: {}", SDL_GetError());
+
 		return extensions;
 	}
 
@@ -151,16 +145,8 @@ namespace Candle {
 	{
 		SDL_Window* sdlWindow = reinterpret_cast<SDL_Window*>(window.GetNativeHandle());
 		VkSurfaceKHR surface = VK_NULL_HANDLE;
-		if (!SDL_Vulkan_CreateSurface(sdlWindow, *renderInstance.GetVulkanInstance(), nullptr, &surface)) {
-			//std::cerr << "Failed to create Vulkan surface: " << SDL_GetError() << std::endl;
-			//vkDestroyInstance(instance, nullptr);
-			//SDL_DestroyWindow(window);
-			//SDL_Quit();
-			//return nullptr;
-
-			CDL_CORE_ERROR(LogChannel::Render, "Failed to create Vulkan surface: {}", SDL_GetError());
-			// Throw error or return some null/invalid surface handle and handle it in the calling code??
-		}
+		if (!SDL_Vulkan_CreateSurface(sdlWindow, *renderInstance.GetVulkanInstance(), nullptr, &surface))
+			CDL_CORE_PANIC(LogChannel::Render, "Failed to create Vulkan surface: {}", SDL_GetError());
 
 		return ::vk::raii::SurfaceKHR{ renderInstance.GetVulkanInstance(), surface };
 	}

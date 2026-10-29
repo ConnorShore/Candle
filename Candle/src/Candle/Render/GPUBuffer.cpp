@@ -6,21 +6,29 @@
 namespace Candle {
 
 	GPUBuffer::GPUBuffer(const GPUBufferSpec& spec, GPUAllocator& allocator)
-		: m_Allocator(allocator.GetAllocator()), m_Size(spec.m_Size)
+		: m_Allocator(allocator.GetAllocator()), m_Size(spec.Size)
 	{
 		vk::BufferCreateInfo bufferInfo{ 
-			.size = spec.m_Size, 
-			.usage = spec.m_Usage, 
+			.size = spec.Size, 
+			.usage = spec.Usage, 
 			.sharingMode = vk::SharingMode::eExclusive 
 		};
 
 		VmaAllocationCreateInfo allocInfo = {};
 		allocInfo.usage = VMA_MEMORY_USAGE_AUTO;
-		allocInfo.flags = spec.m_Flags;
+		allocInfo.flags = spec.Flags;
 
-		vmaCreateBuffer(m_Allocator, reinterpret_cast<VkBufferCreateInfo*>(&bufferInfo), &allocInfo, reinterpret_cast<VkBuffer*>(&m_Buffer), &m_Allocation, nullptr);
+		VkResult result = vmaCreateBuffer(m_Allocator, reinterpret_cast<VkBufferCreateInfo*>(&bufferInfo), &allocInfo, reinterpret_cast<VkBuffer*>(&m_Buffer), &m_Allocation, nullptr);
+		if (result != VK_SUCCESS)
+			CDL_CORE_PANIC(LogChannel::Memory, "Failed to create GPU buffer of {} bytes: {}", spec.Size, vk::to_string(static_cast<vk::Result>(result)));
 
-		if (spec.m_Usage & vk::BufferUsageFlagBits::eShaderDeviceAddress)
+		if (!spec.DebugName.empty())
+		{
+			allocator.GetDevice()->SetDebugName(m_Buffer, spec.DebugName);
+			vmaSetAllocationName(m_Allocator, m_Allocation, spec.DebugName.c_str());
+		}
+
+		if (spec.Usage & vk::BufferUsageFlagBits::eShaderDeviceAddress)
 			m_DeviceAddress = allocator.GetDevice()->GetDevice().getBufferAddress({ .buffer = m_Buffer });
 	}
 
@@ -40,8 +48,7 @@ namespace Candle {
 
 	void GPUBuffer::Destroy()
 	{
-		// TODO: Instead of destroying the buffer immediately, we should defer destruction until the GPU is done using it.
-		// This can be done by adding it to a destruction queue
+		// Immediate, so the owner keeps the buffer alive until the GPU is done with it (a DeletionQueue or a pool slot)
 		// Guarded because vmaDestroyBuffer asserts on a null allocator before checking for null handles
 		if (m_Allocation)
 			vmaDestroyBuffer(m_Allocator, m_Buffer, m_Allocation);

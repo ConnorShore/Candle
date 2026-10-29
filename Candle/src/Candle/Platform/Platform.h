@@ -75,7 +75,7 @@ namespace Candle {
 		static void Shutdown();
 
 		// Window //
-		static void InitWindowing();		// Also loads the Vulkan loader, so a machine without one fails here
+		static std::expected<void, std::string> InitWindowing();		// Also loads the Vulkan loader, so a machine without one fails here
 		static void ShutdownWindowing();
 		static bool IsWindowingInitialized();
 

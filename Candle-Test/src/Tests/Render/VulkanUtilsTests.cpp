@@ -24,13 +24,13 @@ CDL_TEST_CASE(VulkanUtils, ToVulkanVersionPacksLikeVkMakeApiVersion, Unit)
 // sRGB picks the format whose sampler decodes to linear; linear stores the bytes as they are, for data like normals.
 CDL_TEST_CASE(VulkanUtils, ToVulkanFormatPicksTheColorSpacesVariantOfRgba8, Unit)
 {
-	CDL_EXPECT(ToVulkanFormat(TextureFormat::eRgba8, TextureColorSpace::eSrgb) == vk::Format::eR8G8B8A8Srgb);
-	CDL_EXPECT(ToVulkanFormat(TextureFormat::eRgba8, TextureColorSpace::eLinear) == vk::Format::eR8G8B8A8Unorm);
+	CDL_EXPECT(ToVulkanFormat(TextureFormat::Rgba8, TextureColorSpace::Srgb) == vk::Format::eR8G8B8A8Srgb);
+	CDL_EXPECT(ToVulkanFormat(TextureFormat::Rgba8, TextureColorSpace::Linear) == vk::Format::eR8G8B8A8Unorm);
 }
 
 // Their sRGB variants are optional, so asking for one asserts; that path can't run here, since asserts break.
 CDL_TEST_CASE(VulkanUtils, ToVulkanFormatMapsDataFormatsToUnorm, Unit)
 {
-	CDL_EXPECT(ToVulkanFormat(TextureFormat::eRg8, TextureColorSpace::eLinear) == vk::Format::eR8G8Unorm);
-	CDL_EXPECT(ToVulkanFormat(TextureFormat::eR8, TextureColorSpace::eLinear) == vk::Format::eR8Unorm);
+	CDL_EXPECT(ToVulkanFormat(TextureFormat::Rg8, TextureColorSpace::Linear) == vk::Format::eR8G8Unorm);
+	CDL_EXPECT(ToVulkanFormat(TextureFormat::R8, TextureColorSpace::Linear) == vk::Format::eR8Unorm);
 }

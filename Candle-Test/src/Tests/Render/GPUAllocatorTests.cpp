@@ -30,8 +30,8 @@ CDL_TEST_CASE(GPUAllocator, CreatesBuffersWithDeviceAddresses, Gpu)
 	{
 		TestAllocator gpu;
 		GPUBuffer buffer = gpu.Allocator.CreateBuffer({
-			.m_Size = 64,
-			.m_Usage = vk::BufferUsageFlagBits::eStorageBuffer | vk::BufferUsageFlagBits::eShaderDeviceAddress });
+			.Size = 64,
+			.Usage = vk::BufferUsageFlagBits::eStorageBuffer | vk::BufferUsageFlagBits::eShaderDeviceAddress });
 
 		CDL_EXPECT(buffer.GetBuffer());
 		CDL_EXPECT_NE(buffer.GetDeviceAddress(), 0u);

@@ -22,7 +22,8 @@ int main(int argc, char** argv)
 	}
 	catch (const std::exception& e)
 	{
-		std::cout << "Unhandled exception while starting application: " << e.what() << std::endl;
+		// The application, and its logger with it, has already been destroyed by the time this runs
+		std::cout << "Unhandled exception in application: " << e.what() << std::endl;
 		return -1;
 	}
 }

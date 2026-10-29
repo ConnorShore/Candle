@@ -29,7 +29,7 @@ namespace Candle {
 		Shader(const Shader&) = delete;
 		Shader& operator=(const Shader&) = delete;
 
-		const vk::raii::ShaderModule CreateModule(RenderDevice& renderDevice);
+		vk::raii::ShaderModule CreateModule(RenderDevice& renderDevice);
 
 		inline const std::string& GetName() const { return m_Name; }
 		inline const std::filesystem::path& GetFilePath() const { return m_FilePath; }

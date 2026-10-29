@@ -14,7 +14,10 @@ namespace Candle {
 	void MeshAssetHandler::Load(MeshAsset& asset)
 	{
 		const MeshData& meshData = asset.GetMeshData();
-		asset.m_GPUHandle = m_GeometryPool.CreateMesh(meshData.Vertices, meshData.Indices);
+		asset.m_GPUHandle = m_GeometryPool.CreateMesh(meshData.Vertices, meshData.Indices, asset.GetName());
+
+		// The upload copied it into a staging buffer, so keeping the CPU copy would double the mesh in memory
+		asset.m_MeshData = MeshData{};
 	}
 
 	void MeshAssetHandler::Unload(MeshAsset& asset)

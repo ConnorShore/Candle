@@ -18,6 +18,7 @@ namespace Candle {
 		RenderInstance* Instance{ nullptr };
 	};
 
+	// Threading: any thread, since VMA locks internally unless created with VMA_ALLOCATOR_CREATE_EXTERNALLY_SYNCHRONIZED_BIT
 	class GPUAllocator
 	{
 	public:

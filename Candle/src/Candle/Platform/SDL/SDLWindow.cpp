@@ -27,10 +27,7 @@ namespace Candle {
 
 		SDL_Window* sdlWindow = SDL_CreateWindow(info.Title.c_str(), info.Width, info.Height, flags);
 		if (sdlWindow == nullptr)
-		{
-			CDL_CORE_ERROR(LogChannel::Window, "Failed to create SDL window: {}", SDL_GetError());
-			throw std::runtime_error(std::format("Failed to create window '{}'", info.Title));
-		}
+			CDL_CORE_PANIC(LogChannel::Window, "Failed to create window '{}': {}", info.Title, SDL_GetError());
 
 		m_NativeHandle = reinterpret_cast<NativeWindowHandle>(sdlWindow);
 	}

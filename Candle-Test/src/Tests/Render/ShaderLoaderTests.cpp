@@ -1,20 +1,16 @@
-// ShaderLoader on a real device: reflection of a fixture that Build.py shaders compiles from
-// Candle-Test/res/shaders, and rejection of files that are not SPIR-V. Each test fails on any validation message.
+// ShaderLoader: reflection of a fixture that Build.py shaders compiles from Candle-Test/res/shaders, and rejection of
+// files that are not SPIR-V. It never touches a device, so these run headless.
 
 #include "TestFramework.h"
 #include "TestHelpers.h"
 #include "RenderTestHelpers.h"
 
-#include <Candle/Render/RenderDevice.h>
-#include <Candle/Render/RenderInstance.h>
 #include <Candle/Render/Shader.h>
 #include <Candle/Render/ShaderLoader.h>
 
 #include <algorithm>
-#include <exception>
 #include <filesystem>
 #include <format>
-#include <optional>
 #include <span>
 #include <string>
 #include <string_view>
@@ -22,7 +18,7 @@
 using namespace Candle;
 using namespace Candle::Test;
 using namespace std::string_view_literals;
-using Candle::Test::Type::Gpu;
+using Candle::Test::Type::Unit;
 
 namespace {
 
@@ -39,22 +35,14 @@ namespace {
 		return std::move(*fixture);
 	}
 
-	// The loader still reports failure by throwing; returns the message, or nullopt if the load succeeded.
-	std::optional<std::string> LoadError(const std::filesystem::path& path, RenderDevice& device)
+	void ExpectRejectedNaming(const std::filesystem::path& path)
 	{
-		try { ShaderLoader::LoadShader("Rejected", path, device); }
-		catch (const std::exception& e) { return e.what(); }
-		return std::nullopt;
-	}
-
-	void ExpectRejectedNaming(const std::filesystem::path& path, RenderDevice& device)
-	{
-		const std::optional<std::string> error = LoadError(path, device);
-		CDL_EXPECT_MSG(error.has_value(), std::format("{} loaded", path.filename().string()));
-		if (error)
+		auto shader = ShaderLoader::LoadShader("Rejected", path);
+		CDL_EXPECT_MSG(!shader.has_value(), std::format("{} loaded", path.filename().string()));
+		if (!shader)
 		{
-			CDL_NOTE(*error);
-			CDL_EXPECT_MSG(error->contains(path.filename().string()), "the message should name the file");
+			CDL_NOTE(shader.error());
+			CDL_EXPECT_MSG(shader.error().contains(path.filename().string()), "the message should name the file");
 		}
 	}
 
@@ -68,38 +56,33 @@ namespace {
 }
 
 // The names also check that CompileShaders.py's -fvk-use-entrypoint-name survived; without it every one is "main".
-CDL_TEST_CASE(ShaderLoader, ReflectsEveryEntryPointWithItsStage, Gpu)
+CDL_TEST_CASE(ShaderLoader, ReflectsEveryEntryPointWithItsStage, Unit)
 {
 	ReadFixture();
 
-	LoggerFixture logs(LogLevel::Warn, kRenderChannelMask);
+	SharedPtr<Shader> shader = LoadTestShader("Fixture", kFixturePath);
+
+	CDL_EXPECT_EQ(shader->GetName(), std::string("Fixture"));
+	CDL_EXPECT(shader->GetFilePath() == kFixturePath);
+	CDL_EXPECT_EQ(shader->GetEntryPoints().size(), 4u);
+
+	constexpr std::pair<std::string_view, ShaderStage> kExpected[] = {
+		{ "fixtureVertex"sv, ShaderStage::Vertex },
+		{ "fixtureFragment"sv, ShaderStage::Fragment },
+		{ "fixtureClear"sv, ShaderStage::Compute },
+		{ "fixtureIncrement"sv, ShaderStage::Compute },
+	};
+	for (const auto& [name, stage] : kExpected)
 	{
-		TestDevice gpu;
-		SharedPtr<Shader> shader = ShaderLoader::LoadShader("Fixture", kFixturePath, gpu.Device);
-
-		CDL_EXPECT_EQ(shader->GetName(), std::string("Fixture"));
-		CDL_EXPECT(shader->GetFilePath() == kFixturePath);
-		CDL_EXPECT_EQ(shader->GetEntryPoints().size(), 4u);
-
-		constexpr std::pair<std::string_view, ShaderStage> kExpected[] = {
-			{ "fixtureVertex"sv, ShaderStage::Vertex },
-			{ "fixtureFragment"sv, ShaderStage::Fragment },
-			{ "fixtureClear"sv, ShaderStage::Compute },
-			{ "fixtureIncrement"sv, ShaderStage::Compute },
-		};
-		for (const auto& [name, stage] : kExpected)
-		{
-			const ShaderEntryPoint* entryPoint = FindEntryPoint(*shader, name);
-			CDL_EXPECT_MSG(entryPoint != nullptr, std::format("no entry point named {}", name));
-			if (entryPoint)
-				CDL_EXPECT_EQ(entryPoint->Stage, stage);
-		}
+		const ShaderEntryPoint* entryPoint = FindEntryPoint(*shader, name);
+		CDL_EXPECT_MSG(entryPoint != nullptr, std::format("no entry point named {}", name));
+		if (entryPoint)
+			CDL_EXPECT_EQ(entryPoint->Stage, stage);
 	}
-	ExpectNoVulkanDebugMessages(logs);
 }
 
 // Each is caught before the bytes reach the driver: by the open, the size check or the magic number.
-CDL_TEST_CASE(ShaderLoader, RejectsFilesThatAreNotSpirv, Gpu)
+CDL_TEST_CASE(ShaderLoader, RejectsFilesThatAreNotSpirv, Unit)
 {
 	TempDirectory dir;
 	const std::byte notMultipleOfFour[6] = {};
@@ -108,20 +91,15 @@ CDL_TEST_CASE(ShaderLoader, RejectsFilesThatAreNotSpirv, Gpu)
 	// Twelve bytes, so it passes the size check and only the magic number can reject it.
 	CDL_CHECK(Platform::WriteFile(dir / "bad-magic.spv", std::as_bytes(std::span("not SPIR-V!!"sv))).has_value());
 
-	LoggerFixture logs(LogLevel::Warn, kRenderChannelMask);
-	{
-		TestDevice gpu;
-		ExpectRejectedNaming(dir / "missing.spv", gpu.Device);
-		ExpectRejectedNaming(dir / "empty.spv", gpu.Device);
-		ExpectRejectedNaming(dir / "six-bytes.spv", gpu.Device);
-		ExpectRejectedNaming(dir / "bad-magic.spv", gpu.Device);
-	}
-	ExpectNoVulkanDebugMessages(logs);
+	ExpectRejectedNaming(dir / "missing.spv");
+	ExpectRejectedNaming(dir / "empty.spv");
+	ExpectRejectedNaming(dir / "six-bytes.spv");
+	ExpectRejectedNaming(dir / "bad-magic.spv");
 }
 
 // A real header over a cut-off body, as a crashed compile or a half-written hot reload leaves behind. It must be
-// rejected without the driver seeing it: vkCreateShaderModule requires valid SPIR-V, and anything else is undefined.
-CDL_TEST_CASE(ShaderLoader, RejectsTruncatedSpirvBeforeTheDriverSeesIt, Gpu)
+// rejected before a driver could see it: vkCreateShaderModule requires valid SPIR-V, and anything else is undefined.
+CDL_TEST_CASE(ShaderLoader, RejectsTruncatedSpirvBeforeTheDriverSeesIt, Unit)
 {
 	// Before reflection ran first, this input crashed the validation layer (an access violation in
 	// VkLayer_khronos_validation.dll, SDK 1.4.357) and took the whole run with it.
@@ -131,56 +109,41 @@ CDL_TEST_CASE(ShaderLoader, RejectsTruncatedSpirvBeforeTheDriverSeesIt, Gpu)
 	TempDirectory dir;
 	CDL_CHECK(Platform::WriteFile(dir / "truncated.spv", truncated).has_value());
 
-	LoggerFixture logs(LogLevel::Warn, kRenderChannelMask);
-	{
-		TestDevice gpu;
-		ExpectRejectedNaming(dir / "truncated.spv", gpu.Device);
-	}
-	ExpectNoVulkanDebugMessages(logs);
+	ExpectRejectedNaming(dir / "truncated.spv");
 }
 
 // Pipeline's contract check skips an empty block, so an entry point with no push constants must reflect as one.
-CDL_TEST_CASE(ShaderLoader, ReflectsAnEmptyPushBlockForEntryPointsWithout, Gpu)
+CDL_TEST_CASE(ShaderLoader, ReflectsAnEmptyPushBlockForEntryPointsWithout, Unit)
 {
 	ReadFixture();
 
-	LoggerFixture logs(LogLevel::Warn, kRenderChannelMask);
-	{
-		TestDevice gpu;
-		SharedPtr<Shader> shader = ShaderLoader::LoadShader("Fixture", kFixturePath, gpu.Device);
+	SharedPtr<Shader> shader = LoadTestShader("Fixture", kFixturePath);
 
-		for (const ShaderEntryPoint& entryPoint : shader->GetEntryPoints())
-		{
-			CDL_EXPECT_MSG(entryPoint.m_PushConstantBlock.Size == 0, entryPoint.Name);
-			CDL_EXPECT_MSG(entryPoint.m_PushConstantBlock.Members.empty(), entryPoint.Name);
-		}
+	for (const ShaderEntryPoint& entryPoint : shader->GetEntryPoints())
+	{
+		CDL_EXPECT_MSG(entryPoint.PushConstants.Size == 0, entryPoint.Name);
+		CDL_EXPECT_MSG(entryPoint.PushConstants.Members.empty(), entryPoint.Name);
 	}
-	ExpectNoVulkanDebugMessages(logs);
 }
 
 // Reflection is per entry point, so each stage using the block reports all of it, in declaration order.
 // ShaderInteropTests checks the offsets and sizes against C++.
-CDL_TEST_CASE(ShaderLoader, ReflectsThePushBlockOfEveryEntryPointUsingIt, Gpu)
+CDL_TEST_CASE(ShaderLoader, ReflectsThePushBlockOfEveryEntryPointUsingIt, Unit)
 {
 	const std::filesystem::path interopFixturePath = "Candle-Test/res/shaders/bin/ShaderInteropFixture.spv";
 	SkipUnlessCompiled(interopFixturePath);
 
-	LoggerFixture logs(LogLevel::Warn, kRenderChannelMask);
+	SharedPtr<Shader> shader = LoadTestShader("InteropFixture", interopFixturePath);
+
+	for (std::string_view name : { "interopVertex"sv, "interopFragment"sv })
 	{
-		TestDevice gpu;
-		SharedPtr<Shader> shader = ShaderLoader::LoadShader("InteropFixture", interopFixturePath, gpu.Device);
+		const ShaderEntryPoint* entryPoint = FindEntryPoint(*shader, name);
+		CDL_CHECK_MSG(entryPoint != nullptr, std::format("no entry point named {}", name));
 
-		for (std::string_view name : { "interopVertex"sv, "interopFragment"sv })
-		{
-			const ShaderEntryPoint* entryPoint = FindEntryPoint(*shader, name);
-			CDL_CHECK_MSG(entryPoint != nullptr, std::format("no entry point named {}", name));
-
-			const PushConstantBlock& block = entryPoint->m_PushConstantBlock;
-			CDL_EXPECT_NE(block.Size, 0u);
-			CDL_CHECK_EQ(block.Members.size(), 8u);
-			CDL_EXPECT_EQ(block.Members.front().Name, std::string("Global"));
-			CDL_EXPECT_EQ(block.Members.back().Name, std::string("UVScale"));
-		}
+		const PushConstantBlock& block = entryPoint->PushConstants;
+		CDL_EXPECT_NE(block.Size, 0u);
+		CDL_CHECK_EQ(block.Members.size(), 8u);
+		CDL_EXPECT_EQ(block.Members.front().Name, std::string("Global"));
+		CDL_EXPECT_EQ(block.Members.back().Name, std::string("UVScale"));
 	}
-	ExpectNoVulkanDebugMessages(logs);
 }

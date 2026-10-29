@@ -8,9 +8,6 @@ namespace Candle {
 	{
 	}
 
-	// TODO: May change this so its more granular
-	// (instead of saving state as per: https://docs.vulkan.org/tutorial/latest/Synchronization/Pipeline_Barriers_Transitions/02_image_barrier.html#_the_power_of_layout_discard)
-	// but it may still be good to save state, will need to research further
 	void SwapChainImage::Transition(const ImageState& to, vk::raii::CommandBuffer& commandBuffer)
 	{
 		const vk::ImageMemoryBarrier2 barrier = MakeImageBarrier(m_Image, m_State, to, kSubresourceRange);

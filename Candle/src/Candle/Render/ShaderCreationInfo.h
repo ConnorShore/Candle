@@ -34,7 +34,7 @@ namespace Candle {
 	{
 		std::string Name;
 		ShaderStage Stage;
-		PushConstantBlock m_PushConstantBlock;
+		PushConstantBlock PushConstants;
 	};
 
 	struct ShaderCreationInfo

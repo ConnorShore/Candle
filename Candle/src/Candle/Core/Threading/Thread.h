@@ -1,6 +1,7 @@
 #pragma once
 
 #include "Candle/Platform/Platform.h"
+#include "Candle/Core/Logger.h"
 #include "ThreadPriority.h"
 
 #include <thread>
@@ -48,11 +49,19 @@ namespace Candle {
 
 				Platform::SetCurrentThreadPriority(descriptor.Priority);
 
-				// Call the function with or without the stop_token based on its signature
-				if constexpr (std::invocable<std::decay_t<Func>&, std::stop_token, std::decay_t<Args>...>)
-					std::invoke(func, std::move(stoken), std::move(fargs)...);
-				else
-					std::invoke(func, std::move(fargs)...);
+				// An exception escaping a thread would terminate without logging anything
+				try
+				{
+					// Call the function with or without the stop_token based on its signature
+					if constexpr (std::invocable<std::decay_t<Func>&, std::stop_token, std::decay_t<Args>...>)
+						std::invoke(func, std::move(stoken), std::move(fargs)...);
+					else
+						std::invoke(func, std::move(fargs)...);
+				}
+				catch (const std::exception& e)
+				{
+					CDL_CORE_PANIC(LogChannel::Thread, "Unhandled exception on thread '{}': {}", descriptor.Name, e.what());
+				}
 				}, std::forward<Args>(args)...);
 		}
 

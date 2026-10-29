@@ -4,6 +4,7 @@
 #include <vk_mem_alloc.h>
 
 #include <span>
+#include <string>
 
 namespace Candle {
 
@@ -11,11 +12,13 @@ namespace Candle {
 
 	struct GPUBufferSpec
 	{
-		size_t m_Size{ 0 };
-		vk::BufferUsageFlags m_Usage{ };
-		VmaAllocationCreateFlags m_Flags{ };
+		size_t Size{ 0 };
+		vk::BufferUsageFlags Usage{ };
+		VmaAllocationCreateFlags Flags{ };
+		std::string DebugName;	// Names the buffer and its allocation; empty leaves both unnamed
 	};
 
+	// Threading: not internally synchronized; one owner at a time, which may hand it to another thread
 	class GPUBuffer
 	{
 	public:
