@@ -18,7 +18,7 @@ namespace Candle {
 		inline void Acquire()
 		{
 			uint16_t spinCount = 0;
-			while (spinCount < s_SpinThreshold)
+			while (spinCount < kSpinThreshold)
 			{
 				if (!m_Flag.test_and_set(std::memory_order_acquire))
 					return; // Lock acquired
@@ -54,7 +54,7 @@ namespace Candle {
 		std::mutex m_Mutex;
 		std::condition_variable m_CV;
 
-		inline static constexpr uint16_t s_SpinThreshold = 2048; // Number of spins before falling back to std::mutex
+		inline static constexpr uint16_t kSpinThreshold = 2048; // Number of spins before falling back to std::mutex
 	};
 
 }

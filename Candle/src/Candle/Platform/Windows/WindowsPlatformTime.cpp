@@ -10,7 +10,7 @@
 namespace Candle {
 
 	// 100ns intervals between the FILETIME epoch (1601-01-01) and the Unix epoch (1970-01-01).
-	static constexpr uint64_t s_FiletimeToUnixEpoch = 116'444'736'000'000'000ULL;
+	static constexpr uint64_t kFiletimeToUnixEpoch = 116'444'736'000'000'000ULL;
 
 	void Platform::InitTime()
 	{
@@ -28,7 +28,7 @@ namespace Candle {
 		ULARGE_INTEGER wallClock;
 		wallClock.LowPart = fileTime.dwLowDateTime;
 		wallClock.HighPart = fileTime.dwHighDateTime;
-		s_StartUnixMicroseconds = (wallClock.QuadPart - s_FiletimeToUnixEpoch) / 10ULL;	// Convert from 100ns intervals to microseconds
+		s_StartUnixMicroseconds = (wallClock.QuadPart - kFiletimeToUnixEpoch) / 10ULL;	// Convert from 100ns intervals to microseconds
 	}
 
 	Tick Platform::GetStartTick()

@@ -40,12 +40,12 @@ namespace Candle {
 		std::optional<JobRunDecl> TryPopJob(JobPriority priority);
 
 	private:
-		static constexpr size_t k_MaxJobRunSlots = 4096;
+		static constexpr size_t kMaxJobRunSlots = 4096;
 
 		friend class JobWorker;
 
 	private:
-		std::array<JobRunSlot, k_MaxJobRunSlots> m_JobRunSlots;
+		std::array<JobRunSlot, kMaxJobRunSlots> m_JobRunSlots;
 		uint32_t m_FreeSlot = 0;
 		SpinLock m_SlotLock;
 

@@ -49,7 +49,7 @@ namespace Candle {
 
 		struct PlatformScope { PlatformScope(); ~PlatformScope(); };
 		struct LoggerScope { explicit LoggerScope(const LoggerSpecification& spec); ~LoggerScope(); };
-		struct WindowingScope { explicit WindowingScope(bool enabled); ~WindowingScope(); bool m_Enabled; };
+		struct WindowingScope { explicit WindowingScope(bool enabled); ~WindowingScope(); bool Enabled; };
 
     private:
 		// Declared in startup order so that they are destroyed in reverse order

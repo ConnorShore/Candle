@@ -41,24 +41,24 @@ namespace Candle {
 					jobFound = true;
 
 					const JobRunDecl decl = jobDeclOp.value();
-					const JobRunSlot& slot = m_JobSystem.m_JobRunSlots[decl.m_RunSlotIndex];
+					const JobRunSlot& slot = m_JobSystem.m_JobRunSlots[decl.RunSlotIndex];
 
 					// Safe to read without the lock: the slot can't be recycled until this chunk calls FinishJob.
-					const JobSpec jobSpec = slot.m_JobSpec;
-					const uint32_t end = std::min(decl.m_FirstIndex + slot.m_ChunkSize, slot.m_BatchSize);
+					const JobSpec jobSpec = slot.Spec;
+					const uint32_t end = std::min(decl.FirstIndex + slot.ChunkSize, slot.BatchSize);
 
 					// Execute every index in this chunk; one zone per chunk, not per index, keeps the trace readable.
 					{
 						CDL_PROFILE_SCOPE("Job");
-						CDL_PROFILE_SCOPE_NAME(jobSpec.m_Name);
-						CDL_PROFILE_SCOPE_METADATA(end - decl.m_FirstIndex);	// Indices in this chunk, to spot imbalance
+						CDL_PROFILE_SCOPE_NAME(jobSpec.Name);
+						CDL_PROFILE_SCOPE_METADATA(end - decl.FirstIndex);	// Indices in this chunk, to spot imbalance
 
-						for (uint32_t index = decl.m_FirstIndex; index < end; ++index)
-							jobSpec.m_EntryFunc(jobSpec.m_FuncData, index);
+						for (uint32_t index = decl.FirstIndex; index < end; ++index)
+							jobSpec.EntryFunc(jobSpec.FuncData, index);
 					}
 
 					// Once the whole chunk is done, count it towards finishing the slot
-					m_JobSystem.FinishJob(decl.m_RunSlotIndex);
+					m_JobSystem.FinishJob(decl.RunSlotIndex);
 
 					break; // Exit the priority loop to check for jobs again from the highest priority
 				}

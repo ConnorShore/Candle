@@ -61,7 +61,7 @@ CDL_TEST_CASE(Platform, MillisecondsAgreeWithOtherConversions, Unit)
 
 CDL_TEST_CASE(Platform, TickConvertsOnlyExplicitly, Unit)
 {
-	static_assert(!std::is_convertible_v<Tick, uint64_t>, "Tick must not convert to an integer implicitly");
+	CDL_STATIC_ASSERT(!std::is_convertible_v<Tick, uint64_t>, "Tick must not convert to an integer implicitly");
 
 	const Tick tick{ 123'456'789ULL };
 	CDL_CHECK_EQ(static_cast<uint64_t>(tick), 123'456'789ULL);

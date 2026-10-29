@@ -21,16 +21,16 @@ namespace Candle {
 	Application::LoggerScope::LoggerScope(const LoggerSpecification& spec) { Logger::Init(spec); }
 	Application::LoggerScope::~LoggerScope() { Logger::Shutdown(); }
 
-	Application::WindowingScope::WindowingScope(bool enabled) : m_Enabled(enabled)
+	Application::WindowingScope::WindowingScope(bool enabled) : Enabled(enabled)
 	{
-		if (!m_Enabled)
+		if (!Enabled)
 			return;
 
 		auto result = Platform::InitWindowing();
 		if (!result)
 			CDL_CORE_PANIC(LogChannel::Window, "Failed to initialize windowing: {}", result.error());
 	}
-	Application::WindowingScope::~WindowingScope() { if (m_Enabled) Platform::ShutdownWindowing(); }
+	Application::WindowingScope::~WindowingScope() { if (Enabled) Platform::ShutdownWindowing(); }
 
 	Application::Application(const ApplicationSpecification& appSpecs)
 		: m_Specification(appSpecs)

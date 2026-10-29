@@ -12,7 +12,7 @@ namespace Candle {
 
 	namespace {
 
-		constexpr const char* s_LevelColors[LogLevelCount] = {
+		constexpr const char* kLevelColors[kLogLevelCount] = {
 			"\x1b[90m",		// Trace - grey
 			"\x1b[37m",		// Info  - white
 			"\x1b[33m",		// Warn  - yellow
@@ -20,7 +20,7 @@ namespace Candle {
 			"\x1b[1;41m"	// Fatal - bold red
 		};
 
-		constexpr const char* s_ColorReset = "\x1b[0m";
+		constexpr const char* kColorReset = "\x1b[0m";
 
 		// Stateless across calls: a continuation carries on the line its first part opened, even when a drain
 		// batch ended between them, because a message's parts are always adjacent in the stream.
@@ -32,7 +32,7 @@ namespace Candle {
 				const uint64_t seconds = milliseconds / 1000;
 
 				if (color)
-					out.append(s_LevelColors[static_cast<size_t>(record.Level)]);
+					out.append(kLevelColors[static_cast<size_t>(record.Level)]);
 
 				std::format_to(std::back_inserter(out), "[{:02}:{:02}:{:02}.{:03}] [{}] [{}] [{:<5}] (T{}) ",
 					(seconds / 3600) % 24,
@@ -51,7 +51,7 @@ namespace Candle {
 				return;
 
 			if (color)
-				out.append(s_ColorReset);
+				out.append(kColorReset);
 
 			out.push_back('\n');
 		}

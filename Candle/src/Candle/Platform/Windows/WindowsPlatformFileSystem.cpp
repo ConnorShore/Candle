@@ -10,7 +10,7 @@
 namespace Candle {
 
 	namespace {
-		constexpr std::string_view Utf8Bom = "\xEF\xBB\xBF";
+		constexpr std::string_view kUtf8Bom = "\xEF\xBB\xBF";
 
 		// RAII wrapper for a Windows HANDLE
 		struct ScopedWinHandle {
@@ -103,8 +103,8 @@ namespace Candle {
 		auto text = ReadWholeFile<std::string>(path);
 
 		// Editors (Visual Studio among them) can save UTF-8 with a byte-order mark; it marks the encoding, it isn't text.
-		if (text && text->starts_with(Utf8Bom))
-			text->erase(0, Utf8Bom.size());
+		if (text && text->starts_with(kUtf8Bom))
+			text->erase(0, kUtf8Bom.size());
 
 		return text;
 	}
