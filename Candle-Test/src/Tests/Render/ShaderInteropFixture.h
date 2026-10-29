@@ -20,7 +20,7 @@ CDL_INTEROP_BEGIN
 		float3 EmissiveColor;			// std430 aligns a float3 to 16: 32, not 24
 		float EmissiveStrength;			// Packs into the float3's tail in both layouts, so it moves with it
 		float4 BaseColorFactor;			// std430 aligns a float4 to 16: 48, not 40
-		float2 UVScale;					// Last, and ends on the struct's 8-byte alignment (see ShaderInteropTests)
+		float2 UVScale;
 	};
 
 CDL_INTEROP_END

@@ -209,10 +209,13 @@ namespace Candle::Test {
 #define CDL_INTEROP_MEMBER(Type, Member) \
 	::Candle::Test::InteropMember{ #Member, static_cast<uint32_t>(offsetof(Type, Member)), static_cast<uint32_t>(sizeof(Type::Member)) }
 
-	// Fails unless the reflected block holds exactly these members, at the offsets and sizes C++ gives them.
-	inline void ExpectPushBlockMatches(const PushConstantBlock& block, size_t cppSize, std::span<const InteropMember> members)
+	// Fails unless the reflected block holds exactly these members of T, at the offsets and sizes C++ gives them.
+	// Reflection ends a block at its last member while sizeof rounds up to alignof, so T's tail padding is allowed.
+	template<typename T>
+	void ExpectPushBlockMatches(const PushConstantBlock& block, std::span<const InteropMember> members)
 	{
-		CDL_EXPECT_EQ(block.Size, cppSize);
+		const size_t paddedSize = (block.Size + alignof(T) - 1) / alignof(T) * alignof(T);
+		CDL_EXPECT_EQ(paddedSize, sizeof(T));
 		CDL_CHECK_EQ(block.Members.size(), members.size());
 		for (size_t i = 0; i < members.size(); ++i)
 		{

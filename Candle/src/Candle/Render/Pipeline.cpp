@@ -76,6 +76,8 @@ namespace Candle {
 			return colorBlendAttachment;
 		}
 
+
+
 		// The shader half of the push-constant contract; Pipeline::PushConstants checks the C++ half
 		void ValidatePushConstants(const std::vector<ShaderEntryPoint>& entryPoints)
 		{
@@ -116,39 +118,57 @@ namespace Candle {
 
 #pragma region Dynamic State
 		// Set dynamic states that can be changed without recreating the pipeline
-		vk::PipelineDynamicStateCreateInfo dynamicState{ .dynamicStateCount = static_cast<uint32_t>(kDynamicStates.size()), .pDynamicStates = kDynamicStates.data() };
-		vk::PipelineViewportStateCreateInfo viewportState{ .viewportCount = 1, .scissorCount = 1 };
+		vk::PipelineDynamicStateCreateInfo dynamicState{ 
+			.dynamicStateCount = static_cast<uint32_t>(kDynamicStates.size()), 
+			.pDynamicStates = kDynamicStates.data() 
+		};
+		vk::PipelineViewportStateCreateInfo viewportState{ 
+			.viewportCount = 1, 
+			.scissorCount = 1 
+		};
 #pragma endregion
 
 #pragma region Rasterization State
 		// Rasterization state describes how primitives are rasterized into fragments
 		// Using defaults for now but may make some of these configurable in the future
-		vk::PipelineRasterizationStateCreateInfo rasterizer{ .depthClampEnable = vk::False,
-													.rasterizerDiscardEnable = vk::False,
-													.polygonMode = vk::PolygonMode::eFill,
-													.cullMode = m_Specification.CullBackFaces ? vk::CullModeFlagBits::eBack : vk::CullModeFlagBits::eNone,
-													.frontFace = kDefaultFrontFace,
-													.depthBiasEnable = vk::False,
-													.lineWidth = 1.0f };
+		vk::PipelineRasterizationStateCreateInfo rasterizer{ 
+			.depthClampEnable = vk::False,
+			.rasterizerDiscardEnable = vk::False,
+			.polygonMode = vk::PolygonMode::eFill,
+			.cullMode = m_Specification.CullBackFaces ? vk::CullModeFlagBits::eBack : vk::CullModeFlagBits::eNone,
+			.frontFace = kDefaultFrontFace,
+			.depthBiasEnable = vk::False,
+			.lineWidth = 1.0f
+		};
 #pragma endregion
 
 #pragma region Multisample State
 		// Disablign right now, will revisit later once I get to the multisampling chapter
-		vk::PipelineMultisampleStateCreateInfo multisampling{ .rasterizationSamples = vk::SampleCountFlagBits::e1, .sampleShadingEnable = vk::False };
+		vk::PipelineMultisampleStateCreateInfo multisampling{ 
+			.rasterizationSamples = vk::SampleCountFlagBits::e1, 
+			.sampleShadingEnable = vk::False 
+		};
 #pragma endregion
 
 #pragma region Depth / Stencil State
-		// Disabling depth and stencil testing for now, will revisit later once I get to the depth and stencil chapter
-		vk::PipelineDepthStencilStateCreateInfo depthStencil{ .depthTestEnable = vk::False, .depthWriteEnable = vk::False, .depthCompareOp = vk::CompareOp::eLessOrEqual, .depthBoundsTestEnable = vk::False, .stencilTestEnable = vk::False };
+		vk::PipelineDepthStencilStateCreateInfo depthStencil{ 
+			.depthTestEnable = vk::True, 
+			.depthWriteEnable = vk::True, 
+			.depthCompareOp = vk::CompareOp::eLessOrEqual, 
+			.depthBoundsTestEnable = vk::False, 
+			.stencilTestEnable = vk::False 
+		};
 #pragma endregion
 
 #pragma region Color Blend State
 		// Color blend state describes how the output from the fragment shader is blended with the existing color in the framebuffer
 		vk::PipelineColorBlendAttachmentState colorBlendAttachment = CreateColorBlendAttachmentState(m_Specification.Blend);
-		vk::PipelineColorBlendStateCreateInfo colorBlending{.logicOpEnable = vk::False, 
-														.logicOp = vk::LogicOp::eCopy,
-														.attachmentCount = 1,
-														.pAttachments = &colorBlendAttachment };
+		vk::PipelineColorBlendStateCreateInfo colorBlending{
+			.logicOpEnable = vk::False, 
+			.logicOp = vk::LogicOp::eCopy,
+			.attachmentCount = 1,
+			.pAttachments = &colorBlendAttachment 
+		};
 #pragma endregion
 
 #pragma region Pipeline Layout
@@ -175,7 +195,8 @@ namespace Candle {
 		vk::PipelineRenderingCreateInfo pipelineRenderingCreateInfo{
 			.colorAttachmentCount = static_cast<uint32_t>(m_Specification.ColorAttachmentFormats.size()),
 			.pColorAttachmentFormats = m_Specification.ColorAttachmentFormats.data(),
-			.depthAttachmentFormat = m_Specification.DepthAttachmentFormat};
+			.depthAttachmentFormat = m_Specification.DepthAttachmentFormat
+		};
 
 		// Create the graphics pipeline
 		vk::PipelineVertexInputStateCreateInfo vertexInputInfo{};	// No vertex input for now, will revisit later once I get to the vertex input chapter

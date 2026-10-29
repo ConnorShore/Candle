@@ -53,7 +53,7 @@ CDL_TEST_CASE(TrianglePipeline, DescribesTheTriangleShaderAndTarget, Gpu)
 		CDL_EXPECT(spec.Shader->GetFilePath() == kTriangleShaderPath);	// Repo-relative, so any clone finds it
 		CDL_EXPECT_EQ(spec.Topology, PrimitiveTopology::TriangleList);
 		CDL_EXPECT(spec.ColorAttachmentFormats == std::vector<vk::Format>{ kColorFormat });
-		CDL_EXPECT(spec.DepthAttachmentFormat == vk::Format::eUndefined);
+		CDL_EXPECT(spec.DepthAttachmentFormat == vk::Format::eD32Sfloat);
 
 		const ShaderEntryPoint* vertex = FindEntryPoint(*spec.Shader, "VertMain");
 		const ShaderEntryPoint* fragment = FindEntryPoint(*spec.Shader, "FragMain");
@@ -96,11 +96,12 @@ CDL_TEST_CASE(TrianglePipeline, ShaderPushBlockMatchesMeshDrawPushConstants, Gpu
 			CDL_INTEROP_MEMBER(PushConstants, Global),
 			CDL_INTEROP_MEMBER(PushConstants, Vertices),
 			CDL_INTEROP_MEMBER(PushConstants, TextureIndex),
-			CDL_INTEROP_MEMBER(PushConstants, SamplerIndex) };
+			CDL_INTEROP_MEMBER(PushConstants, SamplerIndex),
+			CDL_INTEROP_MEMBER(PushConstants, TransformIndex) };
 		for (const ShaderEntryPoint& entryPoint : spec.Shader->GetEntryPoints())
 		{
 			CDL_NOTE(entryPoint.Name);
-			ExpectPushBlockMatches(entryPoint.m_PushConstantBlock, sizeof(PushConstants), members);
+			ExpectPushBlockMatches<PushConstants>(entryPoint.m_PushConstantBlock, members);
 		}
 	}
 	ExpectNoVulkanDebugMessages(logs);

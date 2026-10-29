@@ -8,6 +8,22 @@ namespace Candle {
 	GPUImage::GPUImage(const GPUImageSpec& spec, GPUAllocator& allocator)
 		: m_Allocator(allocator.GetAllocator())
 	{
+		Create(spec, allocator);
+	}
+
+	GPUImage::~GPUImage()
+	{
+		Destroy();
+	}
+
+	void GPUImage::Recreate(const GPUImageSpec& spec, GPUAllocator& allocator)
+	{
+		Destroy();
+		Create(spec, allocator);
+	}
+
+	void GPUImage::Create(const GPUImageSpec& spec, GPUAllocator& allocator)
+	{
 		vk::ImageCreateInfo imageInfo{
 			.imageType = vk::ImageType::e2D,
 			.format = spec.m_Format,
@@ -16,7 +32,7 @@ namespace Candle {
 			.arrayLayers = 1,
 			.samples = vk::SampleCountFlagBits::e1,
 			.tiling = vk::ImageTiling::eOptimal,
-			.usage = vk::ImageUsageFlagBits::eSampled | vk::ImageUsageFlagBits::eTransferDst,
+			.usage = spec.m_Usage,
 			.sharingMode = vk::SharingMode::eExclusive,
 			.initialLayout = vk::ImageLayout::eUndefined
 		};
@@ -37,18 +53,13 @@ namespace Candle {
 			.viewType = vk::ImageViewType::e2D,
 			.format = spec.m_Format,
 			.subresourceRange = vk::ImageSubresourceRange{
-				.aspectMask = vk::ImageAspectFlagBits::eColor,
+				.aspectMask = spec.m_Aspect,
 				.baseMipLevel = 0,
 				.levelCount = 1,
 				.baseArrayLayer = 0,
 				.layerCount = 1
 			}
 		});
-	}
-
-	GPUImage::~GPUImage()
-	{
-		Destroy();
 	}
 
 	void GPUImage::Destroy()

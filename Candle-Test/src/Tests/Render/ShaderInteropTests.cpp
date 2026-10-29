@@ -47,8 +47,6 @@ CDL_STATIC_ASSERT(sizeof(CDL_GPU_PTR(GPU::Vertex)) == sizeof(vk::DeviceAddress))
 // Pins the fixture's material members to offsets std430 can't produce, so an edit can't quietly make the test blind.
 CDL_STATIC_ASSERT(offsetof(GPU::InteropFixturePushConstants, EmissiveColor) == 24
 	&& offsetof(GPU::InteropFixturePushConstants, BaseColorFactor) == 40);
-// Reflection reports a push block as ending at its last member, so C++ must have no tail padding to compare equal.
-CDL_STATIC_ASSERT(sizeof(GPU::InteropFixturePushConstants) == offsetof(GPU::InteropFixturePushConstants, UVScale) + sizeof(GPU::float2));
 
 // The material members sit where std430 would put them elsewhere, so this fails if CompileShaders.py stops passing
 // -fvk-use-c-layout, or if either language's definition drifts from the shared header.
@@ -76,7 +74,7 @@ CDL_TEST_CASE(ShaderInterop, ShaderLaysOutTheFixtureExactlyAsCppDoes, Gpu)
 		for (const ShaderEntryPoint& entryPoint : shader->GetEntryPoints())
 		{
 			CDL_NOTE(entryPoint.Name);
-			ExpectPushBlockMatches(entryPoint.m_PushConstantBlock, sizeof(Fixture), members);
+			ExpectPushBlockMatches<Fixture>(entryPoint.m_PushConstantBlock, members);
 		}
 	}
 	ExpectNoVulkanDebugMessages(logs);

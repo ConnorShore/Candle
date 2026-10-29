@@ -20,7 +20,8 @@ namespace Candle {
 
 		return {
 			.Shader = shader,
-			.ColorAttachmentFormats = {format}
+			.ColorAttachmentFormats = {format},
+			.DepthAttachmentFormat = vk::Format::eD32Sfloat
 			// Rest are defaults for now
 		};
 	}
