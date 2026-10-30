@@ -6,25 +6,25 @@
 #include "TestHelpers.h"
 #include "BindlessFixture.h"
 
-#include <Candle/Render/BindlessTable.h>
+#include <Candle/Render/Vulkan/BindlessTable.h>
 #include <Candle/Render/FramePacket.h>
-#include <Candle/Render/GeometryPool.h>
-#include <Candle/Render/GPUAllocator.h>
-#include <Candle/Render/GPUBuffer.h>
-#include <Candle/Render/GPUResourceRegistry.h>
-#include <Candle/Render/GPUUploader.h>
-#include <Candle/Render/Image.h>
-#include <Candle/Render/Pipeline.h>
-#include <Candle/Render/PipelineSpecification.h>
-#include <Candle/Render/RenderDevice.h>
-#include <Candle/Render/RenderInstance.h>
+#include <Candle/Render/Resources/GeometryPool.h>
+#include <Candle/Render/Vulkan/GPUAllocator.h>
+#include <Candle/Render/Vulkan/GPUBuffer.h>
+#include <Candle/Render/Resources/GPUResourceRegistry.h>
+#include <Candle/Render/Resources/GPUUploader.h>
+#include <Candle/Render/Vulkan/Image.h>
+#include <Candle/Render/Pipelines/Pipeline.h>
+#include <Candle/Render/Pipelines/PipelineSpecification.h>
+#include <Candle/Render/Vulkan/RenderDevice.h>
+#include <Candle/Render/Vulkan/RenderInstance.h>
 #include <Candle/Render/RenderSpecification.h>
-#include <Candle/Render/SamplerType.h>
-#include <Candle/Render/ShaderCreationInfo.h>
+#include <Candle/Render/Vulkan/SamplerType.h>
+#include <Candle/Render/Pipelines/ShaderCreationInfo.h>
 #include <Candle/Render/ShaderInterop/Vertex.h>
-#include <Candle/Render/ShaderLoader.h>
-#include <Candle/Render/TextureData.h>
-#include <Candle/Render/TexturePool.h>
+#include <Candle/Render/Pipelines/ShaderLoader.h>
+#include <Candle/Render/Assets/TextureData.h>
+#include <Candle/Render/Resources/TexturePool.h>
 
 #include <vk_mem_alloc.h>
 
@@ -407,6 +407,11 @@ namespace Candle::Test {
 
 	// Relative to the repo root, which is where Build.py test and the Visual Studio debugger both run from.
 	inline const std::filesystem::path kBindlessFixturePath = "Candle-Test/res/shaders/bin/BindlessFixture.spv";
+
+	// The engine's own assets, from the same default an Application uses; the triangle is a build output, not a checked-in file
+	inline const std::filesystem::path kEngineAssetDir = CDL_ENGINE_ASSET_DIR;
+	inline const std::filesystem::path kEngineShaderDirectory = kEngineAssetDir / "shaders/bin";
+	inline const std::filesystem::path kTriangleShaderPath = kEngineShaderDirectory / "Triangle.spv";
 
 	// One sample as a shader takes it: the texture's slot of set 0, through one of the bindless samplers, at UV.
 	struct TextureProbe

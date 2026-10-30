@@ -6,7 +6,7 @@
 #include "TestHelpers.h"
 #include "RenderTestHelpers.h"
 
-#include <Candle/Render/RenderInstance.h>
+#include <Candle/Render/Vulkan/RenderInstance.h>
 
 #include <algorithm>
 #include <string>

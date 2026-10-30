@@ -6,8 +6,8 @@
 #include "TestHelpers.h"
 #include "RenderTestHelpers.h"
 
-#include <Candle/Render/SwapChainImage.h>
-#include <Candle/Render/RenderDevice.h>
+#include <Candle/Render/Vulkan/SwapChainImage.h>
+#include <Candle/Render/Vulkan/RenderDevice.h>
 
 #include <type_traits>
 #include <utility>

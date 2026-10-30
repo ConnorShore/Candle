@@ -67,7 +67,7 @@ namespace {
 	// reason about a slot being recycled give the worker a moment to get through FinishJob.
 	void LetFinishJobComplete() { Platform::SleepCurrentThread(20); }
 
-	// m_FuncData points at one of these. Every job in a KickJobs batch receives the same pointer.
+	// FuncData points at one of these. Every job in a KickJobs batch receives the same pointer.
 	struct Counter
 	{
 		std::atomic<uint32_t> Value{ 0 };
@@ -122,7 +122,7 @@ namespace {
 	template<typename T>
 	JobSpec Spec(EntryFn fn, T* data, JobPriority priority = JobPriority::Normal)
 	{
-		return { .m_EntryFunc = fn, .m_FuncData = reinterpret_cast<uintptr_t>(data), .m_Priority = priority, .m_Name = "TestJob" };
+		return { .EntryFunc = fn, .FuncData = reinterpret_cast<uintptr_t>(data), .Priority = priority, .Name = "TestJob" };
 	}
 
 	// One counter per batch index, so a test can see exactly which indices ran and how often.
@@ -358,9 +358,9 @@ CDL_TEST_CASE(JobSystem, RecycledSlotGetsNewGeneration, Unit)
 	const JobHandle b = jobs->KickJob(Spec(&CountEntry, &second));
 	CDL_CHECK(WaitUntil([&] { return second.Get() >= 1; }));
 
-	if (a.m_Index != b.m_Index)
+	if (a.Index != b.Index)
 		CDL_SKIP("free list did not hand back the same slot, so there is no reuse to check");
-	CDL_CHECK_NE(a.m_Generation, b.m_Generation);
+	CDL_CHECK_NE(a.Generation, b.Generation);
 }
 
 //////////////////////////////////////////////////////////////////////////
@@ -508,8 +508,8 @@ CDL_TEST_CASE(JobSystem, WaitForJobWaitsForWholeBatch, Unit)
 CDL_TEST_CASE(JobSystem, DefaultHandleIsInvalid, Unit)
 {
 	constexpr JobHandle handle;
-	static_assert(!handle.IsValid());
-	CDL_CHECK_EQ(handle.m_Index, k_InvalidJobRunSlotIndex);
+	CDL_STATIC_ASSERT(!handle.IsValid());
+	CDL_CHECK_EQ(handle.Index, kInvalidJobRunSlotIndex);
 }
 
 CDL_TEST_CASE(JobSystem, KickedHandleIsValid, Unit)

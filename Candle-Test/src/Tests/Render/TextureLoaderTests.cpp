@@ -6,7 +6,7 @@
 #include "RenderTestHelpers.h"
 
 #include <Candle/Platform/Platform.h>
-#include <Candle/Render/TextureLoader.h>
+#include <Candle/Render/Assets/TextureLoader.h>
 
 #include <array>
 #include <cstddef>

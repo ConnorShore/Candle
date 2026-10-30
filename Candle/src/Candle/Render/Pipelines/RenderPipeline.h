@@ -1,6 +1,6 @@
 #pragma once
 
-#include "Candle/Render/PipelineSpecification.h"
+#include "Candle/Render/Pipelines/PipelineSpecification.h"
 
 #include <string>
 

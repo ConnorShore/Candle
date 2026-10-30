@@ -6,9 +6,9 @@
 #include "TestHelpers.h"
 #include "RenderTestHelpers.h"
 
-#include <Candle/Render/RenderCommandPoolManager.h>
+#include <Candle/Render/Vulkan/RenderCommandPoolManager.h>
 #include <Candle/Render/RenderConstants.h>
-#include <Candle/Render/RenderDevice.h>
+#include <Candle/Render/Vulkan/RenderDevice.h>
 
 #include <vector>
 

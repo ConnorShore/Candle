@@ -188,7 +188,7 @@ CDL_TEST_CASE(Logger, LongMessageSpansConsecutiveRecords, Unit)
 
 CDL_TEST_CASE(Logger, MessageBeyondMaxPartsIsTruncatedWithEllipsis, Unit)
 {
-	constexpr size_t limit = LogMessageMaxParts * (sizeof(LogRecord::Message) - 1);
+	constexpr size_t limit = kLogMessageMaxParts * (sizeof(LogRecord::Message) - 1);
 
 	LoggerFixture logger;
 	const std::string text = PatternedText("LoggerTests: too long ", limit + 60);
@@ -196,8 +196,8 @@ CDL_TEST_CASE(Logger, MessageBeyondMaxPartsIsTruncatedWithEllipsis, Unit)
 	CDL_CHECK(Logger::Flush());
 
 	const size_t first = FindFirstPart(logger.Records, "LoggerTests: too long ");
-	CDL_CHECK(first + LogMessageMaxParts <= logger.Records.size());
-	CDL_EXPECT_FALSE(logger.Records[first + LogMessageMaxParts - 1].HasNext);
+	CDL_CHECK(first + kLogMessageMaxParts <= logger.Records.size());
+	CDL_EXPECT_FALSE(logger.Records[first + kLogMessageMaxParts - 1].HasNext);
 	CDL_EXPECT_EQ(JoinedMessage(logger.Records, first), text.substr(0, limit - 3) + "...");
 }
 

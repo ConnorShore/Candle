@@ -1,16 +1,16 @@
-// TrianglePipeline building the engine's triangle from Candle/res/shaders/bin/Triangle.spv, a build output.
+// TrianglePipeline building the engine's triangle from Triangle.spv under the engine asset directory, a build output.
 // Each test fails on any validation message.
 
 #include "TestFramework.h"
 #include "TestHelpers.h"
 #include "../RenderTestHelpers.h"
 
-#include <Candle/Render/BindlessTable.h>
-#include <Candle/Render/Pipeline.h>
-#include <Candle/Render/PipelineSpecification.h>
+#include <Candle/Render/Vulkan/BindlessTable.h>
+#include <Candle/Render/Pipelines/Pipeline.h>
+#include <Candle/Render/Pipelines/PipelineSpecification.h>
 #include <Candle/Render/Pipelines/TriangleInterop.h>
 #include <Candle/Render/Pipelines/TrianglePipeline.h>
-#include <Candle/Render/Shader.h>
+#include <Candle/Render/Pipelines/Shader.h>
 
 #include <algorithm>
 #include <array>
@@ -23,8 +23,6 @@ using namespace Candle::Test;
 using Candle::Test::Type::Gpu;
 
 namespace {
-
-	const std::filesystem::path kTriangleShaderPath = "Candle/res/shaders/bin/Triangle.spv";
 
 	constexpr vk::Format kColorFormat = vk::Format::eR8G8B8A8Unorm;
 
@@ -47,13 +45,13 @@ CDL_TEST_CASE(TrianglePipeline, DescribesTheTriangleShaderAndTarget, Gpu)
 	LoggerFixture logs(LogLevel::Warn, kRenderChannelMask);
 	{
 		TestDevice gpu;
-		const TrianglePipeline triangle;
+		const TrianglePipeline triangle(kEngineShaderDirectory);
 		const PipelineSpecification spec = triangle.CreateSpecification(gpu.Device, kColorFormat, kDepthFormat);
 
 		CDL_EXPECT_EQ(triangle.GetName(), std::string("BasicTriangle"));
 		CDL_CHECK(spec.Shader);
 		CDL_EXPECT_EQ(spec.Shader->GetName(), triangle.GetName());
-		CDL_EXPECT(spec.Shader->GetFilePath() == kTriangleShaderPath);	// Repo-relative, so any clone finds it
+		CDL_EXPECT(spec.Shader->GetFilePath() == kTriangleShaderPath);
 		CDL_EXPECT_EQ(spec.Topology, PrimitiveTopology::TriangleList);
 		CDL_EXPECT(spec.ColorAttachmentFormats == std::vector<vk::Format>{ kColorFormat });
 		CDL_EXPECT(spec.DepthAttachmentFormat == kDepthFormat);
@@ -76,7 +74,7 @@ CDL_TEST_CASE(TrianglePipeline, BuildsAPipelineWithoutValidationMessages, Gpu)
 	{
 		TestDevice gpu;
 		BindlessTable bindless(gpu.Device);
-		Pipeline pipeline(TrianglePipeline{}.CreateSpecification(gpu.Device, kColorFormat, kDepthFormat), gpu.Device, bindless);
+		Pipeline pipeline(TrianglePipeline{ kEngineShaderDirectory }.CreateSpecification(gpu.Device, kColorFormat, kDepthFormat), gpu.Device, bindless);
 
 		CDL_EXPECT(*pipeline.GetPipeline());
 		CDL_EXPECT(*pipeline.GetLayout());
@@ -92,7 +90,7 @@ CDL_TEST_CASE(TrianglePipeline, ShaderPushBlockMatchesMeshDrawPushConstants, Gpu
 	LoggerFixture logs(LogLevel::Warn, kRenderChannelMask);
 	{
 		TestDevice gpu;
-		const PipelineSpecification spec = TrianglePipeline{}.CreateSpecification(gpu.Device, kColorFormat, kDepthFormat);
+		const PipelineSpecification spec = TrianglePipeline{ kEngineShaderDirectory }.CreateSpecification(gpu.Device, kColorFormat, kDepthFormat);
 
 		using PushConstants = GPU::MeshDrawPushConstants;
 		const std::array members = {

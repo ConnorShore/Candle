@@ -20,9 +20,9 @@ namespace {
 		return input.CaptureSnapshot();
 	}
 
-	constexpr KeyCode LastScancode = static_cast<KeyCode>(std::to_underlying(KeyCode::Count) - 1);
+	constexpr KeyCode kLastScancode = static_cast<KeyCode>(std::to_underlying(KeyCode::Count) - 1);
 
-	constexpr MouseButton AllButtons[] = { MouseButton::Left, MouseButton::Middle, MouseButton::Right, MouseButton::X1, MouseButton::X2 };
+	constexpr MouseButton kAllButtons[] = { MouseButton::Left, MouseButton::Middle, MouseButton::Right, MouseButton::X1, MouseButton::X2 };
 
 }
 
@@ -114,10 +114,10 @@ CDL_TEST_CASE(InputSystem, KeysAcrossTheWholeRangeAreIndependent, Unit)
 {
 	InputSystem input;
 	const InputSnapshot snapshot = Frame(input, {
-		KeyPressedEvent{ KeyCode::A }, KeyPressedEvent{ KeyCode::EndCall }, KeyPressedEvent{ LastScancode }, KeyReleasedEvent{ KeyCode::EndCall } });
+		KeyPressedEvent{ KeyCode::A }, KeyPressedEvent{ KeyCode::EndCall }, KeyPressedEvent{ kLastScancode }, KeyReleasedEvent{ KeyCode::EndCall } });
 
 	CDL_EXPECT(snapshot.IsKeyDown(KeyCode::A));
-	CDL_EXPECT(snapshot.IsKeyDown(LastScancode));
+	CDL_EXPECT(snapshot.IsKeyDown(kLastScancode));
 	CDL_EXPECT_FALSE(snapshot.IsKeyDown(KeyCode::EndCall));
 	CDL_EXPECT_EQ(snapshot.KeysDown.count(), 2u);
 }
@@ -139,7 +139,7 @@ CDL_TEST_CASE(InputSystem, UnknownKeyIsIgnored, Unit)
 // The snapshot promises SDL_BUTTON_MASK's layout, bit (button - 1), so the raw masks are part of its contract.
 CDL_TEST_CASE(InputSystem, EachMouseButtonOwnsOneBit, Unit)
 {
-	for (MouseButton button : AllButtons)
+	for (MouseButton button : kAllButtons)
 	{
 		InputSystem input;
 		const InputSnapshot snapshot = Frame(input, { MouseButtonPressedEvent{ button } });
@@ -147,7 +147,7 @@ CDL_TEST_CASE(InputSystem, EachMouseButtonOwnsOneBit, Unit)
 
 		CDL_EXPECT_EQ(snapshot.MouseDown, expectedMask);
 		CDL_EXPECT_EQ(snapshot.MousePressed, expectedMask);
-		for (MouseButton other : AllButtons)
+		for (MouseButton other : kAllButtons)
 			CDL_EXPECT_EQ(snapshot.IsMouseDown(other), other == button);
 	}
 }

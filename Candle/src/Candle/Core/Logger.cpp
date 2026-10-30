@@ -20,17 +20,17 @@ namespace Candle {
 	namespace {
 
 		// 8192 * 256 B = 2 MB
-		constexpr size_t s_RingCapacity = 8192;
+		constexpr size_t kRingCapacity = 8192;
 
 		// 128 * 256 B = 32 KB
-		constexpr size_t s_DrainBatch = 128;
+		constexpr size_t kDrainBatch = 128;
 
-		constexpr uint64_t s_FlushIntervalMicroseconds = 100'000;
-		constexpr uint64_t s_FlushTimeoutMicroseconds = 2'000'000;
+		constexpr uint64_t kFlushIntervalMicroseconds = 100'000;
+		constexpr uint64_t kFlushTimeoutMicroseconds = 2'000'000;
 
 		MPSCRingBuffer<LogRecord>& Ring()
 		{
-			static MPSCRingBuffer<LogRecord>* s_Ring = new MPSCRingBuffer<LogRecord>(s_RingCapacity);
+			static MPSCRingBuffer<LogRecord>* s_Ring = new MPSCRingBuffer<LogRecord>(kRingCapacity);
 			return *s_Ring;
 		}
 
@@ -75,12 +75,12 @@ namespace Candle {
 		// Drain thread only. Empties the ring into every sink; returns how many records moved.
 		size_t DrainOnce()
 		{
-			LogRecord batch[s_DrainBatch];
+			LogRecord batch[kDrainBatch];
 			size_t total = 0;
 
 			while (true)
 			{
-				const size_t count = Ring().PopBatch(batch, s_DrainBatch);
+				const size_t count = Ring().PopBatch(batch, kDrainBatch);
 				if (count == 0)
 					break;
 
@@ -133,7 +133,7 @@ namespace Candle {
 				const Tick now = Platform::GetTick();
 				const bool flushRequested = request > s_FlushComplete.load(std::memory_order_relaxed);
 				const bool flushDue = drained > 0
-					&& Platform::ToMicroseconds(lastFlush, now) >= s_FlushIntervalMicroseconds;
+					&& Platform::ToMicroseconds(lastFlush, now) >= kFlushIntervalMicroseconds;
 
 				if (flushRequested || flushDue || !running)
 				{
@@ -179,7 +179,7 @@ namespace Candle {
 
 	const char* LogChannelName(LogChannel channel)
 	{
-		static constexpr const char* s_Names[] = {
+		static constexpr const char* kNames[] = {
 			"App", "AI", "Animation", "Render", "Input", "Audio", "Physics", "Memory", "Thread", "Math", "Job", "Window", "FileSystem", "Asset"
 		};
 
@@ -188,8 +188,8 @@ namespace Candle {
 			return "None";
 
 		const size_t index = static_cast<size_t>(std::countr_zero(value));
-		CDL_CORE_ASSERT(index < std::size(s_Names), "Mismatch in channel names and the enum size");
-		return index < std::size(s_Names) ? s_Names[index] : "?";
+		CDL_CORE_ASSERT(index < std::size(kNames), "Mismatch in channel names and the enum size");
+		return index < std::size(kNames) ? kNames[index] : "?";
 	}
 
 	const char* LoggerTypeName(uint8_t type)
@@ -252,7 +252,7 @@ namespace Candle {
 
 		while (s_FlushComplete.load(std::memory_order_acquire) < ticket)
 		{
-			if (Platform::ToMicroseconds(start, Platform::GetTick()) > s_FlushTimeoutMicroseconds)
+			if (Platform::ToMicroseconds(start, Platform::GetTick()) > kFlushTimeoutMicroseconds)
 				return false;
 
 			CDL_THREAD_PAUSE();
@@ -265,7 +265,7 @@ namespace Candle {
 	{
 		constexpr size_t partCapacity = sizeof(LogRecord::Message) - 1;
 
-		char text[LogMessageMaxParts * partCapacity];
+		char text[kLogMessageMaxParts * partCapacity];
 		size_t size = 0;
 		std::vformat_to(TruncatingWriter{ text, sizeof(text), &size }, fmt, args);
 
@@ -276,7 +276,7 @@ namespace Candle {
 		// At least one, in case a formatter with side effects came out shorter the second time.
 		const size_t partCount = std::max<size_t>(1, (length + partCapacity - 1) / partCapacity);
 
-		LogRecord parts[LogMessageMaxParts];
+		LogRecord parts[kLogMessageMaxParts];
 		for (size_t i = 0; i < partCount; ++i)
 		{
 			const size_t offset = i * partCapacity;

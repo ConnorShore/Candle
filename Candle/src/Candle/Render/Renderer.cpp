@@ -1,15 +1,15 @@
 #include "cdlpch.h"
 
 #include "Renderer.h"
-#include "RenderDevice.h"
-#include "PipelineSpecification.h"
-#include "FramePacket.h"
-#include "FrameContext.h"
-#include "SwapChainImage.h"
-#include "GeometryPool.h"
-#include "TexturePool.h"
-#include "GPUAllocator.h"
-#include "RenderConstants.h"
+#include "Candle/Render/Vulkan/RenderDevice.h"
+#include "Candle/Render/Pipelines/PipelineSpecification.h"
+#include "Candle/Render/FramePacket.h"
+#include "Candle/Render/FrameContext.h"
+#include "Candle/Render/Vulkan/SwapChainImage.h"
+#include "Candle/Render/Resources/GeometryPool.h"
+#include "Candle/Render/Resources/TexturePool.h"
+#include "Candle/Render/Vulkan/GPUAllocator.h"
+#include "Candle/Render/RenderConstants.h"
 
 #include "Candle/Render/Pipelines/TrianglePipeline.h"
 #include "Candle/Render/Pipelines/TriangleInterop.h"
@@ -42,20 +42,21 @@ namespace Candle {
 		}
 	}
 
-	Renderer::Renderer(RenderDevice& renderDevice, GeometryPool& geometryPool, TexturePool& texturePool, BindlessTable& bindlessTable, GPUAllocator& allocator, vk::Format targetFormat, vk::Extent2D targetExtent)
+	Renderer::Renderer(RenderDevice& renderDevice, GeometryPool& geometryPool, TexturePool& texturePool, BindlessTable& bindlessTable,
+		GPUAllocator& allocator, const RendererCreationInfo& info)
 		: m_RenderDevice(renderDevice)
 		, m_GeometryPool(geometryPool)
 		, m_TexturePool(texturePool)
 		, m_BindlessTable(bindlessTable)
-		, m_TargetFormat(targetFormat)
+		, m_TargetFormat(info.TargetFormat)
 		, m_DepthFormat(FindDepthFormat(renderDevice))
-		, m_DepthImage({ .Extent = { targetExtent.width, targetExtent.height }, // Sized to the colour target
+		, m_DepthImage({ .Extent = { info.TargetExtent.width, info.TargetExtent.height }, // Sized to the colour target
 			.Format = m_DepthFormat,
 			.Usage = vk::ImageUsageFlagBits::eDepthStencilAttachment,
 			.Aspect = vk::ImageAspectFlagBits::eDepth,
 			.DebugName = "Depth Target" }, allocator)
 	{
-		CreatePipeline(TrianglePipeline{});
+		CreatePipeline(TrianglePipeline{ info.ShaderDirectory });
 	}
 
 	void Renderer::Render(const FramePacket& packet, FrameContext& frame, SwapChainImage& target)

@@ -9,6 +9,10 @@ workspace "Candle"
    -- DEPTH_ZERO_TO_ONE makes glm's projections output Vulkan's [0, 1] depth range instead of OpenGL's [-1, 1].
    defines { "GLM_FORCE_CTOR_INIT", "GLM_FORCE_DEPTH_ZERO_TO_ONE", "VULKAN_HPP_NO_STRUCT_CONSTRUCTORS", "VULKAN_HPP_HANDLE_ERROR_OUT_OF_DATE_AS_SUCCESS" }
 
+   -- Workspace-wide because ApplicationSpecification's default reads it in every TU; packaging will point Dist at a staged copy.
+   -- Built in Lua rather than with %{wks.location}, which premake rewrites relative to each project.
+   defines { 'CDL_ENGINE_ASSET_DIR="' .. path.join(_MAIN_SCRIPT_DIR, "Candle/res") .. '"' }
+
    filter "configurations:not Dist"
       defines { "CDL_ENABLE_ASSERTS" }
 

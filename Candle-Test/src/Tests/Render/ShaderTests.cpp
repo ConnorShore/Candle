@@ -4,7 +4,7 @@
 #include "TestFramework.h"
 #include "TestHelpers.h"
 
-#include <Candle/Render/Shader.h>
+#include <Candle/Render/Pipelines/Shader.h>
 
 #include <string>
 #include <type_traits>

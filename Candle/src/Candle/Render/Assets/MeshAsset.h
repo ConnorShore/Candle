@@ -1,7 +1,7 @@
 #pragma once
 
-#include "MeshData.h"
-#include "Candle/Render/GPUHandles.h"
+#include "Candle/Render/Assets/MeshData.h"
+#include "Candle/Render/Resources/GPUHandles.h"
 #include "Candle/Asset/Asset.h"
 
 namespace Candle {

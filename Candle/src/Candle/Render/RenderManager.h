@@ -1,22 +1,22 @@
 #pragma once
 
-#include "RenderSpecification.h"
-#include "RenderConstants.h"
-#include "RenderInstance.h"
-#include "RenderDevice.h"
-#include "SwapChain.h"
-#include "Renderer.h"
-#include "FrameContext.h"
-#include "RenderCommandPoolManager.h"
-#include "GPUAllocator.h"
-#include "GPUUploader.h"
-#include "GeometryPool.h"
-#include "TexturePool.h"
-#include "BindlessTable.h"
-#include "GPUResourceRegistry.h"
-#include "FramePump.h"
+#include "Candle/Render/RenderSpecification.h"
+#include "Candle/Render/RenderConstants.h"
+#include "Candle/Render/Vulkan/RenderInstance.h"
+#include "Candle/Render/Vulkan/RenderDevice.h"
+#include "Candle/Render/Vulkan/SwapChain.h"
+#include "Candle/Render/Renderer.h"
+#include "Candle/Render/FrameContext.h"
+#include "Candle/Render/Vulkan/RenderCommandPoolManager.h"
+#include "Candle/Render/Vulkan/GPUAllocator.h"
+#include "Candle/Render/Resources/GPUUploader.h"
+#include "Candle/Render/Resources/GeometryPool.h"
+#include "Candle/Render/Resources/TexturePool.h"
+#include "Candle/Render/Vulkan/BindlessTable.h"
+#include "Candle/Render/Resources/GPUResourceRegistry.h"
+#include "Candle/Render/FramePump.h"
 
-#include "Candle/Core/ApplicationSpecification.h"
+#include "Candle/Core/ApplicationInfo.h"
 #include "Candle/Core/Threading/Thread.h"
 
 #include <atomic>
@@ -35,7 +35,7 @@ namespace Candle {
 	class RenderManager
 	{
 	public:
-		RenderManager(const RenderSpecification& renderSpec, const ApplicationInfo& appInfo, Window& window, JobSystem& jobSystem);
+		RenderManager(const RenderSpecification& renderSpec, const ApplicationInfo& appInfo, const std::filesystem::path& engineAssetDir, Window& window, JobSystem& jobSystem);
 		~RenderManager(); // Join render thread, wait for GPU idle (shutdown only), reverse teardown
 
 		void SpawnRenderThread();	// Spawns the render thread, which will run RenderThreadMain() until the application exits (called from the main thread on application startup)

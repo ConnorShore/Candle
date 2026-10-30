@@ -1,6 +1,6 @@
 #pragma once
 
-#include "Asset.h"
+#include "Candle/Asset/Asset.h"
 
 namespace Candle {
 

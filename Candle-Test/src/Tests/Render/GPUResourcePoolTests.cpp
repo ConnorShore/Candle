@@ -5,8 +5,8 @@
 #include "TestHelpers.h"
 
 #include <Candle/Render/FramePacket.h>
-#include <Candle/Render/GPUResourcePool.h>
-#include <Candle/Render/GPUResourceRegistry.h>
+#include <Candle/Render/Resources/GPUResourcePool.h>
+#include <Candle/Render/Resources/GPUResourceRegistry.h>
 
 #include <cstdint>
 

@@ -14,7 +14,7 @@
 #include <Candle/Render/FramePump.h>
 #include <Candle/Render/RenderConstants.h>
 #include <Candle/Render/RenderManager.h>
-#include <Candle/Render/SamplerType.h>
+#include <Candle/Render/Vulkan/SamplerType.h>
 
 #include <array>
 #include <cstdint>
@@ -28,9 +28,6 @@ using namespace Candle::Test;
 using Candle::Test::Type::Gpu;
 
 namespace {
-
-	// Renderer loads the engine's compiled triangle, a build output rather than a checked-in file.
-	const std::filesystem::path kTriangleShaderPath = "Candle/res/shaders/bin/Triangle.spv";
 
 	// ~RenderManager doesn't join, so a test that failed between spawn and join would terminate the run on ~std::thread.
 	class RenderThreadScope
@@ -54,7 +51,7 @@ namespace {
 		Window AppWindow{ TestWindowSpec() };
 		JobSystem Jobs;	// Never started; RenderManager only reads its worker count
 		TempDirectory Files;
-		RenderManager Manager{ StrictRenderSpec(), ApplicationInfo{ .Name = "Candle-Test" }, AppWindow, Jobs };
+		RenderManager Manager{ StrictRenderSpec(), ApplicationInfo{ .Name = "Candle-Test" }, kEngineAssetDir, AppWindow, Jobs };
 		AssetManager Assets;	// After the RenderManager whose pools its handlers upload into
 		GPUTextureHandle DefaultTexture = RegisterHandlersAndLoadTexture();	// Before the render thread, as Application loads its assets
 		RenderThreadScope RenderThread{ Manager };

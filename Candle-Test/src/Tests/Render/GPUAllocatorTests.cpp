@@ -4,8 +4,8 @@
 #include "TestHelpers.h"
 #include "RenderTestHelpers.h"
 
-#include <Candle/Render/GPUAllocator.h>
-#include <Candle/Render/GPUBuffer.h>
+#include <Candle/Render/Vulkan/GPUAllocator.h>
+#include <Candle/Render/Vulkan/GPUBuffer.h>
 
 using namespace Candle;
 using namespace Candle::Test;

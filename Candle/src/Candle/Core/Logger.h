@@ -23,7 +23,7 @@ namespace Candle {
 		Fatal
 	};
 
-	static constexpr size_t LogLevelCount = 5;
+	inline constexpr size_t kLogLevelCount = 5;
 
 	enum class LogChannel : uint16_t
 	{
@@ -66,7 +66,7 @@ inline LogChannel operator|(LogChannel lhs, LogChannel rhs) { return static_cast
 	CDL_STATIC_ASSERT(sizeof(LogRecord) == 256, "LogRecord size is not 256 bytes. Check for padding or alignment issues.");	// 256 is 4 cache lines
 
 	// Past this many records (about 3.8 KB) a message is cut short with "...", so one can't flood the ring.
-	static constexpr size_t LogMessageMaxParts = 16;
+	inline constexpr size_t kLogMessageMaxParts = 16;
 
 	// Simple display helpers (safe to call from any thread)
 	const char* LogLevelName(LogLevel level);
@@ -147,7 +147,7 @@ inline LogChannel operator|(LogChannel lhs, LogChannel rhs) { return static_cast
 
 	private:
 		// Cold path for a message longer than one record: formats it again, splits it into up to
-		// LogMessageMaxParts records carrying first's metadata, and submits them as one group.
+		// kLogMessageMaxParts records carrying first's metadata, and submits them as one group.
 		static void PushLongLog(const LogRecord& first, std::string_view fmt, std::format_args args);
 
 		// Pushes the parts of one message as a single group, so they reach the sinks unbroken.

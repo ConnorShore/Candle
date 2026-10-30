@@ -5,9 +5,9 @@
 #include "TestHelpers.h"
 #include "RenderTestHelpers.h"
 
-#include <Candle/Render/GPUBuffer.h>
-#include <Candle/Render/GPUUploader.h>
-#include <Candle/Render/Image.h>
+#include <Candle/Render/Vulkan/GPUBuffer.h>
+#include <Candle/Render/Resources/GPUUploader.h>
+#include <Candle/Render/Vulkan/Image.h>
 
 #include <array>
 #include <cstddef>

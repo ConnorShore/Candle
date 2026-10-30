@@ -4,8 +4,8 @@
 #include "TestHelpers.h"
 #include "RenderTestHelpers.h"
 
-#include <Candle/Render/Image.h>
-#include <Candle/Render/RenderDevice.h>
+#include <Candle/Render/Vulkan/Image.h>
+#include <Candle/Render/Vulkan/RenderDevice.h>
 
 #include <cstdint>
 

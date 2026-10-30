@@ -1,7 +1,7 @@
 #pragma once
 
-#include "Image.h"
-#include "GPUBuffer.h"
+#include "Candle/Render/Vulkan/Image.h"
+#include "Candle/Render/Vulkan/GPUBuffer.h"
 
 #include <vulkan/vulkan_raii.hpp>
 

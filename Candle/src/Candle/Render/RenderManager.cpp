@@ -1,11 +1,11 @@
 #include "cdlpch.h"
 #include "RenderManager.h"
-#include "ShaderLoader.h"
-#include "Shader.h"
-#include "FramePacket.h"
-#include "RenderConstants.h"
+#include "Candle/Render/Pipelines/ShaderLoader.h"
+#include "Candle/Render/Pipelines/Shader.h"
+#include "Candle/Render/FramePacket.h"
+#include "Candle/Render/RenderConstants.h"
 
-#include "Candle/Core/Window.h"
+#include "Candle/Platform/Window.h"
 #include "Candle/Core/Profiler.h"
 #include "Candle/Core/Job/JobSystem.h"
 #include "Candle/Core/Memory/ScopedPtr.h"
@@ -33,7 +33,7 @@ namespace Candle {
 
 	}
 
-	RenderManager::RenderManager(const RenderSpecification& renderSpec, const ApplicationInfo& appInfo, Window& window, JobSystem& jobSystem)
+	RenderManager::RenderManager(const RenderSpecification& renderSpec, const ApplicationInfo& appInfo, const std::filesystem::path& engineAssetDir, Window& window, JobSystem& jobSystem)
 		: m_Specification(renderSpec)
 		, m_RenderInstance(CreateRenderInstanceSpec(renderSpec, appInfo))
 		, m_RenderDevice(m_RenderInstance, m_Specification)
@@ -43,7 +43,10 @@ namespace Candle {
 		, m_BindlessTable(m_RenderDevice)
 		, m_GeometryPool(m_GPUAllocator, m_GPUUploader, m_ResourceRegistry)
 		, m_TexturePool(m_GPUAllocator, m_GPUUploader, m_ResourceRegistry, m_BindlessTable)
-		, m_Renderer(m_RenderDevice, m_GeometryPool, m_TexturePool, m_BindlessTable, m_GPUAllocator, m_SwapChain.GetSurfaceFormat().format, m_SwapChain.GetExtent())
+		, m_Renderer(m_RenderDevice, m_GeometryPool, m_TexturePool, m_BindlessTable, m_GPUAllocator, {
+			.TargetFormat = m_SwapChain.GetSurfaceFormat().format,
+			.TargetExtent = m_SwapChain.GetExtent(),
+			.ShaderDirectory = engineAssetDir / "shaders/bin" })
 		, m_CommandPoolManager(m_RenderDevice, jobSystem.GetNumWorkers())
 		, m_RenderThread({ .Name = "Candle-RenderThread", .Priority = ThreadPriority::High })
 	{

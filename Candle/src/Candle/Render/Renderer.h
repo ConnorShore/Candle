@@ -1,9 +1,10 @@
 #pragma once
 
-#include "Pipeline.h"
-#include "BindlessTable.h"
-#include "GPUImage.h"
+#include "Candle/Render/Pipelines/Pipeline.h"
+#include "Candle/Render/Vulkan/BindlessTable.h"
+#include "Candle/Render/Vulkan/GPUImage.h"
 
+#include <filesystem>
 #include <vector>
 
 #include <vulkan/vulkan_raii.hpp>
@@ -22,13 +23,20 @@ namespace Candle {
 	struct FrameContext;
 	struct FramePacket;
 
+	struct RendererCreationInfo
+	{
+		vk::Format TargetFormat;
+		vk::Extent2D TargetExtent;
+		std::filesystem::path ShaderDirectory;	// Until shaders come through the asset system
+	};
+
 	// Turns one packet into recorded GPU work. Knows nothing about threads, windows or presentation.
 	// Threading: render thread only.
 	class Renderer
 	{
 	public:
-		explicit Renderer(RenderDevice& renderDevice, GeometryPool& geometryPool, TexturePool& texturePool, 
-							BindlessTable& bindlessTable, GPUAllocator& allocator, vk::Format targetFormat, vk::Extent2D targetExtent);	// pipelines, bindless tables, render graph
+		Renderer(RenderDevice& renderDevice, GeometryPool& geometryPool, TexturePool& texturePool, BindlessTable& bindlessTable,
+					GPUAllocator& allocator, const RendererCreationInfo& info);	// pipelines, bindless tables, render graph
 		void Render(const FramePacket& packet, FrameContext& frame, SwapChainImage& target);   // target is imported into the graph; its owner presents it
 
 		// targetExtent is the colour target's real extent, since the depth image must cover the same render area

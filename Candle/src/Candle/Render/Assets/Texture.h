@@ -1,8 +1,8 @@
 #pragma once
 
-#include "Candle/Render/TextureData.h"
+#include "Candle/Render/Assets/TextureData.h"
 #include "Candle/Asset/Asset.h"
-#include "Candle/Render/GPUHandles.h"
+#include "Candle/Render/Resources/GPUHandles.h"
 
 #include <glm/glm.hpp>
 

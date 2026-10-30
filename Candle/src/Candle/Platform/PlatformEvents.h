@@ -1,6 +1,6 @@
 #pragma once
 
-#include "Candle/Core/Input/InputCodes.h"
+#include "Candle/Input/InputCodes.h"
 
 #include <variant>
 #include <cstdint>

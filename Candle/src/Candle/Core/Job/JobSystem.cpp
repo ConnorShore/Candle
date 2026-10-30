@@ -8,11 +8,11 @@ namespace Candle {
 	JobSystem::JobSystem()
 	{
 		// Populate run slots
-		for (uint32_t i = 0; i < k_MaxJobRunSlots - 1; ++i)
-			m_JobRunSlots[i].m_NextFree = i + 1;
+		for (uint32_t i = 0; i < kMaxJobRunSlots - 1; ++i)
+			m_JobRunSlots[i].NextFree = i + 1;
 
 		// Set last slot's next free to invalid
-		m_JobRunSlots[k_MaxJobRunSlots - 1].m_NextFree = k_InvalidJobRunSlotIndex;
+		m_JobRunSlots[kMaxJobRunSlots - 1].NextFree = kInvalidJobRunSlotIndex;
 
 		// Create workers based on number of processors - 2 (main + render threads)
 		auto cpuTopology = Platform::QueryCPUTopology();
@@ -56,10 +56,10 @@ namespace Candle {
 	JobHandle JobSystem::KickJobs(uint32_t numJobs, JobSpec spec, std::span<const JobHandle> deps /* ={} */)
 	{
 		// An empty batch runs nothing, so it may omit the entry function and act as a pure join node.
-		CDL_CORE_ASSERT(numJobs == 0 || spec.m_EntryFunc, "JobSpec must have an entry function");
+		CDL_CORE_ASSERT(numJobs == 0 || spec.EntryFunc, "JobSpec must have an entry function");
 
 		CDL_PROFILE_SCOPE("KickJobs");
-		CDL_PROFILE_SCOPE_TEXT(spec.m_Name);
+		CDL_PROFILE_SCOPE_TEXT(spec.Name);
 		CDL_PROFILE_SCOPE_METADATA(numJobs);
 
 		// About four chunks per worker: few queue operations, but enough slack that one slow chunk doesn't stall the batch.
@@ -72,37 +72,37 @@ namespace Candle {
 		m_SlotLock.Acquire();
 
 		uint32_t freeSlotIndex = m_FreeSlot;
-		if (freeSlotIndex == k_InvalidJobRunSlotIndex)
+		if (freeSlotIndex == kInvalidJobRunSlotIndex)
 		{
 			m_SlotLock.Release();
 			CDL_CORE_ASSERT(false, "No free job run slots available!");
-			return { k_InvalidJobRunSlotIndex, 0 };
+			return { kInvalidJobRunSlotIndex, 0 };
 		}
 		JobRunSlot& slot = m_JobRunSlots[freeSlotIndex];
-		m_FreeSlot = slot.m_NextFree;
+		m_FreeSlot = slot.NextFree;
 
-		uint32_t generation = slot.m_Generation;
+		uint32_t generation = slot.Generation;
 
-		slot.m_JobCount.store(chunkCount);
-		slot.m_BatchSize = numJobs;
-		slot.m_ChunkSize = chunkSize;
-		slot.m_JobSpec = spec;
+		slot.JobCount.store(chunkCount);
+		slot.BatchSize = numJobs;
+		slot.ChunkSize = chunkSize;
+		slot.Spec = spec;
 		int numDeps = 0;
 		for (const auto& dep : deps)
 		{
 			// An invalid handle is "no job", e.g. a failed kick or a default-constructed member
 			if (!dep.IsValid())
 				continue;
-			CDL_CORE_ASSERT(dep.m_Index < k_MaxJobRunSlots, "JobHandle index out of range");
+			CDL_CORE_ASSERT(dep.Index < kMaxJobRunSlots, "JobHandle index out of range");
 
 			// If dependency is finished, skip it
-			if (dep.m_Generation < m_JobRunSlots[dep.m_Index].m_Generation.load())
+			if (dep.Generation < m_JobRunSlots[dep.Index].Generation.load())
 				continue;
 
-			m_JobRunSlots[dep.m_Index].m_Successors.push_back(freeSlotIndex);
+			m_JobRunSlots[dep.Index].Successors.push_back(freeSlotIndex);
 			numDeps++;
 		}
-		slot.m_Remaining.store(numDeps, std::memory_order_release);	// Set the number of remaining dependencies for this slot
+		slot.Remaining.store(numDeps, std::memory_order_release);	// Set the number of remaining dependencies for this slot
 
 		// Release the lock after updating the free slot index
 		m_SlotLock.Release();
@@ -122,15 +122,15 @@ namespace Candle {
 
 		if (!job.IsValid())
 			return;
-		CDL_CORE_ASSERT(job.m_Index < k_MaxJobRunSlots, "JobHandle index out of range");
+		CDL_CORE_ASSERT(job.Index < kMaxJobRunSlots, "JobHandle index out of range");
 
 		// The time a non-worker thread spends blocked on the pool: on the game thread, this is the frame's critical path.
 		CDL_PROFILE_SCOPE("WaitForJob");
 
-		JobRunSlot& slot = m_JobRunSlots[job.m_Index];
+		JobRunSlot& slot = m_JobRunSlots[job.Index];
 		uint32_t gen;
-		while ((gen = slot.m_Generation.load(std::memory_order_acquire)) <= job.m_Generation)
-			slot.m_Generation.wait(gen, std::memory_order_acquire);
+		while ((gen = slot.Generation.load(std::memory_order_acquire)) <= job.Generation)
+			slot.Generation.wait(gen, std::memory_order_acquire);
 	}
 
 	void JobSystem::FinishJob(uint32_t jobRunSlotIndex)
@@ -138,7 +138,7 @@ namespace Candle {
 		JobRunSlot& slot = m_JobRunSlots[jobRunSlotIndex];
 
 		// Decrement the job count for this slot, if more jobs remain, we aren't fully done yet
-		if (slot.m_JobCount.fetch_sub(1) > 1)
+		if (slot.JobCount.fetch_sub(1) > 1)
 			return;
 
 		FinishSlot(jobRunSlotIndex);
@@ -150,25 +150,25 @@ namespace Candle {
 
 		// The gap between a batch's last chunk and its successors starting; includes the slot lock and requeueing.
 		CDL_PROFILE_SCOPE("FinishSlot");
-		CDL_PROFILE_SCOPE_TEXT(slot.m_JobSpec.m_Name);
+		CDL_PROFILE_SCOPE_TEXT(slot.Spec.Name);
 
 		// Aquire lock and free the slot for reuse
 		m_SlotLock.Acquire();
-		auto successors = std::move(slot.m_Successors);	// Move successors out of the slot to avoid holding the lock while notifying them
-		slot.m_Remaining.store(0);						// Reset remaining dependencies for this slot
-		slot.m_Generation.fetch_add(1);					// Increment generation for this slot
-		slot.m_NextFree = m_FreeSlot;
+		auto successors = std::move(slot.Successors);	// Move successors out of the slot to avoid holding the lock while notifying them
+		slot.Remaining.store(0);						// Reset remaining dependencies for this slot
+		slot.Generation.fetch_add(1);					// Increment generation for this slot
+		slot.NextFree = m_FreeSlot;
 		m_FreeSlot = jobRunSlotIndex;
 		m_SlotLock.Release();
 
 		// Notify any threads waiting on this slot's generation that it has changed
-		slot.m_Generation.notify_all();
+		slot.Generation.notify_all();
 
 		// Notify successors that this job run slot is fully finished
 		for (uint32_t successorIndex : successors)
 		{
 			JobRunSlot& successorSlot = m_JobRunSlots[successorIndex];
-			if (successorSlot.m_Remaining.fetch_sub(1) == 1)
+			if (successorSlot.Remaining.fetch_sub(1) == 1)
 			{
 				// All dependencies for the successor slot are completed, queue its jobs
 				QueueJobSlot(successorIndex);
@@ -184,8 +184,8 @@ namespace Candle {
 	void JobSystem::QueueJobSlot(uint32_t slotIndex)
 	{
 		const JobRunSlot& slot = m_JobRunSlots[slotIndex];
-		const uint32_t chunkCount = slot.m_JobCount.load();
-		const uint32_t chunkSize = slot.m_ChunkSize;
+		const uint32_t chunkCount = slot.JobCount.load();
+		const uint32_t chunkSize = slot.ChunkSize;
 
 		// An empty batch has no chunk to finish it, so it completes as soon as its dependencies have.
 		if (chunkCount == 0)
@@ -194,8 +194,8 @@ namespace Candle {
 			return;
 		}
 
-		m_JobQueues[static_cast<size_t>(slot.m_JobSpec.m_Priority)].PushGenerated(chunkCount, [=](uint32_t chunk) {
-			return JobRunDecl{ .m_FirstIndex = chunk * chunkSize, .m_RunSlotIndex = slotIndex };
+		m_JobQueues[static_cast<size_t>(slot.Spec.Priority)].PushGenerated(chunkCount, [=](uint32_t chunk) {
+			return JobRunDecl{ .FirstIndex = chunk * chunkSize, .RunSlotIndex = slotIndex };
 		});
 	}
 

@@ -10,7 +10,7 @@
 namespace Candle {
 
 	namespace {
-		constexpr std::string_view Utf8Bom = "\xEF\xBB\xBF";
+		constexpr std::string_view kUtf8Bom = "\xEF\xBB\xBF";
 
 		// RAII wrapper for a Windows HANDLE
 		struct ScopedWinHandle {
@@ -103,8 +103,8 @@ namespace Candle {
 		auto text = ReadWholeFile<std::string>(path);
 
 		// Editors (Visual Studio among them) can save UTF-8 with a byte-order mark; it marks the encoding, it isn't text.
-		if (text && text->starts_with(Utf8Bom))
-			text->erase(0, Utf8Bom.size());
+		if (text && text->starts_with(kUtf8Bom))
+			text->erase(0, kUtf8Bom.size());
 
 		return text;
 	}
@@ -149,6 +149,26 @@ namespace Candle {
 			return std::unexpected(FileError{ FileErrorCode::IO, ERROR_WRITE_FAULT });
 
 		return {};
+	}
+
+	std::filesystem::path Platform::GetExecutableDirectory()
+	{
+		// Wide and growable, since the path can be non-ASCII and longer than MAX_PATH
+		std::wstring buffer(MAX_PATH, L'\0');
+		while (true)
+		{
+			const DWORD written = ::GetModuleFileNameW(nullptr, buffer.data(), static_cast<DWORD>(buffer.size()));
+			if (written == 0)
+				CDL_CORE_PANIC(LogChannel::FileSystem,"GetModuleFileNameW failed with error {}", ::GetLastError());
+
+			// A full buffer means the path was truncated
+			if (written < buffer.size())
+			{
+				buffer.resize(written);
+				return std::filesystem::path(buffer).parent_path();
+			}
+			buffer.resize(buffer.size() * 2);
+		}
 	}
 
 }

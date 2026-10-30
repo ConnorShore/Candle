@@ -14,7 +14,7 @@
 
 	#define CDL_PROFILE_SCOPE(name) ZoneScopedN(name)
 	#define CDL_PROFILE_SCOPE_METADATA(value) ZoneValue(value)
-	// Renames the enclosing scope at runtime, for names only known at runtime (e.g. JobSpec::m_Name); Tracy copies the string.
+	// Renames the enclosing scope at runtime, for names only known at runtime (e.g. JobSpec::Name); Tracy copies the string.
 	#define CDL_PROFILE_SCOPE_NAME(name) ZoneName(name, std::strlen(name))
 	// Attaches text to the enclosing scope without renaming it, shown in the zone's tooltip; Tracy copies the string.
 	#define CDL_PROFILE_SCOPE_TEXT(text) ZoneText(text, std::strlen(text))

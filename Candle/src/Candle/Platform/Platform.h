@@ -1,6 +1,6 @@
 #pragma once
 
-#include "PlatformEvents.h"
+#include "Candle/Platform/PlatformEvents.h"
 
 #include "Candle/Core/Threading/ThreadPriority.h"
 
@@ -137,6 +137,7 @@ namespace Candle {
 		static std::expected<std::vector<std::byte>, FileError> ReadFile(const std::filesystem::path& path);
 		static std::expected<std::string, FileError> ReadTextFile(const std::filesystem::path& path);
 		static std::expected<void, FileError> WriteFile(const std::filesystem::path& path, std::span<const std::byte> data);
+		static std::filesystem::path GetExecutableDirectory();	// Absolute; what relative asset directories resolve against
 
 	private:
 		// Defined per platform alongside the tick queries

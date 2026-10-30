@@ -1,6 +1,6 @@
 #pragma once
 
-#include "JobTypes.h"
+#include "Candle/Core/Job/JobTypes.h"
 
 #include "Candle/Core/Threading/Thread.h"
 

@@ -3,7 +3,7 @@
 #include "TestFramework.h"
 
 #include <Candle/Core/Asserts.h>
-#include <Candle/Render/GPUHandles.h>
+#include <Candle/Render/Resources/GPUHandles.h>
 
 #include <type_traits>
 
