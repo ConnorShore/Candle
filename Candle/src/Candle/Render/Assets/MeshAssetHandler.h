@@ -1,6 +1,6 @@
 #pragma once
 
-#include "MeshAsset.h"
+#include "Candle/Render/Assets/MeshAsset.h"
 #include "Candle/Asset/AssetHandler.h"
 
 namespace Candle {

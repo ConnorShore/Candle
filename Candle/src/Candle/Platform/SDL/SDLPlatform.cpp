@@ -1,8 +1,8 @@
 #include "cdlpch.h"
 #include "SDLPlatform.h"
 #include "Candle/Platform/Platform.h"
-#include "Candle/Core/Window.h"
-#include "Candle/Render/RenderInstance.h"
+#include "Candle/Platform/Window.h"
+#include "Candle/Render/Vulkan/RenderInstance.h"
 
 #include <SDL3/SDL_vulkan.h>
 #include <vulkan/vulkan_raii.hpp>

@@ -151,4 +151,24 @@ namespace Candle {
 		return {};
 	}
 
+	std::filesystem::path Platform::GetExecutableDirectory()
+	{
+		// Wide and growable, since the path can be non-ASCII and longer than MAX_PATH
+		std::wstring buffer(MAX_PATH, L'\0');
+		while (true)
+		{
+			const DWORD written = ::GetModuleFileNameW(nullptr, buffer.data(), static_cast<DWORD>(buffer.size()));
+			if (written == 0)
+				CDL_CORE_PANIC(LogChannel::FileSystem,"GetModuleFileNameW failed with error {}", ::GetLastError());
+
+			// A full buffer means the path was truncated
+			if (written < buffer.size())
+			{
+				buffer.resize(written);
+				return std::filesystem::path(buffer).parent_path();
+			}
+			buffer.resize(buffer.size() * 2);
+		}
+	}
+
 }

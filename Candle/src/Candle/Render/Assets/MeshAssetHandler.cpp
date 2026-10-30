@@ -1,8 +1,8 @@
 #include "cdlpch.h"
 #include "MeshAssetHandler.h"
-#include "MeshAsset.h"
+#include "Candle/Render/Assets/MeshAsset.h"
 
-#include "Candle/Render/GeometryPool.h"
+#include "Candle/Render/Resources/GeometryPool.h"
 
 namespace Candle {
 

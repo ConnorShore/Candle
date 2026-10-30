@@ -6,12 +6,12 @@
 #include "RenderTestHelpers.h"
 #include "ShaderInteropFixture.h"
 
-#include <Candle/Render/BindlessTable.h>
-#include <Candle/Render/Pipeline.h>
-#include <Candle/Render/PipelineSpecification.h>
+#include <Candle/Render/Vulkan/BindlessTable.h>
+#include <Candle/Render/Pipelines/Pipeline.h>
+#include <Candle/Render/Pipelines/PipelineSpecification.h>
 #include <Candle/Render/Pipelines/TriangleInterop.h>
-#include <Candle/Render/RenderDevice.h>
-#include <Candle/Render/ShaderLoader.h>
+#include <Candle/Render/Vulkan/RenderDevice.h>
+#include <Candle/Render/Pipelines/ShaderLoader.h>
 
 #include <filesystem>
 #include <format>

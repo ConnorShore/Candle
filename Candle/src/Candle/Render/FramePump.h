@@ -1,6 +1,6 @@
 #pragma once
 
-#include "FramePacket.h"
+#include "Candle/Render/FramePacket.h"
 
 #include <array>
 #include <atomic>

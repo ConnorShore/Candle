@@ -1,8 +1,8 @@
 #include "cdlpch.h"
 #include "TextureHandler.h"
 
-#include "Candle/Render/TexturePool.h"
-#include "Candle/Render/TextureLoader.h"
+#include "Candle/Render/Resources/TexturePool.h"
+#include "Candle/Render/Assets/TextureLoader.h"
 
 namespace Candle {
 

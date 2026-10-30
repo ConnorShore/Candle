@@ -1,5 +1,5 @@
 #include "cdlpch.h"
-#include "Candle/Core/Window.h"
+#include "Candle/Platform/Window.h"
 #include "Candle/Platform/Platform.h"
 
 #include <SDL3/SDL.h>

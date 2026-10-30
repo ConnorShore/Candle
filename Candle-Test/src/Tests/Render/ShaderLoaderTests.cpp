@@ -5,8 +5,8 @@
 #include "TestHelpers.h"
 #include "RenderTestHelpers.h"
 
-#include <Candle/Render/Shader.h>
-#include <Candle/Render/ShaderLoader.h>
+#include <Candle/Render/Pipelines/Shader.h>
+#include <Candle/Render/Pipelines/ShaderLoader.h>
 
 #include <algorithm>
 #include <filesystem>

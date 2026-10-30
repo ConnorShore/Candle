@@ -5,8 +5,8 @@
 #include "TestHelpers.h"
 #include "RenderTestHelpers.h"
 
-#include <Candle/Render/GPUAllocator.h>
-#include <Candle/Render/GPUImage.h>
+#include <Candle/Render/Vulkan/GPUAllocator.h>
+#include <Candle/Render/Vulkan/GPUImage.h>
 
 #include <type_traits>
 #include <utility>

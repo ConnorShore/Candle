@@ -5,13 +5,13 @@
 #include "TestHelpers.h"
 #include "RenderTestHelpers.h"
 
-#include <Candle/Render/BindlessTable.h>
-#include <Candle/Render/Pipeline.h>
-#include <Candle/Render/PipelineSpecification.h>
+#include <Candle/Render/Vulkan/BindlessTable.h>
+#include <Candle/Render/Pipelines/Pipeline.h>
+#include <Candle/Render/Pipelines/PipelineSpecification.h>
 #include <Candle/Render/RenderConstants.h>
-#include <Candle/Render/SamplerType.h>
-#include <Candle/Render/ShaderLoader.h>
-#include <Candle/Render/TexturePool.h>
+#include <Candle/Render/Vulkan/SamplerType.h>
+#include <Candle/Render/Pipelines/ShaderLoader.h>
+#include <Candle/Render/Resources/TexturePool.h>
 
 #include <array>
 #include <filesystem>

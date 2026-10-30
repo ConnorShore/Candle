@@ -1,6 +1,6 @@
 #pragma once
 
-#include "Texture.h"
+#include "Candle/Render/Assets/Texture.h"
 #include "Candle/Asset/AssetHandler.h"
 
 namespace Candle {

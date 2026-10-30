@@ -4,8 +4,8 @@
 
 #include <Candle/Asset/Asset.h>
 #include <Candle/Render/Assets/Texture.h>
-#include <Candle/Render/SamplerType.h>
-#include <Candle/Render/TextureData.h>
+#include <Candle/Render/Vulkan/SamplerType.h>
+#include <Candle/Render/Assets/TextureData.h>
 
 #include <filesystem>
 

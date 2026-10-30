@@ -5,11 +5,11 @@
 #include "TestHelpers.h"
 #include "RenderTestHelpers.h"
 
-#include <Candle/Render/GPUHandles.h>
-#include <Candle/Render/SamplerType.h>
-#include <Candle/Render/TextureData.h>
-#include <Candle/Render/TexturePool.h>
-#include <Candle/Render/VulkanUtils.h>
+#include <Candle/Render/Resources/GPUHandles.h>
+#include <Candle/Render/Vulkan/SamplerType.h>
+#include <Candle/Render/Assets/TextureData.h>
+#include <Candle/Render/Resources/TexturePool.h>
+#include <Candle/Render/Vulkan/VulkanUtils.h>
 
 #include <algorithm>
 #include <array>

@@ -1,5 +1,5 @@
 #include <Candle.h>
-#include <Candle/Core/EntryPoint.h>
+#include <Candle/App/EntryPoint.h>
 #include <Candle/Core/Job/JobSystem.h>
 
 #include <cmath>
@@ -32,19 +32,11 @@ namespace Candle {
 		spec.AppInfo.Name = "Candle Sandbox";
 		spec.AppInfo.Version = { 1, 0, 0 };
 
-		std::string engineAssetDir = "CandleCore";
-		if (argc >= 3) {
-			engineAssetDir = argv[2];
-		}
-
-		std::string projectAssetDir = "GameData";
-		if (argc >= 4) {
-			projectAssetDir = argv[3];
-		}
-
-		// The Editor explicitly points to the source code folders
-		spec.EngineAssetDir = engineAssetDir;
-		spec.ProjectAssetDir = projectAssetDir;
+		// A path typed in a shell means one relative to that shell, so anchor overrides to the working directory here
+		if (argc >= 3)
+			spec.EngineAssetDir = std::filesystem::absolute(argv[2]);
+		if (argc >= 4)
+			spec.ProjectAssetDir = std::filesystem::absolute(argv[3]);
 
 		spec.CommandLineArgsCount = argc;
 		spec.CommandLineArgs = argv;

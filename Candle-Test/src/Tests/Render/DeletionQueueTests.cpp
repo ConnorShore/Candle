@@ -5,7 +5,7 @@
 #include "TestHelpers.h"
 #include "RenderTestHelpers.h"
 
-#include <Candle/Render/DeletionQueue.h>
+#include <Candle/Render/Resources/DeletionQueue.h>
 
 using namespace Candle;
 using namespace Candle::Test;

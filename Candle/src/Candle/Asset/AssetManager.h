@@ -1,7 +1,7 @@
 #pragma once
 
-#include "Asset.h"
-#include "AssetHandler.h"
+#include "Candle/Asset/Asset.h"
+#include "Candle/Asset/AssetHandler.h"
 #include "Candle/Core/Memory/SharedPtr.h"
 #include "Candle/Core/Memory/ScopedPtr.h"
 

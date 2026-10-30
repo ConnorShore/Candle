@@ -2,7 +2,7 @@
 
 #include "TestFramework.h"
 
-#include <Candle/Render/VulkanUtils.h>
+#include <Candle/Render/Vulkan/VulkanUtils.h>
 
 using namespace Candle;
 using Candle::Test::Type::Unit;

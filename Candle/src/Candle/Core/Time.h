@@ -3,7 +3,7 @@
 #include <chrono>
 #include <string>
 
-#include "Logger.h"
+#include "Candle/Core/Logger.h"
 #include "Candle/Platform/Platform.h"
 
 namespace Candle {

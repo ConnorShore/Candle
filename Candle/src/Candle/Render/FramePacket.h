@@ -1,7 +1,7 @@
 #pragma once
 
-#include "GPUHandles.h"
-#include "SamplerType.h"
+#include "Candle/Render/Resources/GPUHandles.h"
+#include "Candle/Render/Vulkan/SamplerType.h"
 
 #include <vector>
 #include <glm/glm.hpp>

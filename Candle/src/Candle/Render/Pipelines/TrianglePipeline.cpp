@@ -1,8 +1,8 @@
 #include "cdlpch.h"
 #include "TrianglePipeline.h"
 
-#include "Candle/Render/RenderDevice.h"
-#include "Candle/Render/ShaderLoader.h"
+#include "Candle/Render/Vulkan/RenderDevice.h"
+#include "Candle/Render/Pipelines/ShaderLoader.h"
 
 namespace Candle {
 
@@ -10,8 +10,7 @@ namespace Candle {
 	{
 		// TODO: Once asset manager is fully implemented, will see if we load the shader from the asset manager
 		//		or if this is where we add it to the asset manager
-		// Relative to the working directory, which Build.py test and the executables' debugdir set to the repo root
-		auto shader = ShaderLoader::LoadShader(m_Name, "Candle/res/shaders/bin/Triangle.spv");
+		auto shader = ShaderLoader::LoadShader(m_Name, m_ShaderPath);
 		if (!shader)
 			CDL_CORE_PANIC(LogChannel::Render, "{}", shader.error());
 

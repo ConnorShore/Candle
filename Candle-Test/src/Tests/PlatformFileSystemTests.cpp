@@ -6,6 +6,7 @@
 
 #include <cstddef>
 #include <cstring>
+#include <filesystem>
 #include <span>
 #include <string>
 #include <string_view>
@@ -255,4 +256,12 @@ CDL_TEST_CASE(FileSystem, ConcurrentWritersToSeparateFilesDoNotInterfere, Stress
 
 	for (int thread = 0; thread < threadCount; ++thread)
 		CDL_EXPECT_EQ(failures[thread], 0);
+}
+
+// What relative asset directories resolve against, so it must be absolute and hold the running binary.
+CDL_TEST_CASE(FileSystem, ExecutableDirectoryHoldsTheRunningExecutable, Unit)
+{
+	const std::filesystem::path dir = Platform::GetExecutableDirectory();
+	CDL_EXPECT(dir.is_absolute());
+	CDL_EXPECT(std::filesystem::exists(dir / "Candle-Test.exe"));
 }

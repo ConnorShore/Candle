@@ -2,7 +2,7 @@
 
 #include "Candle/Platform/Platform.h"
 #include "Candle/Core/Logger.h"
-#include "ThreadPriority.h"
+#include "Candle/Core/Threading/ThreadPriority.h"
 
 #include <thread>
 #include <string>

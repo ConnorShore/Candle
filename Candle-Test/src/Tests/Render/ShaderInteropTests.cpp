@@ -7,11 +7,11 @@
 #include "ShaderInteropFixture.h"
 
 #include <Candle/Render/Pipelines/TriangleInterop.h>
-#include <Candle/Render/Shader.h>
+#include <Candle/Render/Pipelines/Shader.h>
 #include <Candle/Render/ShaderInterop/FrameData.h>
 #include <Candle/Render/ShaderInterop/GlobalPushConstants.h>
 #include <Candle/Render/ShaderInterop/Vertex.h>
-#include <Candle/Render/ShaderLoader.h>
+#include <Candle/Render/Pipelines/ShaderLoader.h>
 
 #include <array>
 #include <filesystem>

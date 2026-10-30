@@ -5,10 +5,10 @@
 #include "TestHelpers.h"
 #include "RenderTestHelpers.h"
 
-#include <Candle/Render/RenderDevice.h>
-#include <Candle/Render/RenderInstance.h>
-#include <Candle/Render/SwapChain.h>
-#include <Candle/Render/SwapChainImage.h>
+#include <Candle/Render/Vulkan/RenderDevice.h>
+#include <Candle/Render/Vulkan/RenderInstance.h>
+#include <Candle/Render/Vulkan/SwapChain.h>
+#include <Candle/Render/Vulkan/SwapChainImage.h>
 
 #include <format>
 

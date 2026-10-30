@@ -1,7 +1,7 @@
 #pragma once
 
-#include "JobTypes.h"
-#include "JobWorker.h"
+#include "Candle/Core/Job/JobTypes.h"
+#include "Candle/Core/Job/JobWorker.h"
 
 #include "Candle/Core/Memory/ScopedPtr.h"
 #include "Candle/Core/Threading/SpinLock.h"

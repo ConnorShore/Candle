@@ -4,6 +4,7 @@
 #include "TestFramework.h"
 #include "TestHelpers.h"
 
+#include <filesystem>
 #include <optional>
 #include <thread>
 
@@ -69,6 +70,29 @@ CDL_TEST_CASE(Application, HeadlessNeverStartsWindowing, Unit)
 		CDL_EXPECT_FALSE(Platform::IsWindowingInitialized());
 	}
 	RestoreLoggerDefaults();
+}
+
+// Anchored to the executable, so the app finds its assets from any working directory; an absolute path is used as given.
+CDL_TEST_CASE(Application, AssetDirectoriesResolveAgainstTheExecutableUnlessAbsolute, Unit)
+{
+	const std::filesystem::path exeDir = Platform::GetExecutableDirectory();
+	const std::filesystem::path absolute = exeDir.root_path() / "ProjectAssets";
+	{
+		ApplicationSpecification spec = QuietSpec();
+		spec.EngineAssetDir = "EngineAssets";
+		spec.ProjectAssetDir = absolute;
+
+		TestApplication app(spec);
+		CDL_EXPECT(app.GetSpecification().EngineAssetDir == exeDir / "EngineAssets");
+		CDL_EXPECT(app.GetSpecification().ProjectAssetDir == absolute);
+	}
+	RestoreLoggerDefaults();
+}
+
+// Premake bakes the default in as an absolute path, so a default-built app never depends on the working directory either.
+CDL_TEST_CASE(Application, DefaultEngineAssetDirIsAbsolute, Unit)
+{
+	CDL_EXPECT(ApplicationSpecification{}.EngineAssetDir.is_absolute());
 }
 
 // The windowing backend must be up for the app's whole lifetime and fully shut down once it is destroyed.

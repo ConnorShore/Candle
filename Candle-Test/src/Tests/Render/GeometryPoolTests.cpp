@@ -5,8 +5,8 @@
 #include "TestHelpers.h"
 #include "RenderTestHelpers.h"
 
-#include <Candle/Render/GeometryPool.h>
-#include <Candle/Render/GPUHandles.h>
+#include <Candle/Render/Resources/GeometryPool.h>
+#include <Candle/Render/Resources/GPUHandles.h>
 #include <Candle/Render/ShaderInterop/Vertex.h>
 
 #include <array>

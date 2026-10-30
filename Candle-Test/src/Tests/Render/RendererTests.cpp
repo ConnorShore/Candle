@@ -9,7 +9,7 @@
 #include <Candle/Render/FramePacket.h>
 #include <Candle/Render/Renderer.h>
 #include <Candle/Render/ShaderInterop/FrameData.h>
-#include <Candle/Render/SwapChainImage.h>
+#include <Candle/Render/Vulkan/SwapChainImage.h>
 
 #include <glm/gtc/matrix_transform.hpp>
 
@@ -27,9 +27,6 @@ using namespace Candle::Test;
 using Candle::Test::Type::Gpu;
 
 namespace {
-
-	// Renderer loads the engine's compiled triangle, a build output rather than a checked-in file.
-	const std::filesystem::path kTriangleShaderPath = "Candle/res/shaders/bin/Triangle.spv";
 
 	constexpr vk::Format kTargetFormat = vk::Format::eR8G8B8A8Unorm;	// UNORM, so the shader's result is stored unconverted
 	constexpr vk::Extent2D kExtent{ 4, 4 };
@@ -81,7 +78,10 @@ namespace {
 		FrameContext Frame = CreateFrameContext(*this);
 
 		explicit TestRenderer(vk::Extent2D extent)
-			: SceneRenderer(Device, Geometry, Pool, Bindless, Allocator, kTargetFormat, extent) {}
+			: SceneRenderer(Device, Geometry, Pool, Bindless, Allocator, {
+				.TargetFormat = kTargetFormat,
+				.TargetExtent = extent,
+				.ShaderDirectory = kEngineShaderDirectory }) {}
 		~TestRenderer() { Device.WaitIdle(); }
 
 		GPUMeshHandle CreateQuad() { return Geometry.CreateMesh(kQuadVertices, kQuadIndices); }
