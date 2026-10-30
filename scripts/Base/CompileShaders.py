@@ -54,6 +54,7 @@ def compile_shaders(slangc, base_directory, spirv_version):
                 shader_path,
                 "-target", "spirv",
                 "-profile", spirv_version,
+                "-Wno-41012",  # Suppresses the E41012 implicit capability upgrade warning
                 "-emit-spirv-directly",
                 "-fvk-use-entrypoint-name",
                 "-fvk-use-c-layout",  # C++'s struct layout rules, so an interop struct has one layout in both languages.
