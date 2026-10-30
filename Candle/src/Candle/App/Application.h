@@ -4,6 +4,7 @@
 #include "Candle/App/ApplicationSpecification.h"
 #include "Candle/Core/Time.h"
 #include "Candle/Platform/Window.h"
+#include "Candle/World/World.h"
 
 #include "Candle/Asset/AssetManager.h"
 #include "Candle/Input/InputSystem.h"
@@ -16,13 +17,27 @@ namespace Candle {
 	class RenderManager;
 	struct FramePacket;
 
+	struct ApplicationContext
+	{
+		Candle::AssetManager& AssetManager;
+		World& ActiveWorld;
+	};
+
+	struct UpdateContext
+	{
+		ApplicationContext& AppContext;
+		TimeStep DeltaTime;
+		const InputSnapshot& Input;
+	};
+
     class Application
     {
     public:
         Application(const ApplicationSpecification& appSpecs);
 		virtual ~Application();
 
-		virtual void OnInit() = 0;
+		virtual void OnInit(ApplicationContext context) = 0;
+		virtual void OnUpdate(UpdateContext context) = 0;
 		virtual void OnShutdown() = 0;
 
         void Run();
@@ -33,6 +48,7 @@ namespace Candle {
 
 	private:
 		void HandlePlatformEvents();
+		void ExtractToFramePacket(FramePacket& packet);
 
 		inline bool IsQuitRequested() const { return m_QuitRequested.load(std::memory_order_relaxed); }
 
@@ -64,6 +80,8 @@ namespace Candle {
 		JobSystem m_JobSystem;
 		ScopedPtr<RenderManager> m_RenderManager;	// Empty when headless
 		AssetManager m_AssetManager;
+
+		World m_ActiveWorld;						// The world that the application is currently simulating and rendering (TEMPORARY: one world only for now)
 
 		std::atomic<bool> m_QuitRequested{ false };
 		FrameStats m_FrameStats;

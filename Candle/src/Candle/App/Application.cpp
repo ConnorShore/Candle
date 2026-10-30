@@ -60,59 +60,6 @@ namespace Candle {
 		// Register asset handlers for various subsystems
 		if (m_RenderManager)
 			m_RenderManager->RegisterAssetHandlers(m_AssetManager);
-
-		// TEMPORARY FOR TESTING
-		MeshData testMeshData{
-			.Vertices = {
-				// +Z
-				{ { -0.5f, -0.5f,  0.5f }, 0.0f, {  0.0f,  0.0f,  1.0f }, 0.0f },
-				{ {  0.5f, -0.5f,  0.5f }, 1.0f, {  0.0f,  0.0f,  1.0f }, 0.0f },
-				{ {  0.5f,  0.5f,  0.5f }, 1.0f, {  0.0f,  0.0f,  1.0f }, 1.0f },
-				{ { -0.5f,  0.5f,  0.5f }, 0.0f, {  0.0f,  0.0f,  1.0f }, 1.0f },
-				// -Z
-				{ {  0.5f, -0.5f, -0.5f }, 0.0f, {  0.0f,  0.0f, -1.0f }, 0.0f },
-				{ { -0.5f, -0.5f, -0.5f }, 1.0f, {  0.0f,  0.0f, -1.0f }, 0.0f },
-				{ { -0.5f,  0.5f, -0.5f }, 1.0f, {  0.0f,  0.0f, -1.0f }, 1.0f },
-				{ {  0.5f,  0.5f, -0.5f }, 0.0f, {  0.0f,  0.0f, -1.0f }, 1.0f },
-				// +X
-				{ {  0.5f, -0.5f,  0.5f }, 0.0f, {  1.0f,  0.0f,  0.0f }, 0.0f },
-				{ {  0.5f, -0.5f, -0.5f }, 1.0f, {  1.0f,  0.0f,  0.0f }, 0.0f },
-				{ {  0.5f,  0.5f, -0.5f }, 1.0f, {  1.0f,  0.0f,  0.0f }, 1.0f },
-				{ {  0.5f,  0.5f,  0.5f }, 0.0f, {  1.0f,  0.0f,  0.0f }, 1.0f },
-				// -X
-				{ { -0.5f, -0.5f, -0.5f }, 0.0f, { -1.0f,  0.0f,  0.0f }, 0.0f },
-				{ { -0.5f, -0.5f,  0.5f }, 1.0f, { -1.0f,  0.0f,  0.0f }, 0.0f },
-				{ { -0.5f,  0.5f,  0.5f }, 1.0f, { -1.0f,  0.0f,  0.0f }, 1.0f },
-				{ { -0.5f,  0.5f, -0.5f }, 0.0f, { -1.0f,  0.0f,  0.0f }, 1.0f },
-				// +Y
-				{ { -0.5f,  0.5f,  0.5f }, 0.0f, {  0.0f,  1.0f,  0.0f }, 0.0f },
-				{ {  0.5f,  0.5f,  0.5f }, 1.0f, {  0.0f,  1.0f,  0.0f }, 0.0f },
-				{ {  0.5f,  0.5f, -0.5f }, 1.0f, {  0.0f,  1.0f,  0.0f }, 1.0f },
-				{ { -0.5f,  0.5f, -0.5f }, 0.0f, {  0.0f,  1.0f,  0.0f }, 1.0f },
-				// -Y
-				{ { -0.5f, -0.5f, -0.5f }, 0.0f, {  0.0f, -1.0f,  0.0f }, 0.0f },
-				{ {  0.5f, -0.5f, -0.5f }, 1.0f, {  0.0f, -1.0f,  0.0f }, 0.0f },
-				{ {  0.5f, -0.5f,  0.5f }, 1.0f, {  0.0f, -1.0f,  0.0f }, 1.0f },
-				{ { -0.5f, -0.5f,  0.5f }, 0.0f, {  0.0f, -1.0f,  0.0f }, 1.0f }
-			},
-			.Indices = {
-				 0,  1,  2,   2,  3,  0,
-				 4,  5,  6,   6,  7,  4,
-				 8,  9, 10,  10, 11,  8,
-				12, 13, 14,  14, 15, 12,
-				16, 17, 18,  18, 19, 16,
-				20, 21, 22,  22, 23, 20
-			}
-		};
-
-		SharedPtr<MeshAsset> meshAsset = SharedPtr<MeshAsset>::Create("TestMesh", std::move(testMeshData));
-		m_AssetManager.LoadAsset(meshAsset);
-
-		TextureData data{
-			.Sampler{SamplerType::LinearWrap}
-		};
-		SharedPtr<Texture> textureAsset = SharedPtr<Texture>::Create("TestTexture", m_Specification.EngineAssetDir / "textures/box.jpg", std::move(data));
-		uint64_t texUUID = m_AssetManager.LoadAsset(textureAsset);
 	}
 
 	Application::~Application()
@@ -122,35 +69,8 @@ namespace Candle {
 
 	void Application::Run()
 	{
-		// Sample test data setup (temporary)
-		SharedPtr<MeshAsset> meshAsset = m_AssetManager.GetAsset<MeshAsset>("TestMesh");
-		SharedPtr<Texture> textureAsset = m_AssetManager.GetAsset<Texture>("TestTexture");
-
-		// Depth check: a textured cube spinning at the origin, and a larger magenta one wholly behind it but overlapping it on
-		// screen. The far cube is drawn second, so without depth testing it paints over the near one where they overlap.
-		const glm::vec3 eye{ 2.0f, 2.0f, 2.0f };
-		const glm::vec3 target{ 0.0f, 0.0f, 0.0f };
-		const glm::vec3 forward = glm::normalize(target - eye);
-		const glm::vec3 right = glm::normalize(glm::cross(forward, glm::vec3(0.0f, 1.0f, 0.0f)));
-		const glm::mat4 farCube = glm::scale(glm::translate(glm::mat4(1.0f), target + 2.5f * forward + 0.9f * right), glm::vec3(1.5f));
-
-		std::vector<DrawItem> drawItems{
-			{
-				.Mesh = meshAsset->GetGPUHandle(),
-				.Texture = textureAsset->GetGPUHandle(),
-				.Sampler = textureAsset->GetTextureData().Sampler,
-				.TransformIndex = 0
-			},
-			{
-				.Mesh = meshAsset->GetGPUHandle(),
-				.Texture = {},		// The default handle resolves to the flat magenta error texture
-				.Sampler = SamplerType::LinearWrap,
-				.TransformIndex = 1
-			}
-		};
-		std::vector<glm::mat4> transforms{ glm::mat4(1.0f), farCube };
-		glm::mat4 viewMatrix = glm::lookAt(eye, target, glm::vec3(0.0f, 1.0f, 0.0f));
-		//
+		// Call the application init callback
+		OnInit({ m_AssetManager, m_ActiveWorld });
 
 		// Spawn the render thread if we have a render manager
 		if (m_RenderManager)
@@ -168,31 +88,22 @@ namespace Candle {
 			// Moves inside the fixed-step tick loop once there is one, so each tick consumes the edges exactly once
 			InputSnapshot inputSnapshot = m_InputSystem.CaptureSnapshot();
 
+			// Call the application update callback
+			ApplicationContext appContext{ m_AssetManager, m_ActiveWorld };
+			UpdateContext updateContext{ appContext, m_FrameStats.DeltaTime, inputSnapshot };
+			OnUpdate(updateContext);
+
 			// TODO: Implement game logic
 			if (m_RenderManager)
 			{
-				// Spin the cube about a tilted axis so every face takes a turn in front; rebuilt from total time, never accumulated
-				const float angle = glm::radians(45.0f) * static_cast<float>(m_FrameStats.TotalTime);
-				transforms[0] = glm::rotate(glm::mat4(1.0f), angle, glm::normalize(glm::vec3(1.0f, 1.0f, 0.0f)));
-
-				const bool minimized = m_Window->IsMinimized();
-				const glm::uvec2 surfaceSize = m_Window->GetSize();
-				const float aspect = surfaceSize.y > 0 ? static_cast<float>(surfaceSize.x) / static_cast<float>(surfaceSize.y) : 1.0f;
-
 				CDL_PROFILE_SCOPE("Application::Run::FramePacket");
 				FramePacket& packet = m_RenderManager->BeginFramePacket();
 				CDL_PROFILE_SCOPE_METADATA(packet.FrameIndex);
-				packet.DrawItems = drawItems;
-				packet.TransformData = transforms;
-				packet.ViewMatrix = viewMatrix;
-				packet.ProjectionMatrix = glm::perspective(glm::radians(45.0f), aspect, 0.1f, 100.0f);
-				packet.Time = m_FrameStats.TotalTime;
-				packet.Minimized = minimized;
-				packet.SurfaceSize = surfaceSize;
+				ExtractToFramePacket(packet);
 				m_RenderManager->SubmitFramePacket(packet);
 
 				// Nothing is presented while minimized, so nothing else holds the loop back
-				if (minimized)
+				if (m_Window->IsMinimized())
 					Platform::SleepCurrentThread(10);
 			}
 
@@ -226,6 +137,9 @@ namespace Candle {
 		// Wait for the render thread to finish before exiting
 		if (m_RenderManager)
 			m_RenderManager->JoinRenderThread();
+
+		// Call the application shutdown callback
+		OnShutdown();
 	}
 
 	void Application::HandlePlatformEvents()
@@ -246,6 +160,37 @@ namespace Candle {
 				[&](const InputEvent& e) { m_InputSystem.ConsumeEvent(e); }
 				}, evt);
 		}
+	}
+
+	void Application::ExtractToFramePacket(FramePacket& packet)
+	{
+		std::vector<DrawItem> drawItems;
+		std::vector<glm::mat4> transforms;
+		drawItems.reserve(m_ActiveWorld.Entities.size());
+		transforms.reserve(m_ActiveWorld.Entities.size());
+
+		for (size_t i = 0; i < m_ActiveWorld.Entities.size(); ++i)
+		{
+			Entity& entity = m_ActiveWorld.Entities[i];
+			auto mesh = m_AssetManager.GetAsset<MeshAsset>(entity.MeshID);
+			auto texture = m_AssetManager.GetAsset<Texture>(entity.TextureID);
+
+			transforms.push_back(entity.Transform);
+			drawItems.push_back({
+				.Mesh = mesh->GetGPUHandle(),
+				.Texture = texture ? texture->GetGPUHandle() : GPUTextureHandle{},
+				.Sampler = SamplerType::LinearClamp,
+				.TransformIndex = static_cast<uint32_t>(drawItems.size())
+			});
+		}
+
+		packet.DrawItems = drawItems;
+		packet.TransformData = transforms;
+		packet.ViewMatrix = m_ActiveWorld.View;
+		packet.ProjectionMatrix = m_ActiveWorld.Projection;
+		packet.Time = m_FrameStats.TotalTime;
+		packet.Minimized = m_Window->IsMinimized();
+		packet.SurfaceSize = m_Window->GetSize();
 	}
 
 }

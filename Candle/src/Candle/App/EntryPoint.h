@@ -15,9 +15,7 @@ int main(int argc, char** argv)
 	try
 	{
 		auto app = Candle::CreateApplication(argc, argv);
-		app->OnInit();
 		app->Run();
-		app->OnShutdown();
 		return 0;
 	}
 	catch (const std::exception& e)

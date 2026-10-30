@@ -1,7 +1,5 @@
 #pragma once
 
-#include <vulkan/vulkan_raii.hpp>
-
 namespace Candle {
 
 	// The element in the bindless sampler array (set 0, binding 1), so shaders must index with the same values

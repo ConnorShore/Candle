@@ -43,6 +43,14 @@ namespace Candle {
 
 		[[nodiscard]] SharedPtr<Asset> GetAsset(uint64_t uuid) const;
 
+		template<IsAsset T>
+		[[nodiscard]] inline SharedPtr<T> GetAsset(uint64_t uuid) const
+		{
+			SharedPtr<Asset> asset = GetAsset(uuid);
+			CDL_CORE_ASSERT(!asset || asset->GetType() == T::kType, "AssetID collision");
+			return StaticPointerCast<T>(asset);
+		}
+
 		void RegisterAssetHandler(ScopedPtr<IAssetHandler> handler);
 
 	private:

@@ -145,7 +145,8 @@ namespace Candle::Test {
 	{
 	public:
 		using Application::Application;
-		void OnInit() override {}
+		void OnInit(ApplicationContext context) override {}
+		void OnUpdate(UpdateContext context) override {}
 		void OnShutdown() override {}
 	};
 
