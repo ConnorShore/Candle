@@ -85,7 +85,7 @@ namespace Candle {
 		frame.FrameData.Write(std::as_bytes(std::span(&frameData, 1)));
 
 		const GPU::GlobalPushConstants global{ 
-			.Frame = frame.FrameData.GetDeviceAddress() 
+			.Frame = frame.FrameData.GetDeviceAddress()
 		};
 
 		// TODO: The render graph will own the passes, their pipelines, the depth target and the barriers between them;

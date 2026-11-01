@@ -1,6 +1,7 @@
 #include "cdlpch.h"
 #include "Candle/Platform/Window.h"
 #include "Candle/Platform/Platform.h"
+#include "Candle/Render/GUI/GuiSystem.h"
 
 #include <SDL3/SDL.h>
 
@@ -14,6 +15,7 @@ namespace Candle {
 			return reinterpret_cast<SDL_Window*>(handle); 
 		}
 
+		constexpr bool IsNativeWindowHandleValid(NativeWindowHandle handle) { return handle != 0; }
 	}
 
 	Window::Window(const WindowSpecification& info)
@@ -21,11 +23,12 @@ namespace Candle {
 		CDL_CORE_ASSERT(Platform::IsMainThread(), "Windows must be created on the main thread");
 		CDL_CORE_ASSERT(Platform::IsWindowingInitialized(), "InitWindowing must run before a window is created");
 
-		uint64_t flags = SDL_WINDOW_RESIZABLE | SDL_WINDOW_VULKAN;
+		uint64_t flags = SDL_WINDOW_RESIZABLE | SDL_WINDOW_VULKAN | SDL_WINDOW_HIGH_PIXEL_DENSITY;
 		if (info.Mode == WindowMode::BorderlessFullscreen)
 			flags |= SDL_WINDOW_FULLSCREEN;	// With no display mode set, SDL's fullscreen is borderless desktop fullscreen
 
-		SDL_Window* sdlWindow = SDL_CreateWindow(info.Title.c_str(), info.Width, info.Height, flags);
+		float scale = GetContentScale();	// Scale the window size by the content scale to get the correct pixel size for high-DPI displays
+		SDL_Window* sdlWindow = SDL_CreateWindow(info.Title.c_str(), static_cast<int>(info.Width * scale), static_cast<int>(info.Height * scale), flags);
 		if (sdlWindow == nullptr)
 			CDL_CORE_PANIC(LogChannel::Window, "Failed to create window '{}': {}", info.Title, SDL_GetError());
 
@@ -64,11 +67,18 @@ namespace Candle {
 	void Window::Destroy()
 	{
 		CDL_CORE_ASSERT(Platform::IsMainThread(), "Windows must be destroyed on the main thread");
-		if (m_NativeHandle != 0)
+		if (IsNativeWindowHandleValid(m_NativeHandle))
 		{
 			SDL_DestroyWindow(ToSDL(m_NativeHandle));
 			m_NativeHandle = 0;
 		}
+	}
+
+	float Window::GetContentScale() const
+	{
+		CDL_CORE_ASSERT(Platform::IsMainThread(), "Windows must be queried for content scale on the main thread");
+		SDL_DisplayID displayID = IsNativeWindowHandleValid(m_NativeHandle) ? SDL_GetDisplayForWindow(ToSDL(m_NativeHandle)) : SDL_GetPrimaryDisplay();
+		return SDL_GetDisplayContentScale(displayID);
 	}
 
 	bool Window::IsMinimized() const

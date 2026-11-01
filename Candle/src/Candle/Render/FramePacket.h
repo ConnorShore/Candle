@@ -2,6 +2,7 @@
 
 #include "Candle/Render/Resources/GPUHandles.h"
 #include "Candle/Render/Vulkan/SamplerType.h"
+#include "Candle/Render/GUI/GuiDrawData.h"
 
 #include <vector>
 #include <glm/glm.hpp>
@@ -26,6 +27,8 @@ namespace Candle {
 		glm::mat4 ViewMatrix{ 1.0f };
 		glm::mat4 ProjectionMatrix{ 1.0f };
 		double Time{ 0.0 };		// Simulation time in seconds at extraction; the renderer never reads a clock of its own
+
+		Candle::GuiDrawData GuiDrawData;	// Draw data for the GUI layer; the renderer will render this on top of the 3D scene
 
 		bool Minimized{ false };		// Whether the surface is minimized; the renderer may skip rendering if true
 		glm::uvec2 SurfaceSize{ 0, 0 };	// The  size of the surface for this frame; the renderer may need to recreate the swapchain if changed

@@ -30,6 +30,7 @@ namespace Candle {
 
 		void Destroy();
 
+		float GetContentScale() const;
 		bool IsMinimized() const;
 		glm::uvec2 GetSize() const;
 		uint32_t GetID() const;
@@ -40,7 +41,7 @@ namespace Candle {
 		inline NativeWindowHandle GetNativeHandle() const { return m_NativeHandle; }
 
 	private:
-		NativeWindowHandle m_NativeHandle;
+		NativeWindowHandle m_NativeHandle{ 0 };
 	};
 
 }

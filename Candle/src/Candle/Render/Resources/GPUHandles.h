@@ -12,6 +12,12 @@ namespace Candle {
 		uint32_t Index{ std::numeric_limits<uint32_t>::max() };
 		uint32_t Generation{ 0 };
 
+		GPUHandle(uint64_t other) 
+		{
+			Index = static_cast<uint32_t>(other & 0xFFFFFFFF);
+			Generation = static_cast<uint32_t>((other >> 32) & 0xFFFFFFFF);
+		}
+
 		inline bool IsValid() const { return Index != std::numeric_limits<uint32_t>::max(); }
 	};
 
