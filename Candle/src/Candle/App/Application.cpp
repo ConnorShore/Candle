@@ -53,7 +53,7 @@ namespace Candle {
 		, m_WindowingScope(!m_Specification.Headless)
 		, m_Window(m_Specification.Headless ? ScopedPtr<Window>() : ScopedPtr<Window>::Create(m_Specification.WindowSpec))
 		, m_RenderManager(m_Specification.Headless ? ScopedPtr<RenderManager>() : ScopedPtr<RenderManager>::Create(m_Specification.RenderSpec, m_Specification.AppInfo, m_Specification.EngineAssetDir, *m_Window, m_JobSystem))
-		, m_GuiSystem(m_Specification.Headless ? ScopedPtr<GuiSystem>() : ScopedPtr<GuiSystem>::Create(*m_Window))
+		, m_GuiSystem(m_Specification.Headless ? ScopedPtr<GuiSystem>() : ScopedPtr<GuiSystem>::Create(*m_Window, m_RenderManager->GetTexturePool()))
 	{
 		CDL_CORE_INFO(LogChannel::Application, "Application created: {}", m_Specification.AppInfo.Name);
 		Platform::SetCurrentThreadName("Candle-MainThread");
@@ -98,7 +98,7 @@ namespace Candle {
 			OnUpdate(updateContext);
 
 			// Call the GUI system to end the frame
-			 m_GuiSystem->EndFrame();
+			m_GuiSystem->EndFrame();
 
 			// TODO: Implement game logic
 			if (m_RenderManager)

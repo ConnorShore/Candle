@@ -4,6 +4,8 @@
 #include <Candle/Render/Assets/MeshAsset.h>
 #include <Candle/Render/Assets/Texture.h>
 
+#include <imgui.h>
+
 #include <cmath>
 
 namespace Candle {
@@ -106,6 +108,8 @@ namespace Candle {
 			// Update textured cube transform to spin it
 			Entity& cubeEntity = context.AppContext.ActiveWorld.Entities[0];
 			cubeEntity.Transform = glm::rotate(cubeEntity.Transform, glm::radians(45.0f) * context.DeltaTime.GetSeconds(), glm::normalize(glm::vec3(1.0f, 1.0f, 0.0f)));
+
+			ImGui::ShowDemoWindow();
 		}
 
 		void OnShutdown() override

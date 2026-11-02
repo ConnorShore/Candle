@@ -50,6 +50,7 @@ namespace Candle {
 
 		inline RenderDevice& GetRenderDevice() { return m_RenderDevice; }
 		inline GeometryPool& GetGeometryPool() { return m_GeometryPool; }	// For tests only; the application goes through asset handlers
+		inline TexturePool& GetTexturePool() { return m_TexturePool; }
 
 	private:
 		void RenderThreadMain();   // Wait for a frame slot → acquire → Renderer::Render → submit → present

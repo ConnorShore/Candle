@@ -1,5 +1,6 @@
 #pragma once
 
+#include "GUIVertex.h"
 #include "Candle/Render/Resources/GPUHandles.h"
 
 #include <glm/glm.hpp>
@@ -8,15 +9,9 @@
 
 namespace Candle {
 
-	struct GuiVertex
-	{
-		glm::vec2 Position;
-		glm::vec2 UV;
-		uint32_t Color;	// RGBA8 packed into a uint32_t
-	};
 	using GuiIndex = uint16_t;	
 
-	struct GuiDrawCmd
+	struct GuiDrawCommand
 	{
 		glm::vec4 ClipRect;             // minX, minY, maxX, maxY in framebuffer pixels: DisplayPos removed and FramebufferScale applied at extraction
 		GPUTextureHandle Texture;
@@ -27,9 +22,9 @@ namespace Candle {
 
 	struct GuiDrawData
 	{
-		std::vector<GuiVertex> Vertices;
+		std::vector<Candle::GPU::GuiVertex> Vertices;
 		std::vector<GuiIndex> Indices;
-		std::vector<GuiDrawCmd> Commands;
+		std::vector<GuiDrawCommand> Commands;
 		glm::vec2 DisplayPos;
 		glm::vec2 DisplaySize;
 	};

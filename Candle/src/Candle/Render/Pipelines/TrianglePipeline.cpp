@@ -17,7 +17,8 @@ namespace Candle {
 		return {
 			.Shader = *shader,
 			.ColorAttachmentFormats = {colorFormat},
-			.DepthAttachmentFormat = depthFormat
+			.DepthAttachmentFormat = depthFormat,
+			.DebugName = m_Name
 			// Rest are defaults for now
 		};
 	}

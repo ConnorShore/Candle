@@ -24,7 +24,8 @@ namespace Candle {
 		explicit RenderPipeline(std::string name) : m_Name(std::move(name)) {}
 
 	protected:
-		std::string m_Name;	// Name for debugging
+		std::string m_Name;			// Name for debugging
+		std::string m_ShaderPath;	// Path to the shader file, relative to the engine's asset directory
 	};
 
 }

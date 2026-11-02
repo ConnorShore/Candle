@@ -6,6 +6,7 @@
 
 #include <filesystem>
 #include <vector>
+#include <string_view>
 
 #include <vulkan/vulkan_raii.hpp>
 
@@ -19,6 +20,7 @@ namespace Candle {
 	class BindlessTable;
 	class RenderPipeline;
 	class GPUAllocator;
+	class GPUBuffer;
 
 	struct FrameContext;
 	struct FramePacket;
@@ -45,11 +47,18 @@ namespace Candle {
 	private:
 		void CreatePipeline(const RenderPipeline& pipeline); // builds a Pipeline from the description and stores it
 
+		// TODO: Eventaully will be part of render graph; for now, the Renderer owns the depth target and does the passes itself
+		void RenderTrianglePipeline(const FramePacket& packet, FrameContext& frame, SwapChainImage& target, const GPU::GlobalPushConstants globalPCs);
+		void RenderGuiPipeline(const FramePacket& packet, FrameContext& frame, SwapChainImage& target, const GPU::GlobalPushConstants globalPCs);
+
+		// TODO: Will probably move to some helper or something one render grpah is implemented
+		void EnsureCapacity(GPUBuffer& buffer, size_t size, vk::BufferUsageFlags usage, std::string_view name);
 	private:
 		RenderDevice& m_RenderDevice;
 		GeometryPool& m_GeometryPool;
 		TexturePool& m_TexturePool;
 		BindlessTable& m_BindlessTable;
+		GPUAllocator& m_GPUAllocator;
 		vk::Format m_TargetFormat;
 		vk::Format m_DepthFormat;	// Chosen once, before m_DepthImage; the depth image and every pipeline's spec both take it
 		GPUImage m_DepthImage;	// Shared by every frame in flight, so each frame's first barrier waits for the last one's depth writes
