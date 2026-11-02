@@ -3,6 +3,7 @@
 #include "Candle/Platform/Window.h"
 #include "Candle/Platform/SDL/SDLPlatform.h"
 #include "Candle/Render/Resources/TexturePool.h"
+#include "Candle/Render/GUI/GuiTextureID.h"
 
 #include <imgui.h>
 #include <imgui_internal.h>
@@ -12,10 +13,11 @@ namespace Candle {
 
 	namespace {
 
-		// Index in the low 32 bits, Generation in the high 32, so a handle round-trips through ImGui unchanged
+		CDL_STATIC_ASSERT(std::is_same_v<ImTextureID, uint64_t>, "ToGuiTextureID returns uint64_t standing in for ImTextureID");
+
 		ImTextureID ToTextureID(GPUTextureHandle handle)
 		{
-			return (static_cast<ImTextureID>(handle.Generation) << 32) | handle.Index;
+			return ToGuiTextureID(handle);
 		}
 
 		GPUTextureHandle ToTextureHandle(ImTextureID id)
@@ -146,7 +148,7 @@ namespace Candle {
 	void GuiSystem::UpdateTextures()
 	{
 		ImDrawData* drawData = ImGui::GetDrawData();
-		if (!drawData->Textures)
+		if (!drawData || !drawData->Textures)
 			return;
 
 		for (ImTextureData* tex : *drawData->Textures)
@@ -181,7 +183,7 @@ namespace Candle {
 	void GuiSystem::ReleaseTextures()
 	{
 		ImDrawData* drawData = ImGui::GetDrawData();
-		if (!drawData->Textures)
+		if (!drawData || !drawData->Textures)
 			return;
 
 		for (ImTextureData* tex : *drawData->Textures)

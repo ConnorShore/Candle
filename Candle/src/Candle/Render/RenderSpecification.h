@@ -55,6 +55,7 @@ namespace Candle {
 		RenderDevicePreference DevicePreference{ RenderDevicePreference::DiscreteGPU };
 
 		bool EnableVSync = true;
+		bool RenderToSwapChain = true;	// If false, the world renders into RenderContext's output texture, which the app shows itself
 	};
 
 }

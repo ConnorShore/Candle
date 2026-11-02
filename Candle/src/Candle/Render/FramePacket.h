@@ -29,6 +29,7 @@ namespace Candle {
 		double Time{ 0.0 };		// Simulation time in seconds at extraction; the renderer never reads a clock of its own
 
 		Candle::GuiDrawData GuiDrawData;	// Draw data for the GUI layer; the renderer will render this on top of the 3D scene
+		GPUTextureHandle OutputTarget;		// What the scene renders into when not rendering to the swapchain, for the GUI to show; invalid otherwise
 
 		bool Minimized{ false };		// Whether the surface is minimized; the renderer may skip rendering if true
 		glm::uvec2 SurfaceSize{ 0, 0 };	// The  size of the surface for this frame; the renderer may need to recreate the swapchain if changed

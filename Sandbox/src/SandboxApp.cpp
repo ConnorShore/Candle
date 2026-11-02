@@ -109,6 +109,24 @@ namespace Candle {
 			Entity& cubeEntity = context.AppContext.ActiveWorld.Entities[0];
 			cubeEntity.Transform = glm::rotate(cubeEntity.Transform, glm::radians(45.0f) * context.DeltaTime.GetSeconds(), glm::normalize(glm::vec3(1.0f, 1.0f, 0.0f)));
 
+			// Show the world in a window when it renders to a texture
+			if (!context.Render.IsRenderingToSwapChain())
+			{
+				ImGui::DockSpaceOverViewport();
+
+				ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0.0f, 0.0f));
+				ImGui::Begin("Scene");
+				const ImVec2 size = ImGui::GetContentRegionAvail();
+				context.Render.SetOutputSize({ size.x, size.y });
+				ImGui::Image(context.Render.GetOutputTextureID(), size);
+				ImGui::End();
+				ImGui::PopStyleVar();
+
+				// Match the camera to the window's shape, or the image stretches
+				const glm::uvec2 outputSize = context.Render.GetOutputSize();
+				context.AppContext.ActiveWorld.Projection = glm::perspective(glm::radians(45.0f), static_cast<float>(outputSize.x) / outputSize.y, 0.1f, 100.0f);
+			}
+
 			ImGui::ShowDemoWindow();
 		}
 
@@ -148,6 +166,7 @@ namespace Candle {
 
 		// Render settings for the Sandbox application
 		spec.RenderSpec.DevicePreference = RenderDevicePreference::DiscreteGPU;
+		spec.RenderSpec.RenderToSwapChain = true;	// false renders the world into the "Scene" window instead
 
 		return ScopedPtr<SandboxApp>::Create(spec);
 	}

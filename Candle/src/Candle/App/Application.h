@@ -6,6 +6,7 @@
 #include "Candle/Platform/Window.h"
 #include "Candle/World/World.h"
 #include "Candle/Render/GUI/GuiSystem.h"
+#include "Candle/Render/RenderContext.h"
 
 #include "Candle/Asset/AssetManager.h"
 #include "Candle/Input/InputSystem.h"
@@ -29,6 +30,7 @@ namespace Candle {
 		ApplicationContext& AppContext;
 		TimeStep DeltaTime;
 		const InputSnapshot& Input;
+		RenderContext& Render;
 	};
 
     class Application
@@ -81,6 +83,7 @@ namespace Candle {
 		JobSystem m_JobSystem;
 		ScopedPtr<RenderManager> m_RenderManager;	// Empty when headless
 		ScopedPtr<GuiSystem> m_GuiSystem;			// Empty when headless
+		RenderContext m_RenderContext;				// After the render manager, which it releases its output target through
 		AssetManager m_AssetManager;
 
 		World m_ActiveWorld;						// The world that the application is currently simulating and rendering (TEMPORARY: one world only for now)

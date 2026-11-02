@@ -54,6 +54,7 @@ namespace Candle {
 		, m_Window(m_Specification.Headless ? ScopedPtr<Window>() : ScopedPtr<Window>::Create(m_Specification.WindowSpec))
 		, m_RenderManager(m_Specification.Headless ? ScopedPtr<RenderManager>() : ScopedPtr<RenderManager>::Create(m_Specification.RenderSpec, m_Specification.AppInfo, m_Specification.EngineAssetDir, *m_Window, m_JobSystem))
 		, m_GuiSystem(m_Specification.Headless ? ScopedPtr<GuiSystem>() : ScopedPtr<GuiSystem>::Create(*m_Window, m_RenderManager->GetTexturePool()))
+		, m_RenderContext(m_RenderManager.Get(), m_Specification.RenderSpec.RenderToSwapChain, { m_Specification.WindowSpec.Width, m_Specification.WindowSpec.Height })
 	{
 		CDL_CORE_INFO(LogChannel::Application, "Application created: {}", m_Specification.AppInfo.Name);
 		Platform::SetCurrentThreadName("Candle-MainThread");
@@ -90,15 +91,17 @@ namespace Candle {
 			InputSnapshot inputSnapshot = m_InputSystem.CaptureSnapshot();
 
 			// Call the GUI system to start a new frame
-			m_GuiSystem->StartFrame();
+			if (m_GuiSystem)
+				m_GuiSystem->StartFrame();
 
 			// Call the application update callback
 			ApplicationContext appContext{ m_AssetManager, m_ActiveWorld };
-			UpdateContext updateContext{ appContext, m_FrameStats.DeltaTime, inputSnapshot };
+			UpdateContext updateContext{ appContext, m_FrameStats.DeltaTime, inputSnapshot, m_RenderContext };
 			OnUpdate(updateContext);
 
 			// Call the GUI system to end the frame
-			m_GuiSystem->EndFrame();
+			if (m_GuiSystem)
+				m_GuiSystem->EndFrame();
 
 			// TODO: Implement game logic
 			if (m_RenderManager)
@@ -202,7 +205,8 @@ namespace Candle {
 		packet.ViewMatrix = m_ActiveWorld.View;
 		packet.ProjectionMatrix = m_ActiveWorld.Projection;
 		packet.Time = m_FrameStats.TotalTime;
-		packet.GuiDrawData = m_GuiSystem->ExtractDrawData();
+		packet.GuiDrawData = m_GuiSystem ? m_GuiSystem->ExtractDrawData() : GuiDrawData{};
+		packet.OutputTarget = m_RenderContext.GetOutputTexture();
 		packet.Minimized = m_Window->IsMinimized();
 		packet.SurfaceSize = m_Window->GetSize();
 	}

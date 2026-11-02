@@ -47,6 +47,29 @@ namespace Candle {
 			}
 			CDL_CORE_PANIC(LogChannel::Render, "No suitable depth format found");
 		}
+
+		GPUImageSpec DepthImageSpec(vk::Format format, glm::uvec2 extent)
+		{
+			return { .Extent = extent,
+				.Format = format,
+				.Usage = vk::ImageUsageFlagBits::eDepthStencilAttachment,
+				.Aspect = vk::ImageAspectFlagBits::eDepth,
+				.DebugName = "Depth Target" };
+		}
+
+		constexpr vk::ImageSubresourceRange kColorRange{ .aspectMask = vk::ImageAspectFlagBits::eColor, .levelCount = 1, .layerCount = 1 };
+
+		// A colour attachment the next pass only writes, since its clear replaces whatever was there
+		constexpr ImageState kColorAttachmentWrite{
+			.Layout = vk::ImageLayout::eColorAttachmentOptimal,
+			.Access = vk::AccessFlagBits2::eColorAttachmentWrite,
+			.Stage = vk::PipelineStageFlagBits2::eColorAttachmentOutput };
+
+		// A colour attachment the next pass also reads: its load and blending read what the pass before it wrote
+		constexpr ImageState kColorAttachmentReadWrite{
+			.Layout = vk::ImageLayout::eColorAttachmentOptimal,
+			.Access = vk::AccessFlagBits2::eColorAttachmentRead | vk::AccessFlagBits2::eColorAttachmentWrite,
+			.Stage = vk::PipelineStageFlagBits2::eColorAttachmentOutput };
 	}
 
 	Renderer::Renderer(RenderDevice& renderDevice, GeometryPool& geometryPool, TexturePool& texturePool, BindlessTable& bindlessTable,
@@ -56,13 +79,11 @@ namespace Candle {
 		, m_TexturePool(texturePool)
 		, m_BindlessTable(bindlessTable)
 		, m_GPUAllocator(allocator)
+		, m_RenderToSwapChain(info.RenderToSwapChain)
 		, m_TargetFormat(info.TargetFormat)
 		, m_DepthFormat(FindDepthFormat(renderDevice))
-		, m_DepthImage({ .Extent = { info.TargetExtent.width, info.TargetExtent.height }, // Sized to the colour target
-			.Format = m_DepthFormat,
-			.Usage = vk::ImageUsageFlagBits::eDepthStencilAttachment,
-			.Aspect = vk::ImageAspectFlagBits::eDepth,
-			.DebugName = "Depth Target" }, allocator)
+		, m_DepthImage(DepthImageSpec(m_DepthFormat, { info.TargetExtent.width, info.TargetExtent.height }), allocator) // Sized to the colour target
+		, m_DepthExtent(info.TargetExtent.width, info.TargetExtent.height)
 	{
 		CreatePipeline(TrianglePipeline{ info.ShaderDirectory });
 		CreatePipeline(GuiPipeline{ info.ShaderDirectory });
@@ -74,6 +95,9 @@ namespace Candle {
 
 		// TODO: The render graph will own the passes, their pipelines, the depth target and the barriers between them;
 		//	until then the passes are recorded here by hand
+
+		// Frees the depth images MatchDepthToOutput replaced, once the frames that used them have retired
+		m_RetiredImages.Drain(QueueType::Graphics, m_RenderDevice.GetCompletedTimelineValue(QueueType::Graphics));
 
 		// Write the transform data into the frame's TransformData buffer, if any
 		std::span<const glm::mat4> transforms = packet.TransformData;
@@ -103,9 +127,45 @@ namespace Candle {
 		// Begin recording commands into the command buffer
 		frame.CommandBuffer.begin({ .flags = vk::CommandBufferUsageFlagBits::eOneTimeSubmit });
 
-		// Each pass transitions the target into the state it needs, so the tracked state also orders it after the pass before
-		RenderTrianglePipeline(packet, frame, target, global);	// Clears the target, so it runs every frame, even with nothing to draw
-		RenderGuiPipeline(packet, frame, target, global);		// Loads the target and draws over the scene; returns early with no GUI
+		if (m_RenderToSwapChain)
+		{
+			// The scene pass clears the target, so it runs every frame, even with nothing to draw
+			target.Transition(kColorAttachmentWrite, frame.CommandBuffer);
+			RenderTrianglePipeline(packet, frame, { .ColorView = target.GetImageView(), .Extent = target.GetDesc().Extent }, global);
+
+			// The GUI pass draws over the scene; the tracked state makes this transition order it after the scene's writes
+			target.Transition(kColorAttachmentReadWrite, frame.CommandBuffer);
+			RenderGuiPipeline(packet, frame, target, vk::AttachmentLoadOp::eLoad, global);	// Returns early with no GUI
+		}
+		else
+		{
+			const TextureInfo output = m_TexturePool.GetTextureInfo(packet.OutputTarget);
+			if (output.IsRenderTarget)
+			{
+				CDL_CORE_ASSERT(output.Extent == m_DepthExtent, "Depth must match the output target; RenderManager calls MatchDepthToOutput first");
+
+				// Undefined discards last frame's contents, which the clear replaces. Last frame's GUI pass sampled it, and a write
+				// after a read needs only an execution dependency, so the source has a stage but no access
+				const vk::ImageMemoryBarrier2 toAttachment = MakeImageBarrier(output.Image,
+					{ .Layout = vk::ImageLayout::eUndefined, .Access = vk::AccessFlagBits2::eNone, .Stage = vk::PipelineStageFlagBits2::eFragmentShader },
+					kColorAttachmentWrite, kColorRange);
+				frame.CommandBuffer.pipelineBarrier2({ .imageMemoryBarrierCount = 1, .pImageMemoryBarriers = &toAttachment });
+
+				RenderTrianglePipeline(packet, frame, { .ColorView = output.ImageView, .Extent = { output.Extent.x, output.Extent.y } }, global);
+
+				// The GUI samples it next, through a bindless descriptor that expects ShaderReadOnlyOptimal
+				const vk::ImageMemoryBarrier2 toSampled = MakeImageBarrier(output.Image, kColorAttachmentWrite,
+					{ .Layout = vk::ImageLayout::eShaderReadOnlyOptimal, .Access = vk::AccessFlagBits2::eShaderSampledRead, .Stage = vk::PipelineStageFlagBits2::eFragmentShader },
+					kColorRange);
+				frame.CommandBuffer.pipelineBarrier2({ .imageMemoryBarrierCount = 1, .pImageMemoryBarriers = &toSampled });
+			}
+			else
+				CDL_CORE_ASSERT(false, "Not rendering to the swapchain, but the packet has no output target to render the scene into");
+
+			// Nothing else draws to the target, so the GUI pass clears it, and runs even with no GUI to draw
+			target.Transition(kColorAttachmentWrite, frame.CommandBuffer);
+			RenderGuiPipeline(packet, frame, target, vk::AttachmentLoadOp::eClear, global);
+		}
 
 		// Every pass leaves the target as a colour attachment, and presentation reads it next
 		target.Transition({
@@ -119,11 +179,24 @@ namespace Candle {
 
 	void Renderer::RecreateTargets(vk::Extent2D targetExtent, GPUAllocator& allocator)
 	{
-		m_DepthImage.Recreate({ .Extent = { targetExtent.width, targetExtent.height },
-			.Format = m_DepthFormat,
-			.Usage = vk::ImageUsageFlagBits::eDepthStencilAttachment,
-			.Aspect = vk::ImageAspectFlagBits::eDepth,
-			.DebugName = "Depth Target" }, allocator);
+		// Otherwise depth follows the output target, which a swapchain resize doesn't change
+		if (!m_RenderToSwapChain)
+			return;
+
+		m_DepthExtent = { targetExtent.width, targetExtent.height };
+		m_DepthImage.Recreate(DepthImageSpec(m_DepthFormat, m_DepthExtent), allocator);
+	}
+
+	void Renderer::MatchDepthToOutput(glm::uvec2 outputExtent, uint64_t lastUseValue)
+	{
+		CDL_CORE_ASSERT(!m_RenderToSwapChain, "Depth follows the swapchain when rendering to it; RecreateTargets resizes it");
+		if (outputExtent == m_DepthExtent)
+			return;
+
+		// Frames in flight may still test against the old image, so it waits in the deletion queue rather than being freed here
+		m_RetiredImages.Enqueue(QueueType::Graphics, lastUseValue, std::move(m_DepthImage));
+		m_DepthExtent = outputExtent;
+		m_DepthImage = GPUImage(DepthImageSpec(m_DepthFormat, m_DepthExtent), m_GPUAllocator);
 	}
 
 	void Renderer::CreatePipeline(const RenderPipeline& pipeline)
@@ -133,15 +206,8 @@ namespace Candle {
 		m_Pipelines.emplace_back(spec, m_RenderDevice, m_BindlessTable);
 	}
 
-	void Renderer::RenderTrianglePipeline(const FramePacket& packet, FrameContext& frame, SwapChainImage& target, const GPU::GlobalPushConstants globalPCs)
+	void Renderer::RenderTrianglePipeline(const FramePacket& packet, FrameContext& frame, const SceneTarget& target, const GPU::GlobalPushConstants globalPCs)
 	{
-		// Write only: the clear replaces whatever was there
-		target.Transition({
-			.Layout = vk::ImageLayout::eColorAttachmentOptimal,
-			.Access = vk::AccessFlagBits2::eColorAttachmentWrite,
-			.Stage = vk::PipelineStageFlagBits2::eColorAttachmentOutput
-			}, frame.CommandBuffer);
-
 		// Transition the depth image to DEPTH_ATTACHMENT_OPTIMAL
 		vk::ImageMemoryBarrier2 depthBarrier = MakeImageBarrier(
 			m_DepthImage.GetImage(),
@@ -162,7 +228,7 @@ namespace Candle {
 		vk::ClearValue clearDepth = vk::ClearDepthStencilValue(1.0f, 0);
 
 		vk::RenderingAttachmentInfo colorAttachmentInfo = {
-			.imageView = target.GetImageView(),
+			.imageView = target.ColorView,
 			.imageLayout = vk::ImageLayout::eColorAttachmentOptimal,
 			.loadOp = vk::AttachmentLoadOp::eClear,
 			.storeOp = vk::AttachmentStoreOp::eStore,
@@ -176,13 +242,13 @@ namespace Candle {
 			.clearValue = clearDepth
 		};
 
-		vk::Extent2D swapChainExtent = target.GetDesc().Extent;
+		const vk::Extent2D extent = target.Extent;
 
 		// Setup the rendering info for the render pass begin info. This specifies the render area, the number of layers, and the color attachment info.
 		vk::RenderingInfo renderingInfo = {
 			.renderArea = {
 				.offset = { 0, 0 },
-				.extent = swapChainExtent },
+				.extent = extent },
 			.layerCount = 1,
 			.colorAttachmentCount = 1,
 			.pColorAttachments = &colorAttachmentInfo,
@@ -195,8 +261,8 @@ namespace Candle {
 
 			frame.CommandBuffer.bindPipeline(vk::PipelineBindPoint::eGraphics, m_Pipelines[0].GetPipeline());
 
-			frame.CommandBuffer.setViewport(0, vk::Viewport(0.0f, static_cast<float>(swapChainExtent.height), static_cast<float>(swapChainExtent.width), -static_cast<float>(swapChainExtent.height), 0.0f, 1.0f));
-			frame.CommandBuffer.setScissor(0, vk::Rect2D(vk::Offset2D(0, 0), swapChainExtent));
+			frame.CommandBuffer.setViewport(0, vk::Viewport(0.0f, static_cast<float>(extent.height), static_cast<float>(extent.width), -static_cast<float>(extent.height), 0.0f, 1.0f));
+			frame.CommandBuffer.setScissor(0, vk::Rect2D(vk::Offset2D(0, 0), extent));
 
 			// Bind the bindless descriptor set to the pipeline layout
 			vk::PipelineLayout pipelineLayout = m_Pipelines[0].GetLayout();
@@ -231,31 +297,24 @@ namespace Candle {
 		}
 	}
 
-	void Renderer::RenderGuiPipeline(const FramePacket& packet, FrameContext& frame, SwapChainImage& target, const GPU::GlobalPushConstants globalPCs)
+	void Renderer::RenderGuiPipeline(const FramePacket& packet, FrameContext& frame, SwapChainImage& target, vk::AttachmentLoadOp loadOp, const GPU::GlobalPushConstants globalPCs)
 	{
 		const GuiDrawData& gui = packet.GuiDrawData;
-		if (gui.Commands.empty())
+		const bool hasDraws = !gui.Commands.empty();
+
+		// With nothing to draw, the pass only matters for its clear
+		if (!hasDraws && loadOp != vk::AttachmentLoadOp::eClear)
 			return;
 
-		// Write the GUI vertex and index data into the frame's GuiVertexData and GuiIndexData buffers, if any
-		EnsureCapacity(frame.GuiVertices, gui.Vertices.size() * sizeof(Candle::GPU::GuiVertex), vk::BufferUsageFlagBits::eShaderDeviceAddress, "GuiVertices");
-		EnsureCapacity(frame.GuiIndices, gui.Indices.size() * sizeof(GuiIndex), vk::BufferUsageFlagBits::eIndexBuffer, "GuiIndices");
-		frame.GuiVertices.Write(std::as_bytes(std::span(gui.Vertices)));
-		frame.GuiIndices.Write(std::as_bytes(std::span(gui.Indices)));
+		vk::ClearValue clearColor = vk::ClearColorValue(0.0f, 0.0f, 0.0f, 1.0f);
 
-		// Read as well as write: the load and blending both read what the scene pass wrote, so this orders after its writes
-		target.Transition({
-			.Layout = vk::ImageLayout::eColorAttachmentOptimal,
-			.Access = vk::AccessFlagBits2::eColorAttachmentRead | vk::AccessFlagBits2::eColorAttachmentWrite,
-			.Stage = vk::PipelineStageFlagBits2::eColorAttachmentOutput
-			}, frame.CommandBuffer);
-
-		// Color attachment only, no depth. Loaded rather than cleared, so the GUI draws over the scene
+		// Color attachment only, no depth. Loaded to draw over the scene, or cleared when the scene went to an output target
 		vk::RenderingAttachmentInfo colorAttachmentInfo = {
 			.imageView = target.GetImageView(),
 			.imageLayout = vk::ImageLayout::eColorAttachmentOptimal,
-			.loadOp = vk::AttachmentLoadOp::eLoad,
-			.storeOp = vk::AttachmentStoreOp::eStore };
+			.loadOp = loadOp,
+			.storeOp = vk::AttachmentStoreOp::eStore,
+			.clearValue = clearColor };
 
 		vk::Extent2D swapChainExtent = target.GetDesc().Extent;
 
@@ -270,6 +329,21 @@ namespace Candle {
 			.pColorAttachments = &colorAttachmentInfo,
 			.pDepthAttachment = nullptr
 		};
+
+		if (!hasDraws)
+		{
+			// Just the clear
+			GPUDebugScope guiPass(m_RenderDevice, frame.CommandBuffer, "GUI Pass (clear only)");
+			frame.CommandBuffer.beginRendering(renderingInfo);
+			frame.CommandBuffer.endRendering();
+			return;
+		}
+
+		// Write the GUI vertex and index data into the frame's GuiVertexData and GuiIndexData buffers
+		EnsureCapacity(frame.GuiVertices, gui.Vertices.size() * sizeof(Candle::GPU::GuiVertex), vk::BufferUsageFlagBits::eShaderDeviceAddress, "GuiVertices");
+		EnsureCapacity(frame.GuiIndices, gui.Indices.size() * sizeof(GuiIndex), vk::BufferUsageFlagBits::eIndexBuffer, "GuiIndices");
+		frame.GuiVertices.Write(std::as_bytes(std::span(gui.Vertices)));
+		frame.GuiIndices.Write(std::as_bytes(std::span(gui.Indices)));
 
 		{
 			GPUDebugScope guiPass(m_RenderDevice, frame.CommandBuffer, "GUI Pass");

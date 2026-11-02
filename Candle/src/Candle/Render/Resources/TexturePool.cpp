@@ -70,9 +70,28 @@ namespace Candle {
 			vk::AccessFlagBits2::eShaderSampledRead);
 
 		vk::ImageView view = image.GetImageView();
-		GPUTextureHandle handle = m_Textures.Insert(TextureEntry{ .Image = std::move(image) });
+		GPUTextureHandle handle = m_Textures.Insert(TextureEntry{ .Image = std::move(image), .Extent = spec.Extent });
 
 		// Published here so no texture can be handed out before a shader can sample it
+		m_BindlessTable.WriteTexture(handle.Index, view);
+		return handle;
+	}
+
+	GPUTextureHandle TexturePool::CreateRenderTarget(RenderTargetCreateSpec spec)
+	{
+		CDL_CORE_ASSERT(spec.Extent.x > 0 && spec.Extent.y > 0, "A render target must have an area > 0");
+
+		// No upload: the renderer transitions it out of Undefined, since each frame's clear replaces the contents anyway
+		GPUImage image = m_Allocator.CreateImage(GPUImageSpec{
+			.Extent = spec.Extent,
+			.Format = spec.Format,
+			.Usage = vk::ImageUsageFlagBits::eColorAttachment | vk::ImageUsageFlagBits::eSampled,
+			.DebugName = spec.DebugName
+			});
+
+		vk::ImageView view = image.GetImageView();
+		GPUTextureHandle handle = m_Textures.Insert(TextureEntry{ .Image = std::move(image), .Extent = spec.Extent, .IsRenderTarget = true });
+
 		m_BindlessTable.WriteTexture(handle.Index, view);
 		return handle;
 	}
@@ -106,7 +125,10 @@ namespace Candle {
 
 		return TextureInfo{
 			.Index = handle.Index,
-			.ImageView = entry->Image.GetImageView()
+			.ImageView = entry->Image.GetImageView(),
+			.Image = entry->Image.GetImage(),
+			.Extent = entry->Extent,
+			.IsRenderTarget = entry->IsRenderTarget
 		};
 	}
 

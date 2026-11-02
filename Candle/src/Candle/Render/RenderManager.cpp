@@ -46,7 +46,8 @@ namespace Candle {
 		, m_Renderer(m_RenderDevice, m_GeometryPool, m_TexturePool, m_BindlessTable, m_GPUAllocator, {
 			.TargetFormat = m_SwapChain.GetSurfaceFormat().format,
 			.TargetExtent = m_SwapChain.GetExtent(),
-			.ShaderDirectory = engineAssetDir / "shaders/bin" })
+			.ShaderDirectory = engineAssetDir / "shaders/bin",
+			.RenderToSwapChain = renderSpec.RenderToSwapChain })
 		, m_CommandPoolManager(m_RenderDevice, jobSystem.GetNumWorkers())
 		, m_RenderThread({ .Name = "Candle-RenderThread", .Priority = ThreadPriority::High })
 	{
@@ -115,6 +116,15 @@ namespace Candle {
 		m_FramePump.Submit(packet);
 	}
 
+	GPUTextureHandle RenderManager::CreateOutputTarget(glm::uvec2 extent)
+	{
+		CDL_CORE_ASSERT(Platform::IsMainThread(), "RenderManager::CreateOutputTarget() must be called from the main thread.");
+		return m_TexturePool.CreateRenderTarget({
+			.Extent = extent,
+			.Format = m_Renderer.GetTargetFormat(),
+			.DebugName = std::format("Output Target {}x{}", extent.x, extent.y) });
+	}
+
 	void RenderManager::RenderThreadMain()
 	{
 		CDL_PROFILE_SCOPE("RenderManager::RenderThreadMain");
@@ -159,6 +169,17 @@ namespace Candle {
 		{
 			// Error codes already threw inside acquireNextImage, and eTimeout or eNotReady can't happen with no timeout
 			CDL_CORE_PANIC(LogChannel::Render, "Failed to acquire swap chain image: {}", vk::to_string(result));
+		}
+
+		// The application resizes the output target, and depth must cover it. The newest retire value is the last frame that could
+		// still be using the old depth image, so it is freed once the GPU passes that rather than waited on here.
+		if (!m_Specification.RenderToSwapChain)
+		{
+			uint64_t lastUseValue = 0;
+			for (const FrameContext& context : m_FrameContexts)
+				lastUseValue = std::max(lastUseValue, context.RetireValue);
+
+			m_Renderer.MatchDepthToOutput(m_TexturePool.GetTextureInfo(packet->OutputTarget).Extent, lastUseValue);
 		}
 
 		// Record command buffers for rendering

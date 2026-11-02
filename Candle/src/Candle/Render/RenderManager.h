@@ -48,6 +48,10 @@ namespace Candle {
 		FramePacket& BeginFramePacket();
 		void SubmitFramePacket(FramePacket& packet);
 
+		// Main thread only. A render target in the format the scene's pipelines draw to, for rendering somewhere other than
+		// the swapchain; release it through the texture pool like any texture.
+		GPUTextureHandle CreateOutputTarget(glm::uvec2 extent);
+
 		inline RenderDevice& GetRenderDevice() { return m_RenderDevice; }
 		inline GeometryPool& GetGeometryPool() { return m_GeometryPool; }	// For tests only; the application goes through asset handlers
 		inline TexturePool& GetTexturePool() { return m_TexturePool; }
