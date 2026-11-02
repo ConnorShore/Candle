@@ -53,6 +53,8 @@ namespace Candle {
 		, m_WindowingScope(!m_Specification.Headless)
 		, m_Window(m_Specification.Headless ? ScopedPtr<Window>() : ScopedPtr<Window>::Create(m_Specification.WindowSpec))
 		, m_RenderManager(m_Specification.Headless ? ScopedPtr<RenderManager>() : ScopedPtr<RenderManager>::Create(m_Specification.RenderSpec, m_Specification.AppInfo, m_Specification.EngineAssetDir, *m_Window, m_JobSystem))
+		, m_GuiSystem(m_Specification.Headless ? ScopedPtr<GuiSystem>() : ScopedPtr<GuiSystem>::Create(*m_Window, m_RenderManager->GetTexturePool()))
+		, m_RenderContext(m_RenderManager.Get(), m_Specification.RenderSpec.RenderToSwapChain, { m_Specification.WindowSpec.Width, m_Specification.WindowSpec.Height })
 	{
 		CDL_CORE_INFO(LogChannel::Application, "Application created: {}", m_Specification.AppInfo.Name);
 		Platform::SetCurrentThreadName("Candle-MainThread");
@@ -88,10 +90,18 @@ namespace Candle {
 			// Moves inside the fixed-step tick loop once there is one, so each tick consumes the edges exactly once
 			InputSnapshot inputSnapshot = m_InputSystem.CaptureSnapshot();
 
+			// Call the GUI system to start a new frame
+			if (m_GuiSystem)
+				m_GuiSystem->StartFrame();
+
 			// Call the application update callback
 			ApplicationContext appContext{ m_AssetManager, m_ActiveWorld };
-			UpdateContext updateContext{ appContext, m_FrameStats.DeltaTime, inputSnapshot };
+			UpdateContext updateContext{ appContext, m_FrameStats.DeltaTime, inputSnapshot, m_RenderContext };
 			OnUpdate(updateContext);
+
+			// Call the GUI system to end the frame
+			if (m_GuiSystem)
+				m_GuiSystem->EndFrame();
 
 			// TODO: Implement game logic
 			if (m_RenderManager)
@@ -157,7 +167,13 @@ namespace Candle {
 				[&](const WindowResized& e) {},
 				[&](const WindowFocus& e) {},
 				[&](const WindowMinimized& e) {},
-				[&](const InputEvent& e) { m_InputSystem.ConsumeEvent(e); }
+				[&](const InputEvent& e) 
+				{
+					const bool isRelease = std::holds_alternative<KeyReleasedEvent>(e) || std::holds_alternative<MouseButtonReleasedEvent>(e);
+					if (!isRelease && m_GuiSystem && m_GuiSystem->WantsInput(e))
+							return;
+					m_InputSystem.ConsumeEvent(e);
+				}
 				}, evt);
 		}
 	}
@@ -189,6 +205,8 @@ namespace Candle {
 		packet.ViewMatrix = m_ActiveWorld.View;
 		packet.ProjectionMatrix = m_ActiveWorld.Projection;
 		packet.Time = m_FrameStats.TotalTime;
+		packet.GuiDrawData = m_GuiSystem ? m_GuiSystem->ExtractDrawData() : GuiDrawData{};
+		packet.OutputTarget = m_RenderContext.GetOutputTexture();
 		packet.Minimized = m_Window->IsMinimized();
 		packet.SurfaceSize = m_Window->GetSize();
 	}

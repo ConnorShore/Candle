@@ -94,3 +94,22 @@ CDL_TEST_CASE(DeletionQueue, DrainAllAndDestructionFreeEverything, Gpu)
 	}
 	ExpectNoVulkanDebugMessages(logs);
 }
+
+// Renderer queues the depth image MatchDepthToOutput replaces, so an image waits for its retire value as a buffer does.
+CDL_TEST_CASE(DeletionQueue, HoldsAnImageUntilItsRetireValueIsReached, Gpu)
+{
+	LoggerFixture logs(LogLevel::Warn, kRenderChannelMask);
+	{
+		TestAllocator gpu;
+		DeletionQueue deletions;
+		deletions.Enqueue(QueueType::Graphics, 5, GPUImage(GPUImageSpec{ .Extent = { 4, 4 } }, gpu.Allocator));
+		CDL_CHECK_EQ(LiveAllocations(gpu.Allocator), 1u);
+
+		deletions.Drain(QueueType::Graphics, 4);
+		CDL_EXPECT_EQ(LiveAllocations(gpu.Allocator), 1u);
+
+		deletions.Drain(QueueType::Graphics, 5);
+		CDL_EXPECT_EQ(LiveAllocations(gpu.Allocator), 0u);
+	}
+	ExpectNoVulkanDebugMessages(logs);
+}

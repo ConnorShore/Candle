@@ -13,7 +13,7 @@ VertexOutput VertMain(uint vid : SV_VertexID) {
     VertexOutput output;
     Vertex vertex = pushConstants->Vertices[vid];
     float4x4 viewProj = pushConstants->Global.Frame->ViewProjection;
-    float4x4 model = pushConstants->Global.Frame->TransformData[pushConstants->TransformIndex];
+    float4x4 model = pushConstants->Global.Frame->TransformData[NonUniformResourceIndex(pushConstants->TransformIndex)];
     output.position = mul(viewProj, mul(model, float4(vertex.Position, 1.0)));
     output.uv = float2(vertex.UVx, 1.0 - vertex.UVy);
     return output;
@@ -24,6 +24,6 @@ float4 FragMain(VertexOutput inVert) : SV_Target
 {
     // Each channel cycles at the same rate, a third of a turn apart
     float time = pushConstants->Global.Frame->Time;
-    float4 baseColor = textures[pushConstants->TextureIndex].Sample(samplers[pushConstants->SamplerIndex], inVert.uv);
+    float4 baseColor = textures[pushConstants->TextureIndex].Sample(samplers[NonUniformResourceIndex(pushConstants->SamplerIndex)], inVert.uv);
     return float4(baseColor.xyz * cos(time + float3(0.0, 2.0, 4.0)), 1.0);
 }

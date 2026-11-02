@@ -29,4 +29,6 @@ namespace Candle {
 
 	using PlatformEvent = std::variant<QuitRequested, WindowCloseRequested, WindowResized, WindowFocus, WindowMinimized, InputEvent>;
 
+	constexpr bool IsKeyEvent(const InputEvent& event) { return std::holds_alternative<KeyPressedEvent>(event) || std::holds_alternative<KeyReleasedEvent>(event); }
+	constexpr bool IsMouseEvent(const InputEvent& event) { return std::holds_alternative<MouseButtonPressedEvent>(event) || std::holds_alternative<MouseButtonReleasedEvent>(event) || std::holds_alternative<MouseMoveEvent>(event) || std::holds_alternative<MouseWheelEvent>(event); }
 }

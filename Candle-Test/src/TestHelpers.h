@@ -8,6 +8,9 @@
 #include <Candle.h>
 #include <Candle/Core/LogSink.h>
 
+#include <imgui.h>
+
+#include <array>
 #include <atomic>
 #include <filesystem>
 #include <format>
@@ -140,12 +143,28 @@ namespace Candle::Test {
 		return static_cast<int>(std::clamp(hardware, 4u, 16u));
 	}
 
-	// An Application with no-op hooks, for tests that drive Run() directly.
+	// ImGui reads and writes imgui.ini in the working directory, which for the tests is the repo root and its checked-in
+	// layout. The context exists once a GuiSystem is built, and the file is only touched once a frame has run.
+	inline void KeepImGuiOffDisk()
+	{
+		if (ImGui::GetCurrentContext())
+			ImGui::GetIO().IniFilename = nullptr;
+	}
+
+	// One of each InputEvent alternative, split the way GuiSystem routes them to ImGui's two capture flags.
+	inline const std::array<InputEvent, 2> kKeyEvents = { KeyPressedEvent{ KeyCode::A }, KeyReleasedEvent{ KeyCode::A } };
+	inline const std::array<InputEvent, 4> kMouseEvents = {
+		MouseButtonPressedEvent{ MouseButton::Left },
+		MouseButtonReleasedEvent{ MouseButton::Left },
+		MouseMoveEvent{ .Position = { 10.0f, 20.0f }, .Delta = { 1.0f, 2.0f } },
+		MouseWheelEvent{ .Delta = { 0.0f, 1.0f }, .Ticks = { 0, 1 } } };
+
+	// An Application with no-op hooks, for tests that drive Run() directly. A windowed one runs ImGui, kept off disk.
 	class TestApplication : public Application
 	{
 	public:
 		using Application::Application;
-		void OnInit(ApplicationContext context) override {}
+		void OnInit(ApplicationContext context) override { KeepImGuiOffDisk(); }
 		void OnUpdate(UpdateContext context) override {}
 		void OnShutdown() override {}
 	};
@@ -179,18 +198,24 @@ namespace Candle::Test {
 		return spec;
 	}
 
+	// QuietSpec with a window, which also brings up a render device and the GUI
+	inline ApplicationSpecification WindowedSpec()
+	{
+		ApplicationSpecification spec = QuietSpec();
+		spec.Headless = false;
+		spec.WindowSpec = TestWindowSpec();
+		return spec;
+	}
+
 	// A windowed app needs the windowing backend, which can't start without a desktop session; skip there rather than fail.
 	// The backend is probed on its own, because the app also creates a render device, and its failures must fail the test.
-	inline void EmplaceWindowedApp(std::optional<TestApplication>& app)
+	template<typename App>
+	void EmplaceWindowedApp(std::optional<App>& app, const ApplicationSpecification& spec = WindowedSpec())
 	{
 		auto windowing = Platform::InitWindowing();
 		if (!windowing)
 			CDL_SKIP(std::format("windowing unavailable: {}", windowing.error()));
 		Platform::ShutdownWindowing();
-
-		ApplicationSpecification spec = QuietSpec();
-		spec.Headless = false;
-		spec.WindowSpec = TestWindowSpec();
 
 		try { app.emplace(spec); }
 		catch (...)

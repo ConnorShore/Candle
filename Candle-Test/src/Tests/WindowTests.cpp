@@ -53,6 +53,20 @@ CDL_TEST_CASE(Window, SizeIsInPixelsWithTheSpecsAspectRatio, Display)
 	CDL_EXPECT_EQ(window.GetHeight(), size.y);
 }
 
+// A spec's size is at a content scale of 1, so a window covers the same physical area on any display. Small, so a high
+// scale still fits the screen and the OS doesn't shrink it.
+CDL_TEST_CASE(Window, PixelSizeIsTheSpecsSizeTimesTheContentScale, Display)
+{
+	WindowingBackend backend;
+	const Window window(TestWindowSpec(320, 240));
+
+	const float scale = window.GetContentScale();
+	const glm::uvec2 size = window.GetSize();
+	CDL_NOTE(std::format("320x240 spec at content scale {} is {}x{} pixels", scale, size.x, size.y));
+	CDL_EXPECT_NEAR(size.x, 320.0 * scale, 1.0);
+	CDL_EXPECT_NEAR(size.y, 240.0 * scale, 1.0);
+}
+
 // The render thread will size the swapchain from WindowResized while the main thread calls GetSize, so they must agree.
 CDL_TEST_CASE(Window, ResizeEventReportsTheSameSizeAsGetSize, Display)
 {

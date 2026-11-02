@@ -1,5 +1,6 @@
-// TexturePool on a real device: texture creation, its info, slot reuse through the free list, the image a released
-// texture gives back once its frame retires, and what a shader samples from it. Each test fails on any validation message.
+// TexturePool on a real device: texture and render target creation, their info, slot reuse through the free list, the
+// image a released texture gives back once its frame retires, and what a shader samples from it. Each test fails on any
+// validation message.
 
 #include "TestFramework.h"
 #include "TestHelpers.h"
@@ -31,14 +32,42 @@ namespace {
 			.Data = std::as_bytes(std::span(&kWhite, 1)), .Extent = { 1, 1 }, .Format = TextureFormat::Rgba8, .ColorSpace = TextureColorSpace::Linear });
 	}
 
-	// Each texel's centre in row order, read with no filtering, so the result is exactly the texel stored there.
-	std::vector<TextureProbe> ProbeEveryTexel(GPUTextureHandle texture, glm::uvec2 extent)
+	// UNORM, so a cleared value is stored and sampled back unconverted
+	constexpr vk::Format kRenderTargetFormat = vk::Format::eR8G8B8A8Unorm;
+
+	GPUTextureHandle CreateRenderTarget(TexturePool& pool, glm::uvec2 extent)
 	{
-		std::vector<TextureProbe> probes;
-		for (uint32_t y = 0; y < extent.y; ++y)
-			for (uint32_t x = 0; x < extent.x; ++x)
-				probes.push_back({ .Texture = texture, .Sampler = SamplerType::PointClamp, .UV = (glm::vec2(x, y) + 0.5f) / glm::vec2(extent) });
-		return probes;
+		return pool.CreateRenderTarget({ .Extent = extent, .Format = kRenderTargetFormat, .DebugName = "Test Render Target" });
+	}
+
+	constexpr ImageState kShaderReadState{
+		.Layout = vk::ImageLayout::eShaderReadOnlyOptimal,
+		.Access = vk::AccessFlagBits2::eShaderSampledRead,
+		.Stage = vk::PipelineStageFlagBits2::eFragmentShader };
+
+	// Draws into the target as the scene pass does, a clear standing in for the draws, and leaves it where Renderer does:
+	// ready for a shader to sample through its bindless slot.
+	void ClearRenderTarget(TestTextures& gpu, GPUTextureHandle target, const Texel& colour)
+	{
+		const TextureInfo info = gpu.Pool.GetTextureInfo(target);
+		TestCommands commands(gpu.Device);
+		commands.Buffer.begin({ .flags = vk::CommandBufferUsageFlagBits::eOneTimeSubmit });
+
+		const vk::ImageMemoryBarrier2 toAttachment = MakeImageBarrier(info.Image, {}, kColorAttachmentState, kColorSubresourceRange);
+		commands.Buffer.pipelineBarrier2({ .imageMemoryBarrierCount = 1, .pImageMemoryBarriers = &toAttachment });
+
+		const vk::RenderingAttachmentInfo attachment{
+			.imageView = info.ImageView, .imageLayout = vk::ImageLayout::eColorAttachmentOptimal,
+			.loadOp = vk::AttachmentLoadOp::eClear, .storeOp = vk::AttachmentStoreOp::eStore,
+			.clearValue = vk::ClearColorValue(colour[0] / 255.0f, colour[1] / 255.0f, colour[2] / 255.0f, colour[3] / 255.0f) };
+		commands.Buffer.beginRendering({ .renderArea = { { 0, 0 }, { info.Extent.x, info.Extent.y } }, .layerCount = 1,
+			.colorAttachmentCount = 1, .pColorAttachments = &attachment });
+		commands.Buffer.endRendering();
+
+		const vk::ImageMemoryBarrier2 toSampled = MakeImageBarrier(info.Image, kColorAttachmentState, kShaderReadState, kColorSubresourceRange);
+		commands.Buffer.pipelineBarrier2({ .imageMemoryBarrierCount = 1, .pImageMemoryBarriers = &toSampled });
+		commands.Buffer.end();
+		SubmitAndWait(gpu.Device, commands.Buffer);
 	}
 
 	// Every format and colour space ToVulkanFormat accepts; R8 and RG8 are linear only.
@@ -87,6 +116,100 @@ CDL_TEST_CASE(TexturePool, LiveTexturesGetDistinctSlotsAndViews, Gpu)
 
 		CDL_EXPECT_NE(first.Index, second.Index);
 		CDL_EXPECT(gpu.Pool.GetTextureInfo(first).ImageView != gpu.Pool.GetTextureInfo(second).ImageView);
+	}
+	ExpectNoVulkanDebugMessages(logs);
+}
+
+// Not square, so swapped extents show. Only render targets are drawn into, and the renderer asserts on that.
+CDL_TEST_CASE(TexturePool, TextureInfoReportsItsExtentAndThatItIsNoRenderTarget, Gpu)
+{
+	LoggerFixture logs(LogLevel::Warn, kRenderChannelMask);
+	{
+		TestTextures gpu;
+		const std::vector<Texel> texels(3 * 2, kWhite);
+		const TextureInfo info = gpu.Pool.GetTextureInfo(CreateBoundTexture(gpu, { 3, 2 }, texels));
+
+		CDL_EXPECT(info.Extent == glm::uvec2(3, 2));
+		CDL_EXPECT(info.Image);
+		CDL_EXPECT_FALSE(info.IsRenderTarget);
+	}
+	ExpectNoVulkanDebugMessages(logs);
+}
+
+// Nothing is uploaded, so the target costs its image and no staging buffer.
+CDL_TEST_CASE(TexturePool, CreateRenderTargetReturnsAValidHandleAndItsInfo, Gpu)
+{
+	LoggerFixture logs(LogLevel::Warn, kRenderChannelMask);
+	{
+		TestTextures gpu;
+		const GPUTextureHandle target = CreateRenderTarget(gpu.Pool, { 5, 3 });
+		const TextureInfo info = gpu.Pool.GetTextureInfo(target);
+
+		CDL_EXPECT(target.IsValid());
+		CDL_EXPECT(gpu.Pool.IsAlive(target));
+		CDL_EXPECT_EQ(info.Index, target.Index);	// The bindless element the target is published at, for the GUI to sample
+		CDL_EXPECT(info.ImageView);
+		CDL_EXPECT(info.Image);
+		CDL_EXPECT(info.Extent == glm::uvec2(5, 3));
+		CDL_EXPECT(info.IsRenderTarget);
+		CDL_EXPECT_EQ(LiveAllocations(gpu.Allocator), kDefaultTextureAllocations + 1u);
+	}
+	ExpectNoVulkanDebugMessages(logs);
+}
+
+// Render targets share the textures' slots, generations and bindless elements, so one never aliases the other.
+CDL_TEST_CASE(TexturePool, RenderTargetsAndTexturesGetDistinctSlots, Gpu)
+{
+	LoggerFixture logs(LogLevel::Warn, kRenderChannelMask);
+	{
+		TestTextures gpu;
+		const GPUTextureHandle texture = CreateTexel(gpu.Pool);
+		const GPUTextureHandle target = CreateRenderTarget(gpu.Pool, { 1, 1 });
+
+		CDL_EXPECT_NE(texture.Index, target.Index);
+		CDL_EXPECT(gpu.Pool.GetTextureInfo(texture).ImageView != gpu.Pool.GetTextureInfo(target).ImageView);
+	}
+	ExpectNoVulkanDebugMessages(logs);
+}
+
+// RenderContext releases a target whenever the output size changes, while frames that drew into it may still be in flight.
+CDL_TEST_CASE(TexturePool, ReleasedRenderTargetFreesItsImageOnceTheFrameRetires, Gpu)
+{
+	LoggerFixture logs(LogLevel::Warn, kRenderChannelMask);
+	{
+		TestTextures gpu;
+		const GPUTextureHandle target = CreateRenderTarget(gpu.Pool, { 4, 4 });
+		CDL_CHECK_EQ(LiveAllocations(gpu.Allocator), kDefaultTextureAllocations + 1u);
+
+		gpu.Pool.ReleaseTexture(target);
+		CDL_EXPECT_FALSE(gpu.Pool.IsAlive(target));
+		CDL_EXPECT_EQ(LiveAllocations(gpu.Allocator), kDefaultTextureAllocations + 1u);
+
+		RunReleaseFrame(gpu);
+		CDL_EXPECT_EQ(LiveAllocations(gpu.Allocator), kDefaultTextureAllocations);
+	}
+	ExpectNoVulkanDebugMessages(logs);
+}
+
+// The scene draws into the target and the GUI samples it: the image needs both usages, and its view must be published at
+// the handle's slot. Validation catches a missing usage, and the colour a view at the wrong slot.
+CDL_TEST_CASE(TexturePool, RenderTargetCanBeDrawnIntoThenSampled, Gpu)
+{
+	SkipUnlessCompiled(kBindlessFixturePath);
+
+	LoggerFixture logs(LogLevel::Warn, kRenderChannelMask);
+	{
+		TestTextures gpu;
+		constexpr glm::uvec2 kExtent{ 3, 2 };
+		constexpr Texel kClearColour{ 51, 102, 153, 255 };
+		const GPUTextureHandle target = CreateRenderTarget(gpu.Pool, kExtent);
+
+		ClearRenderTarget(gpu, target, kClearColour);
+		const std::vector<Texel> sampled = SampleTextures(gpu, ProbeEveryTexel(target, kExtent));
+
+		CDL_CHECK_EQ(sampled.size(), size_t{ kExtent.x } * kExtent.y);
+		for (size_t i = 0; i < sampled.size(); ++i)
+			ExpectTexelNear(sampled[i], kClearColour, std::format("texel {}", i), 0);
 	}
 	ExpectNoVulkanDebugMessages(logs);
 }

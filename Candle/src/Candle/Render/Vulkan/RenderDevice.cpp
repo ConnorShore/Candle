@@ -62,6 +62,7 @@ namespace Candle {
 			CDL_REQUIRED_FEATURE(vk::PhysicalDeviceVulkan12Features, descriptorBindingUpdateUnusedWhilePending),
 			CDL_REQUIRED_FEATURE(vk::PhysicalDeviceVulkan12Features, descriptorBindingSampledImageUpdateAfterBind),
 			CDL_REQUIRED_FEATURE(vk::PhysicalDeviceVulkan12Features, runtimeDescriptorArray),
+			CDL_REQUIRED_FEATURE(vk::PhysicalDeviceVulkan12Features, shaderSampledImageArrayNonUniformIndexing),
 			CDL_REQUIRED_FEATURE(vk::PhysicalDeviceVulkan13Features, dynamicRendering),
 			CDL_REQUIRED_FEATURE(vk::PhysicalDeviceVulkan13Features, synchronization2),
 		};
