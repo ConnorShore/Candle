@@ -168,11 +168,11 @@ namespace Candle {
 				[&](const WindowFocus& e) {},
 				[&](const WindowMinimized& e) {},
 				[&](const InputEvent& e) 
-				{ 
-					// If the GUI wants the input, don't pass it to the InputSystem; otherwise, consume it
-					if (m_GuiSystem && m_GuiSystem->WantsInput(e)) 
-						return; 
-					m_InputSystem.ConsumeEvent(e); 
+				{
+					const bool isRelease = std::holds_alternative<KeyReleasedEvent>(e) || std::holds_alternative<MouseButtonReleasedEvent>(e);
+					if (!isRelease && m_GuiSystem && m_GuiSystem->WantsInput(e))
+							return;
+					m_InputSystem.ConsumeEvent(e);
 				}
 				}, evt);
 		}

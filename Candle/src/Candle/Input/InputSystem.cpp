@@ -15,16 +15,20 @@ namespace Candle {
 				m_Building.KeysPressed.set(std::to_underlying(e.Key), true);
 			},
 			[this](const KeyReleasedEvent& e) {
-				if (e.Key == KeyCode::Unknown)
-					return;
-				m_Building.KeysDown.set(std::to_underlying(e.Key), false);
-				m_Building.KeysReleased.set(std::to_underlying(e.Key), true);
+					const auto key = std::to_underlying(e.Key);
+					// Only a key this system saw pressed can be released; otherwise the GUI owned it
+					if (e.Key == KeyCode::Unknown || !m_Building.KeysDown.test(key))
+							return;
+					m_Building.KeysDown.set(key, false);
+					m_Building.KeysReleased.set(key, true);
 			},
 			[this](const MouseButtonPressedEvent& e) {
 				m_Building.MouseDown |= InputSnapshot::ButtonBit(e.Button);
 				m_Building.MousePressed |= InputSnapshot::ButtonBit(e.Button);
 			},
 			[this](const MouseButtonReleasedEvent& e) {
+				if (!(m_Building.MouseDown & InputSnapshot::ButtonBit(e.Button)))
+						return;
 				m_Building.MouseDown &= ~InputSnapshot::ButtonBit(e.Button);
 				m_Building.MouseReleased |= InputSnapshot::ButtonBit(e.Button);
 			},

@@ -75,7 +75,7 @@ namespace Candle {
 		}
 
 		// Setup scaling
-		float scaleing = window.GetContentScale();
+		float scaling = window.GetContentScale();
 		style.ScaleAllSizes(scaleing);        // Bake a fixed style scale. (until we have a solution for dynamic style scaling, changing this requires resetting Style + calling this again)
 		style.FontScaleDpi = scaleing;        // Set initial font scale. (in docking branch: using io.ConfigDpiScaleFonts=true automatically overrides this for every window depending on the current monitor)
 

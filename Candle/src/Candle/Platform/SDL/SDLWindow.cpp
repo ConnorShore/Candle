@@ -43,7 +43,8 @@ namespace Candle {
 	void Window::Resize(uint32_t width, uint32_t height)
 	{
 		CDL_CORE_ASSERT(Platform::IsMainThread(), "Windows must be resized on the main thread");
-		SDL_SetWindowSize(ToSDL(m_NativeHandle), width, height);
+		const float scale = GetContentScale();
+		SDL_SetWindowSize(ToSDL(m_NativeHandle), static_cast<int>(width * scale), static_cast<int>(height * scale));
 	}
 
 	void Window::Minimize()
