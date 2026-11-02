@@ -108,6 +108,7 @@ namespace Candle {
 			{
 				DebugContext debugContext{
 					.DeltaTime = m_FrameStats.DeltaTime,
+					.Input = inputSnapshot,
 					.Main = m_LastMainTimings,
 					.Render = m_RenderManager ? m_RenderManager->GetRenderStats() : RenderStats{}
 				};
@@ -193,8 +194,13 @@ namespace Candle {
 				[&](const WindowMinimized& e) {},
 				[&](const InputEvent& e) 
 				{
+					// Let the debug UI manager consume the event first so it can toggle visibility of the debug UI before the GUI system or input system consume it
+					if (m_DebugUIManager)
+						m_DebugUIManager->ConsumeEvent(e);
+
+					const bool guiWantsInput = m_GuiSystem && m_GuiSystem->WantsInput(e);
 					const bool isRelease = std::holds_alternative<KeyReleasedEvent>(e) || std::holds_alternative<MouseButtonReleasedEvent>(e);
-					if (!isRelease && m_GuiSystem && m_GuiSystem->WantsInput(e))
+					if (!isRelease && guiWantsInput)
 							return;
 					m_InputSystem.ConsumeEvent(e);
 				}

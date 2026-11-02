@@ -3,6 +3,7 @@
 #include "Candle/Core/Time.h"
 #include "Candle/Core/FrameTimings.h"
 #include "Candle/Render/RenderStats.h"
+#include "Candle/Input/InputSnapshot.h"
 
 namespace Candle {
 
@@ -11,6 +12,7 @@ namespace Candle {
 	struct DebugContext
 	{
 		TimeStep DeltaTime;
+		InputSnapshot Input;		// This frame's input, the same capture OnUpdate gets; keys ImGui captured never reach it
 		ThreadFrameTimings Main;	// The main thread's last completed frame
 		RenderStats Render;			// The render thread's last completed frame to reach the main thread; a few frames behind Main
 	};

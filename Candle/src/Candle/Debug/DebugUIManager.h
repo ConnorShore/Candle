@@ -2,6 +2,7 @@
 
 #include "DebugPanel.h"
 #include "Candle/Core/Memory/ScopedPtr.h"
+#include "Candle/Platform/PlatformEvents.h"
 
 #include <concepts>
 #include <utility>
@@ -36,6 +37,8 @@ namespace Candle {
 			m_Panels.emplace_back(std::move(panel));
 			return *raw;
 		}
+
+		void ConsumeEvent(const InputEvent& event);
 
 		void OnUpdate(const DebugContext& context);	// Every panel, open or not
 		void OnRender(const DebugContext& context);	// Open panels only, and nothing while hidden
