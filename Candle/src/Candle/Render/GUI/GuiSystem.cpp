@@ -182,11 +182,9 @@ namespace Candle {
 
 	void GuiSystem::ReleaseTextures()
 	{
-		ImDrawData* drawData = ImGui::GetDrawData();
-		if (!drawData || !drawData->Textures)
-			return;
-
-		for (ImTextureData* tex : *drawData->Textures)
+		// The platform IO's list rather than the draw data's: GetDrawData is null from StartFrame until EndFrame, so a
+		// GuiSystem destroyed mid-frame, as when an exception unwinds out of OnUpdate, would otherwise release nothing
+		for (ImTextureData* tex : ImGui::GetPlatformIO().Textures)
 		{
 			if (tex->Status != ImTextureStatus_Destroyed)
 			{

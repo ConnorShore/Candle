@@ -25,6 +25,7 @@
 #include <Candle/Render/Pipelines/ShaderLoader.h>
 #include <Candle/Render/Assets/TextureData.h>
 #include <Candle/Render/Resources/TexturePool.h>
+#include <Candle/Render/GUI/GuiDrawData.h>
 
 #include <vk_mem_alloc.h>
 
@@ -35,6 +36,7 @@
 #include <cstring>
 #include <filesystem>
 #include <format>
+#include <optional>
 #include <span>
 #include <string>
 #include <string_view>
@@ -53,6 +55,14 @@ namespace Candle::Test {
 		return spec;
 	}
 
+	// StrictRenderSpec with the scene drawn into an output target the application shows, as an editor's scene window does
+	inline RenderSpecification OutputTargetRenderSpec()
+	{
+		RenderSpecification spec = StrictRenderSpec();
+		spec.RenderToSwapChain = false;
+		return spec;
+	}
+
 	inline RenderInstanceSpecification TestInstanceSpec(const RenderSpecification& renderSpec)
 	{
 		return {
@@ -66,29 +76,39 @@ namespace Candle::Test {
 	inline constexpr uint16_t kRenderChannelMask = static_cast<uint16_t>(LogChannel::Render);
 
 	// The debug messenger logs at the message's own severity, so match its prefix rather than a level: Render
-	// also warns about non-Vulkan things. Flushes first, so call it after the Vulkan objects under test are
-	// destroyed to include their teardown messages.
-	inline std::vector<std::string> VulkanDebugMessages(LoggerFixture& logs)
+	// also warns about non-Vulkan things. Read records only once the logger has flushed or shut down.
+	inline std::vector<std::string> VulkanDebugMessages(const std::vector<LogRecord>& records)
 	{
-		CDL_CHECK(Logger::Flush());
-
 		std::vector<std::string> messages;
-		for (size_t i = 0; i < logs.Records.size(); ++i)
+		for (size_t i = 0; i < records.size(); ++i)
 		{
-			const LogRecord& record = logs.Records[i];
+			const LogRecord& record = records[i];
 			if (record.Channel == LogChannel::Render && !record.IsContinuation && std::string_view(record.Message).starts_with("[Vulkan Debug]"))
-				messages.push_back(JoinedMessage(logs.Records, i));
+				messages.push_back(JoinedMessage(records, i));
 		}
 		return messages;
 	}
 
-	// Notes every message, so a validation error names its VUID in the test output.
-	inline void ExpectNoVulkanDebugMessages(LoggerFixture& logs)
+	// Flushes first, so call it after the Vulkan objects under test are destroyed to include their teardown messages.
+	inline std::vector<std::string> VulkanDebugMessages(LoggerFixture& logs)
 	{
-		const std::vector<std::string> messages = VulkanDebugMessages(logs);
+		CDL_CHECK(Logger::Flush());
+		return VulkanDebugMessages(logs.Records);
+	}
+
+	// Notes every message, so a validation error names its VUID in the test output.
+	inline void ExpectNoVulkanDebugMessages(const std::vector<LogRecord>& records)
+	{
+		const std::vector<std::string> messages = VulkanDebugMessages(records);
 		for (const std::string& message : messages)
 			CDL_NOTE(message);
 		CDL_EXPECT_EQ(messages.size(), 0u);
+	}
+
+	inline void ExpectNoVulkanDebugMessages(LoggerFixture& logs)
+	{
+		CDL_CHECK(Logger::Flush());
+		ExpectNoVulkanDebugMessages(logs.Records);
 	}
 
 	// Members construct in order and destroy in reverse, so the device goes before the instance and the backend.
@@ -412,6 +432,14 @@ namespace Candle::Test {
 	inline const std::filesystem::path kEngineAssetDir = CDL_ENGINE_ASSET_DIR;
 	inline const std::filesystem::path kEngineShaderDirectory = kEngineAssetDir / "shaders/bin";
 	inline const std::filesystem::path kTriangleShaderPath = kEngineShaderDirectory / "Triangle.spv";
+	inline const std::filesystem::path kGuiShaderPath = kEngineShaderDirectory / "Gui.spv";	// The name GuiPipeline loads
+
+	// A Renderer builds every engine pipeline up front, so it needs all their shaders compiled, not just the one a test draws with
+	inline void SkipUnlessRendererShadersCompiled()
+	{
+		SkipUnlessCompiled(kTriangleShaderPath);
+		SkipUnlessCompiled(kGuiShaderPath);
+	}
 
 	// One sample as a shader takes it: the texture's slot of set 0, through one of the bindless samplers, at UV.
 	struct TextureProbe
@@ -420,6 +448,16 @@ namespace Candle::Test {
 		SamplerType Sampler;
 		glm::vec2 UV;
 	};
+
+	// Each texel's centre in row order, read with no filtering, so the result is exactly the texel stored there.
+	inline std::vector<TextureProbe> ProbeEveryTexel(GPUTextureHandle texture, glm::uvec2 extent)
+	{
+		std::vector<TextureProbe> probes;
+		for (uint32_t y = 0; y < extent.y; ++y)
+			for (uint32_t x = 0; x < extent.x; ++x)
+				probes.push_back({ .Texture = texture, .Sampler = SamplerType::PointClamp, .UV = (glm::vec2(x, y) + 0.5f) / glm::vec2(extent) });
+		return probes;
+	}
 
 	// Draws each probe into its own pixel of a probes.size() x 1 target with BindlessFixture and reads the colours back,
 	// so a test sees what a shader really samples. The probed textures must already be written into gpu.Bindless.
@@ -469,6 +507,48 @@ namespace Candle::Test {
 		SubmitAndWait(gpu.Device, commands.Buffer);
 
 		return ToTexels(ReadBackImage(gpu, *target.Handle, extent, kColorAttachmentState));
+	}
+
+	// ImGui's IM_COL32 packing, which GuiVertex::Color carries: R in the low byte.
+	inline uint32_t PackGuiColor(const Texel& colour)
+	{
+		return uint32_t{ colour[0] } | uint32_t{ colour[1] } << 8 | uint32_t{ colour[2] } << 16 | uint32_t{ colour[3] } << 24;
+	}
+
+	// GUI draw data with no draws yet. As in ImGui's, vertex positions are display coordinates, offset by pos.
+	inline GuiDrawData MakeGuiDrawData(glm::vec2 size, glm::vec2 pos = { 0.0f, 0.0f })
+	{
+		return { .DisplayPos = pos, .DisplaySize = size };
+	}
+
+	// The four corners of [min, max] in display coordinates, UVs spanning the texture; returns the first one's index.
+	inline uint32_t AddGuiQuadVertices(GuiDrawData& gui, glm::vec2 min, glm::vec2 max, const Texel& colour = kWhite)
+	{
+		const uint32_t first = static_cast<uint32_t>(gui.Vertices.size());
+		const uint32_t packed = PackGuiColor(colour);
+		gui.Vertices.push_back({ .Position = { min.x, min.y }, .UV = { 0.0f, 0.0f }, .Color = packed });
+		gui.Vertices.push_back({ .Position = { max.x, min.y }, .UV = { 1.0f, 0.0f }, .Color = packed });
+		gui.Vertices.push_back({ .Position = { max.x, max.y }, .UV = { 1.0f, 1.0f }, .Color = packed });
+		gui.Vertices.push_back({ .Position = { min.x, max.y }, .UV = { 0.0f, 1.0f }, .Color = packed });
+		return first;
+	}
+
+	// One command drawing the quad whose corners start at vertex first, indexed from vertexOffset as ImGui's indices are.
+	// clip is in framebuffer pixels, DisplayPos already removed, as ExtractDrawData leaves it.
+	inline void AddGuiQuadCommand(GuiDrawData& gui, GPUTextureHandle texture, uint32_t vertexOffset, uint32_t first, glm::vec4 clip)
+	{
+		const uint32_t indexOffset = static_cast<uint32_t>(gui.Indices.size());
+		for (const uint32_t corner : { 0u, 1u, 2u, 0u, 2u, 3u })
+			gui.Indices.push_back(static_cast<GuiIndex>(first - vertexOffset + corner));
+		gui.Commands.push_back({ .ClipRect = clip, .Texture = texture, .VertexOffset = vertexOffset, .IndexOffset = indexOffset, .IndexCount = 6 });
+	}
+
+	// A quad with its own command and vertex offset, clipped to the whole display unless told otherwise.
+	inline void AddGuiQuad(GuiDrawData& gui, glm::vec2 min, glm::vec2 max, GPUTextureHandle texture, const Texel& colour = kWhite,
+		std::optional<glm::vec4> clip = std::nullopt)
+	{
+		const uint32_t first = AddGuiQuadVertices(gui, min, max, colour);
+		AddGuiQuadCommand(gui, texture, first, first, clip.value_or(glm::vec4(0.0f, 0.0f, gui.DisplaySize)));
 	}
 
 }

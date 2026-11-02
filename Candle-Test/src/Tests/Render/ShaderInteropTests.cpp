@@ -6,6 +6,8 @@
 #include "RenderTestHelpers.h"
 #include "ShaderInteropFixture.h"
 
+#include <Candle/Render/GUI/GuiInterop.h>
+#include <Candle/Render/GUI/GuiVertex.h>
 #include <Candle/Render/Pipelines/TriangleInterop.h>
 #include <Candle/Render/Pipelines/Shader.h>
 #include <Candle/Render/ShaderInterop/FrameData.h>
@@ -36,6 +38,8 @@ CDL_STATIC_ASSERT(kIsPlainBytes<GPU::FrameData>);
 CDL_STATIC_ASSERT(kIsPlainBytes<GPU::GlobalPushConstants>);
 CDL_STATIC_ASSERT(kIsPlainBytes<GPU::MeshDrawPushConstants>);
 CDL_STATIC_ASSERT(kIsPlainBytes<GPU::InteropFixturePushConstants>);
+CDL_STATIC_ASSERT(kIsPlainBytes<GPU::GuiVertex>);
+CDL_STATIC_ASSERT(kIsPlainBytes<GPU::GuiDrawPushConstants>);
 
 // Each UV half fills the tail of a float3, so a vertex is two 16-byte rows with no padding, in std430 as in C layout.
 CDL_STATIC_ASSERT(offsetof(GPU::Vertex, UVx) == 12 && offsetof(GPU::Vertex, Normal) == 16 && offsetof(GPU::Vertex, UVy) == 28);

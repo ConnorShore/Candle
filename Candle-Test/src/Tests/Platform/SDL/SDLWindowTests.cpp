@@ -41,3 +41,27 @@ CDL_TEST_CASE(SDLWindow, DestroyIsIdempotent, Display)
 	CDL_EXPECT_EQ(NativeWindowCount(), 0);
 	window.Destroy();
 }
+
+// The scale of the display the window is on, which GuiSystem sizes ImGui's style and fonts by.
+CDL_TEST_CASE(SDLWindow, ContentScaleIsThatOfTheWindowsDisplay, Display)
+{
+	WindowingBackend backend;
+	const Window window(TestWindowSpec());
+
+	SDL_Window* native = reinterpret_cast<SDL_Window*>(window.GetNativeHandle());
+	const float expected = SDL_GetDisplayContentScale(SDL_GetDisplayForWindow(native));
+	CDL_NOTE(std::format("content scale {}", window.GetContentScale()));
+	CDL_EXPECT_GT(window.GetContentScale(), 0.0f);
+	CDL_EXPECT_EQ(window.GetContentScale(), expected);
+}
+
+// The constructor asks before its window exists, and a destroyed window has none either, so both fall back to the primary
+// display rather than handing SDL a null or dangling window.
+CDL_TEST_CASE(SDLWindow, ContentScaleWithoutAWindowIsThePrimaryDisplays, Display)
+{
+	WindowingBackend backend;
+	Window window(TestWindowSpec());
+	window.Destroy();
+
+	CDL_EXPECT_EQ(window.GetContentScale(), SDL_GetDisplayContentScale(SDL_GetPrimaryDisplay()));
+}

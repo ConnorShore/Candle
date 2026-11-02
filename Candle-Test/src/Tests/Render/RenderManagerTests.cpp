@@ -1,6 +1,6 @@
 // RenderManager's frame loop end to end on a real window and its real render thread: frame packets drawn by the engine's
-// triangle pipeline, the pump that paces the main thread, skipped frames, and deferred releases riding the packets.
-// Each test fails on any validation message, teardown's included.
+// triangle pipeline, the pump that paces the main thread, skipped frames, deferred releases riding the packets, and the
+// scene drawn into an output target the GUI shows. Each test fails on any validation message, teardown's included.
 
 #include "TestFramework.h"
 #include "TestHelpers.h"
@@ -12,7 +12,9 @@
 #include <Candle/Render/Assets/Texture.h>
 #include <Candle/Render/FramePacket.h>
 #include <Candle/Render/FramePump.h>
+#include <Candle/Render/GUI/GuiDrawData.h>
 #include <Candle/Render/RenderConstants.h>
+#include <Candle/Render/RenderContext.h>
 #include <Candle/Render/RenderManager.h>
 #include <Candle/Render/Vulkan/SamplerType.h>
 
@@ -47,13 +49,18 @@ namespace {
 	// waits for the GPU.
 	struct TestRenderManager
 	{
+		explicit TestRenderManager(const RenderSpecification& spec = StrictRenderSpec())
+			: Manager(spec, ApplicationInfo{ .Name = "Candle-Test" }, kEngineAssetDir, AppWindow, Jobs) {}
+
 		WindowingBackend Backend;
 		Window AppWindow{ TestWindowSpec() };
 		JobSystem Jobs;	// Never started; RenderManager only reads its worker count
 		TempDirectory Files;
-		RenderManager Manager{ StrictRenderSpec(), ApplicationInfo{ .Name = "Candle-Test" }, kEngineAssetDir, AppWindow, Jobs };
+		RenderManager Manager;
 		AssetManager Assets;	// After the RenderManager whose pools its handlers upload into
 		GPUTextureHandle DefaultTexture = RegisterHandlersAndLoadTexture();	// Before the render thread, as Application loads its assets
+		GPUTextureHandle OutputTarget;	// Every packet's; a manager drawing the scene into an output target needs one
+		GuiDrawData Gui;				// Every packet's; empty unless a test draws a GUI
 		RenderThreadScope RenderThread{ Manager };
 
 		GPUMeshHandle CreateTriangle() { return Manager.GetGeometryPool().CreateMesh(kTriangleVertices, kTriangleIndices); }
@@ -111,6 +118,8 @@ namespace {
 				.TransformIndex = 0 } };
 			packet.TransformData = { glm::mat4(1.0f) };
 			packet.Time = frame / 60.0;
+			packet.OutputTarget = test.OutputTarget;
+			packet.GuiDrawData = test.Gui;
 			packet.Minimized = surface.Minimized;
 			packet.SurfaceSize = surface.Size;
 
@@ -118,6 +127,15 @@ namespace {
 				manager.GetRenderDevice().WaitFor(QueueType::Graphics, TimelineProbe(manager));
 			manager.SubmitFramePacket(packet);
 		}
+	}
+
+	// A GUI quad over the left half of a display the window's size, as ImGui's main viewport is
+	GuiDrawData HalfScreenGui(const Window& window, GPUTextureHandle texture)
+	{
+		const glm::vec2 size(window.GetSize());
+		GuiDrawData gui = MakeGuiDrawData(size);
+		AddGuiQuad(gui, { 0.0f, 0.0f }, { size.x / 2.0f, size.y }, texture);
+		return gui;
 	}
 
 	// Minimize and Restore can land a few pumps later; only the state they leave matters here, not the events.
@@ -139,7 +157,7 @@ namespace {
 // back. The main thread runs at most kFramePacketCount packets ahead, which bounds the timeline from below.
 CDL_TEST_CASE(RenderManager, RendersFramesAndShutsDownCleanly, Gpu)
 {
-	SkipUnlessCompiled(kTriangleShaderPath);
+	SkipUnlessRendererShadersCompiled();
 
 	LoggerFixture logs(LogLevel::Warn, kRenderChannelMask);
 	{
@@ -161,7 +179,7 @@ CDL_TEST_CASE(RenderManager, RendersFramesAndShutsDownCleanly, Gpu)
 // Fails by hanging rather than by assertion.
 CDL_TEST_CASE(RenderManager, JoinRightAfterSpawnReturns, Gpu)
 {
-	SkipUnlessCompiled(kTriangleShaderPath);
+	SkipUnlessRendererShadersCompiled();
 
 	LoggerFixture logs(LogLevel::Warn, kRenderChannelMask);
 	{
@@ -175,7 +193,7 @@ CDL_TEST_CASE(RenderManager, JoinRightAfterSpawnReturns, Gpu)
 // each still hands its packet back, or the main thread hangs once the pump is full.
 CDL_TEST_CASE(RenderManager, SkipsFramesWhileMinimized, Gpu)
 {
-	SkipUnlessCompiled(kTriangleShaderPath);
+	SkipUnlessRendererShadersCompiled();
 
 	LoggerFixture logs(LogLevel::Warn, kRenderChannelMask);
 	{
@@ -202,7 +220,7 @@ CDL_TEST_CASE(RenderManager, SkipsFramesWhileMinimized, Gpu)
 // drawn at zero would pass too; what fails is a skipped frame keeping its packet, which hangs the main thread.
 CDL_TEST_CASE(RenderManager, KeepsTakingPacketsWhileTheSurfaceHasNoArea, Gpu)
 {
-	SkipUnlessCompiled(kTriangleShaderPath);
+	SkipUnlessRendererShadersCompiled();
 
 	LoggerFixture logs(LogLevel::Warn, kRenderChannelMask);
 	{
@@ -219,7 +237,7 @@ CDL_TEST_CASE(RenderManager, KeepsTakingPacketsWhileTheSurfaceHasNoArea, Gpu)
 // packet says, so this can't tell a rebuild from none; it checks the frame loop survives one cleanly.
 CDL_TEST_CASE(RenderManager, RendersAcrossAResize, Gpu)
 {
-	SkipUnlessCompiled(kTriangleShaderPath);
+	SkipUnlessRendererShadersCompiled();
 
 	LoggerFixture logs(LogLevel::Warn, kRenderChannelMask);
 	{
@@ -242,7 +260,7 @@ CDL_TEST_CASE(RenderManager, RendersAcrossAResize, Gpu)
 // finish long before the render thread frees anything; GPUResourcePoolTests fake the timeline to catch that.
 CDL_TEST_CASE(RenderManager, ReleasedMeshSlotComesBackOnceItsFramesRetire, Gpu)
 {
-	SkipUnlessCompiled(kTriangleShaderPath);
+	SkipUnlessRendererShadersCompiled();
 
 	LoggerFixture logs(LogLevel::Warn, kRenderChannelMask);
 	{
@@ -264,7 +282,7 @@ CDL_TEST_CASE(RenderManager, ReleasedMeshSlotComesBackOnceItsFramesRetire, Gpu)
 // A skipped frame draws nothing, but the releases its packet carries must still retire, or a minimized app leaks.
 CDL_TEST_CASE(RenderManager, ReleasesStillRetireWhileFramesAreSkipped, Gpu)
 {
-	SkipUnlessCompiled(kTriangleShaderPath);
+	SkipUnlessRendererShadersCompiled();
 
 	LoggerFixture logs(LogLevel::Warn, kRenderChannelMask);
 	{
@@ -285,7 +303,7 @@ CDL_TEST_CASE(RenderManager, ReleasesStillRetireWhileFramesAreSkipped, Gpu)
 // The application's path for meshes: RenderManager hands its mesh handler to the AssetManager, which uploads on load.
 CDL_TEST_CASE(RenderManager, RegisteredHandlersUploadMeshAssets, Gpu)
 {
-	SkipUnlessCompiled(kTriangleShaderPath);
+	SkipUnlessRendererShadersCompiled();
 
 	LoggerFixture logs(LogLevel::Warn, kRenderChannelMask);
 	{
@@ -308,7 +326,7 @@ CDL_TEST_CASE(RenderManager, RegisteredHandlersUploadMeshAssets, Gpu)
 // file on load and publishes it in the bindless table, so frames can draw with it at once.
 CDL_TEST_CASE(RenderManager, RegisteredHandlersUploadTextureAssets, Gpu)
 {
-	SkipUnlessCompiled(kTriangleShaderPath);
+	SkipUnlessRendererShadersCompiled();
 
 	LoggerFixture logs(LogLevel::Warn, kRenderChannelMask);
 	{
@@ -318,6 +336,65 @@ CDL_TEST_CASE(RenderManager, RegisteredHandlersUploadTextureAssets, Gpu)
 		CDL_EXPECT_NE(texture.Index, test.DefaultTexture.Index);
 
 		SubmitFrames(test, 3, test.CreateTriangle(), WindowSurface(test.AppWindow), Pacing::Free, texture);
+	}
+	ExpectNoVulkanDebugMessages(logs);
+}
+
+// Every frame slot runs the GUI pass over the scene and grows its own GUI buffers, while earlier frames may still read theirs.
+CDL_TEST_CASE(RenderManager, DrawsTheGuiOverTheScene, Gpu)
+{
+	SkipUnlessRendererShadersCompiled();
+
+	LoggerFixture logs(LogLevel::Warn, kRenderChannelMask);
+	{
+		TestRenderManager test;
+		test.Gui = HalfScreenGui(test.AppWindow, test.DefaultTexture);
+		SubmitFrames(test, 10, test.CreateTriangle(), WindowSurface(test.AppWindow));
+	}
+	ExpectNoVulkanDebugMessages(logs);
+}
+
+// The scene goes to an output target the GUI samples rather than to the swapchain, so each frame moves the target between
+// attachment and sampled layouts; synchronization validation checks every transition, across frames in flight too.
+CDL_TEST_CASE(RenderManager, RendersTheSceneIntoAnOutputTargetTheGuiShows, Gpu)
+{
+	SkipUnlessRendererShadersCompiled();
+
+	LoggerFixture logs(LogLevel::Warn, kRenderChannelMask);
+	{
+		TestRenderManager test(OutputTargetRenderSpec());
+		RenderContext output(&test.Manager, false, { 320, 240 });
+		test.OutputTarget = output.GetOutputTexture();
+		test.Gui = HalfScreenGui(test.AppWindow, test.OutputTarget);
+
+		SubmitFrames(test, 10, test.CreateTriangle(), WindowSurface(test.AppWindow));
+		test.RenderThread.Join();	// As Application joins before its RenderContext releases the target
+	}
+	ExpectNoVulkanDebugMessages(logs);
+}
+
+// RenderContext replaces the output target whenever the application's window changes size, while frames drawing the old one
+// are in flight, and the render thread resizes depth to match. Grown past the swapchain, shrunk, turned the other way and
+// collapsed to a pixel, so depth left at any earlier size makes a frame's render area outgrow it and fail validation.
+CDL_TEST_CASE(RenderManager, RendersAcrossOutputTargetResizes, Gpu)
+{
+	SkipUnlessRendererShadersCompiled();
+
+	LoggerFixture logs(LogLevel::Warn, kRenderChannelMask);
+	{
+		TestRenderManager test(OutputTargetRenderSpec());
+		RenderContext output(&test.Manager, false, { 320, 240 });
+		const GPUMeshHandle mesh = test.CreateTriangle();
+		const Surface surface = WindowSurface(test.AppWindow);
+
+		for (const glm::vec2 size : { glm::vec2(320.0f, 240.0f), glm::vec2(1024.0f, 96.0f), glm::vec2(64.0f, 64.0f), glm::vec2(96.0f, 700.0f), glm::vec2(0.0f, 0.0f) })
+		{
+			output.SetOutputSize(size);
+			test.OutputTarget = output.GetOutputTexture();
+			test.Gui = HalfScreenGui(test.AppWindow, test.OutputTarget);
+			SubmitFrames(test, 3, mesh, surface);
+		}
+		test.RenderThread.Join();
 	}
 	ExpectNoVulkanDebugMessages(logs);
 }
