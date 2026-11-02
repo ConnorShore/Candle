@@ -42,6 +42,7 @@ namespace Candle {
 		Window			= 1 << 11,
 		FileSystem		= 1 << 12,
 		Asset			= 1 << 13,
+		Debug			= 1 << 14,
 	};
 
 	// Bitwise OR/AND operators for LogChannel to allow combining channels

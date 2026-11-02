@@ -3,6 +3,7 @@
 #include "Candle/Render/Resources/GPUHandles.h"
 #include "Candle/Render/Vulkan/SamplerType.h"
 #include "Candle/Render/GUI/GuiDrawData.h"
+#include "Candle/Render/RenderStats.h"
 
 #include <vector>
 #include <glm/glm.hpp>
@@ -35,7 +36,10 @@ namespace Candle {
 		glm::uvec2 SurfaceSize{ 0, 0 };	// The  size of the surface for this frame; the renderer may need to recreate the swapchain if changed
 
 		std::vector<GPUSlotRef> ReleasedSlots;	// Released by the main thread; no later packet may reference them
-		std::vector<GPUSlotRef> RecycledSlots;	// The one field the render thread writes: freed slots, read when the packet is next acquired for writing
+
+		// The only fields the render thread writes, read when the packet is next acquired for writing
+		std::vector<GPUSlotRef> RecycledSlots;	// Freed slots
+		Candle::RenderStats RenderStats;		// The render thread's last completed frame; not this packet's, which is released before it presents
 
 		uint64_t FrameIndex{ 0 };	// The index of the frame for this packet; used for debugging and profiling
 	};

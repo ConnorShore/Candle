@@ -6,6 +6,8 @@
 
 #include "Candle/Platform/Platform.h"
 
+#include "Candle/Debug/DebugUIManager.h"
+
 // Temporary, until we have a better way to register asset handlers //
 #include "Candle/Render/Assets/MeshAsset.h"
 #include "Candle/Render/Assets/Texture.h"
@@ -54,6 +56,7 @@ namespace Candle {
 		, m_Window(m_Specification.Headless ? ScopedPtr<Window>() : ScopedPtr<Window>::Create(m_Specification.WindowSpec))
 		, m_RenderManager(m_Specification.Headless ? ScopedPtr<RenderManager>() : ScopedPtr<RenderManager>::Create(m_Specification.RenderSpec, m_Specification.AppInfo, m_Specification.EngineAssetDir, *m_Window, m_JobSystem))
 		, m_GuiSystem(m_Specification.Headless ? ScopedPtr<GuiSystem>() : ScopedPtr<GuiSystem>::Create(*m_Window, m_RenderManager->GetTexturePool()))
+		, m_DebugUIManager(m_Specification.Headless ? ScopedPtr<DebugUIManager>() : ScopedPtr<DebugUIManager>::Create())
 		, m_RenderContext(m_RenderManager.Get(), m_Specification.RenderSpec.RenderToSwapChain, { m_Specification.WindowSpec.Width, m_Specification.WindowSpec.Height })
 	{
 		CDL_CORE_INFO(LogChannel::Application, "Application created: {}", m_Specification.AppInfo.Name);
@@ -83,6 +86,7 @@ namespace Candle {
 		while (!IsQuitRequested())
 		{
 			CDL_PROFILE_SCOPE("Application::Run");
+			ThreadFrameTimings mainTimings;
 
 			// Process events
 			HandlePlatformEvents();
@@ -99,6 +103,19 @@ namespace Candle {
 			UpdateContext updateContext{ appContext, m_FrameStats.DeltaTime, inputSnapshot, m_RenderContext };
 			OnUpdate(updateContext);
 
+			// Call the debug UI manager to update and render its panels
+			if (m_DebugUIManager)
+			{
+				DebugContext debugContext{
+					.DeltaTime = m_FrameStats.DeltaTime,
+					.Main = m_LastMainTimings,
+					.Render = m_RenderManager ? m_RenderManager->GetRenderStats() : RenderStats{}
+				};
+
+				m_DebugUIManager->OnUpdate(debugContext);
+				m_DebugUIManager->OnRender(debugContext);
+			}
+
 			// Call the GUI system to end the frame
 			if (m_GuiSystem)
 				m_GuiSystem->EndFrame();
@@ -107,8 +124,11 @@ namespace Candle {
 			if (m_RenderManager)
 			{
 				CDL_PROFILE_SCOPE("Application::Run::FramePacket");
+				Timer pumpWaitTimer;
 				FramePacket& packet = m_RenderManager->BeginFramePacket();
+				mainTimings.PumpWaitMs = static_cast<float>(pumpWaitTimer.ElapsedMilliseconds());
 				CDL_PROFILE_SCOPE_METADATA(packet.FrameIndex);
+
 				ExtractToFramePacket(packet);
 				m_RenderManager->SubmitFramePacket(packet);
 
@@ -123,6 +143,10 @@ namespace Candle {
 			m_FrameStats.TotalTime += m_FrameStats.DeltaTime;
 			m_FrameStats.FrameCount++;
 			startTick = endTick;
+
+			// DeltaTime already spans the whole iteration, end tick to end tick, so it is the main thread's total
+			mainTimings.TotalMs = m_FrameStats.DeltaTime.GetMilliseconds();
+			m_LastMainTimings = mainTimings;
 
 			// Display log every 1/2 second, averaged over the window: one frame's 1/dt depends on where it lands in the present cycle
 			m_FrameStats.TimeSinceLastLog += m_FrameStats.DeltaTime;

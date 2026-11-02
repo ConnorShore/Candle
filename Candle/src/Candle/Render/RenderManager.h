@@ -1,20 +1,24 @@
 #pragma once
 
-#include "Candle/Render/RenderSpecification.h"
-#include "Candle/Render/RenderConstants.h"
+#include "RenderSpecification.h"
+#include "RenderConstants.h"
+#include "Renderer.h"
+#include "FrameContext.h"
+#include "FramePump.h"
+#include "FramePacket.h"
+#include "RenderStats.h"
+
 #include "Candle/Render/Vulkan/RenderInstance.h"
 #include "Candle/Render/Vulkan/RenderDevice.h"
 #include "Candle/Render/Vulkan/SwapChain.h"
-#include "Candle/Render/Renderer.h"
-#include "Candle/Render/FrameContext.h"
+#include "Candle/Render/Vulkan/BindlessTable.h"
 #include "Candle/Render/Vulkan/RenderCommandPoolManager.h"
 #include "Candle/Render/Vulkan/GPUAllocator.h"
+
+#include "Candle/Render/Resources/GPUResourceRegistry.h"
 #include "Candle/Render/Resources/GPUUploader.h"
 #include "Candle/Render/Resources/GeometryPool.h"
 #include "Candle/Render/Resources/TexturePool.h"
-#include "Candle/Render/Vulkan/BindlessTable.h"
-#include "Candle/Render/Resources/GPUResourceRegistry.h"
-#include "Candle/Render/FramePump.h"
 
 #include "Candle/Core/ApplicationInfo.h"
 #include "Candle/Core/Threading/Thread.h"
@@ -56,8 +60,11 @@ namespace Candle {
 		inline GeometryPool& GetGeometryPool() { return m_GeometryPool; }	// For tests only; the application goes through asset handlers
 		inline TexturePool& GetTexturePool() { return m_TexturePool; }
 
+		// Main thread only. The render thread's last completed frame to come back in a packet; a few frames behind the main thread
+		inline const RenderStats& GetRenderStats() const { return m_LatestRenderStats; }
+
 	private:
-		void RenderThreadMain();   // Wait for a frame slot → acquire → Renderer::Render → submit → present
+		void RenderThreadMain(RenderStats& stats);   // Wait for a frame slot → acquire → Renderer::Render → submit → present; fills in what it measures
 		void RetireAndReleasePacket(FramePacket& packet, uint64_t retireValue);	// Retires its releases, then hands it back to the main thread
 
 		void CreateFrameContexts();
@@ -81,6 +88,9 @@ namespace Candle {
 
 		std::array<FrameContext, kMaxFramesInFlight> m_FrameContexts;
 		uint32_t m_FrameIndex{ 0 };
+
+		RenderStats m_CompletedRenderStats;	// Render thread only: its last completed frame, written into each packet it releases
+		RenderStats m_LatestRenderStats;	// Main thread only: copied out of each packet as it is acquired for writing
 	};
 
 }

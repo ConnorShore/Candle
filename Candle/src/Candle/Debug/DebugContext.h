@@ -1,0 +1,18 @@
+#pragma once
+
+#include "Candle/Core/Time.h"
+#include "Candle/Core/FrameTimings.h"
+#include "Candle/Render/RenderStats.h"
+
+namespace Candle {
+
+	// What every debug panel is handed each frame. Snapshots are held by value: they are small, and nothing can dangle.
+	// Threading: built and read on the main thread only.
+	struct DebugContext
+	{
+		TimeStep DeltaTime;
+		ThreadFrameTimings Main;	// The main thread's last completed frame
+		RenderStats Render;			// The render thread's last completed frame to reach the main thread; a few frames behind Main
+	};
+
+}

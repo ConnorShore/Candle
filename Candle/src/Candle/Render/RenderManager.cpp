@@ -6,6 +6,7 @@
 #include "Candle/Render/RenderConstants.h"
 
 #include "Candle/Platform/Window.h"
+#include "Candle/Core/Time.h"
 #include "Candle/Core/Profiler.h"
 #include "Candle/Core/Job/JobSystem.h"
 #include "Candle/Core/Memory/ScopedPtr.h"
@@ -66,7 +67,13 @@ namespace Candle {
 	{
 		m_RenderThread.Start([this](std::stop_token stoken){
 			while (!stoken.stop_requested()) {
-				RenderThreadMain();
+				// Timed here rather than inside, so every early return in RenderThreadMain still completes the frame's stats
+				Timer frameTimer;
+				RenderStats stats;
+				RenderThreadMain(stats);
+				stats.Timings.TotalMs = static_cast<float>(frameTimer.ElapsedMilliseconds());
+				m_CompletedRenderStats = stats;
+
 				CDL_PROFILE_FRAME_NAMED("RenderFrame");
 			}
 
@@ -104,6 +111,7 @@ namespace Candle {
 		CDL_CORE_ASSERT(Platform::IsMainThread(), "RenderManager::BeginFramePacket() must be called from the main thread.");
 
 		FramePacket& packet = m_FramePump.AquireForWriting();
+		m_LatestRenderStats = packet.RenderStats;
 		m_GPUUploader.FreeCompletedStagingBuffers();
 		m_ResourceRegistry.ReturnRecycledSlotsToPools(packet);
 		m_ResourceRegistry.MoveReleasedSlotsIntoPacket(packet);
@@ -125,11 +133,14 @@ namespace Candle {
 			.DebugName = std::format("Output Target {}x{}", extent.x, extent.y) });
 	}
 
-	void RenderManager::RenderThreadMain()
+	void RenderManager::RenderThreadMain(RenderStats& stats)
 	{
 		CDL_PROFILE_SCOPE("RenderManager::RenderThreadMain");
+
 		// A minimized surface reports a zero extent, and a swapchain can't be created at that size
+		Timer pumpWaitTimer;
 		FramePacket* packet = m_FramePump.AquireForReading();
+		stats.Timings.PumpWaitMs = static_cast<float>(pumpWaitTimer.ElapsedMilliseconds());
 		if (!packet)
 			return;	// Closed by JoinRenderThread
 
@@ -214,6 +225,9 @@ namespace Candle {
 	{
 		m_ResourceRegistry.RetireReleasedSlots(packet, retireValue);
 		m_ResourceRegistry.FreeRetiredSlots(m_RenderDevice.GetCompletedTimelineValue(QueueType::Graphics), packet);
+
+		// The previous frame's, since this one has yet to present; every path through RenderThreadMain releases through here
+		packet.RenderStats = m_CompletedRenderStats;
 
 		// The main thread can write into it again
 		m_FramePump.Release(packet);

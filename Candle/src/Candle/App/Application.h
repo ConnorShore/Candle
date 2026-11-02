@@ -11,12 +11,14 @@
 #include "Candle/Asset/AssetManager.h"
 #include "Candle/Input/InputSystem.h"
 #include "Candle/Core/Job/JobSystem.h"
+#include "Candle/Core/FrameTimings.h"
 
 #include <atomic>
 
 namespace Candle {
 
 	class RenderManager;
+	class DebugUIManager;
 	struct FramePacket;
 
 	struct ApplicationContext
@@ -83,6 +85,7 @@ namespace Candle {
 		JobSystem m_JobSystem;
 		ScopedPtr<RenderManager> m_RenderManager;	// Empty when headless
 		ScopedPtr<GuiSystem> m_GuiSystem;			// Empty when headless
+		ScopedPtr<DebugUIManager> m_DebugUIManager;	// Empty when headless
 		RenderContext m_RenderContext;				// After the render manager, which it releases its output target through
 		AssetManager m_AssetManager;
 
@@ -92,6 +95,8 @@ namespace Candle {
 		FrameStats m_FrameStats;
 
 		std::vector<PlatformEvent> m_FrameEvents;
+
+		ThreadFrameTimings m_LastMainTimings;	// Main thread only: its last completed frame, for the debug UI
 	};
 
 	ScopedPtr<Application> CreateApplication(int argc, char** argv);
