@@ -35,7 +35,7 @@ namespace Candle {
 	{
 		if (commandLine.empty())
 		{
-			Log("No command entered.");
+			CDL_CORE_WARN(LogChannel::Command, "No command entered.");
 			return;
 		}
 
@@ -48,14 +48,14 @@ namespace Candle {
 		// Extract the command
 		if (!(iss >> command))
 		{
-			Log("Failed to parse command.");
+			CDL_CORE_WARN(LogChannel::Command, "Failed to parse command.");
 			return;
 		}
 
 		// Check to ensure the command is registered
 		if (m_Commands.find(command) == m_Commands.end())
 		{
-			Log("Command not found: " + command);
+			CDL_CORE_WARN(LogChannel::Command, "Command not found: {}", command);
 			return;
 		}
 

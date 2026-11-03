@@ -14,6 +14,13 @@ namespace Candle {
 		Scene
 	};
 
+	struct DebugPanelCommand
+	{
+		std::string Name;
+		std::string Description;
+		std::string Usage;
+	};
+
 	class DebugPanel
 	{
 	public:
@@ -34,6 +41,7 @@ namespace Candle {
 
 		virtual const char* GetName() const = 0;
 		virtual DebugPanelCategory GetCategory() const = 0;
+		virtual DebugPanelCommand GetCommand() const = 0;	// Single command to show/hide panel for now; TODO: may add ability to add more commands later
 	};
 
 }

@@ -11,11 +11,11 @@
 
 namespace Candle {
 
-	template<typename T>
-	concept IsDebugPanel = std::derived_from<T, DebugPanel>;
-
 	class ConsoleManager;
 	class MainThreadLogSink;
+
+	template<typename T>
+	concept IsDebugPanel = std::derived_from<T, DebugPanel>;
 
 	// Owns the debug panels and drives them each frame.
 	// Threading: main thread only; OnRender must run between GuiSystem::StartFrame and EndFrame.
@@ -35,6 +35,8 @@ namespace Candle {
 		template<IsDebugPanel T, typename... Args>
 		T& AddPanel(Args&&... args)
 		{
+			CDL_CORE_ASSERT(m_RegisteredPanelCommands == false, "Cannot add panels after registering panel commands.");
+
 			ScopedPtr<T> panel = ScopedPtr<T>::Create(std::forward<Args>(args)...);
 			T* raw = panel.Get();
 			m_Panels.emplace_back(std::move(panel));
@@ -50,8 +52,17 @@ namespace Candle {
 		inline bool IsVisible() const { return m_IsVisible; }
 
 	private:
+		constexpr static const char* kDebugUICommand = "debug";	// All debug ui commands start with this prefix, followed by the panel's command name
+		constexpr static const char* kDebugUICommandUsage = "debug <panel>";	// Usage for the debug command, which is the same for all panels
+
+	private:
+		void RegisterPanelCommands();
+
+	private:
+		ConsoleManager& m_ConsoleManager;
 		std::vector<ScopedPtr<DebugPanel>> m_Panels;
 		bool m_IsVisible{ true };
+		bool m_RegisteredPanelCommands{ false };
 	};
 
 }

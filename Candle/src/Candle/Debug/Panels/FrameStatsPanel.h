@@ -23,6 +23,14 @@ namespace Candle {
 
 		inline virtual const char* GetName() const override { return "Frame Stats"; }
 		inline virtual DebugPanelCategory GetCategory() const override { return DebugPanelCategory::General; }
+		inline virtual DebugPanelCommand GetCommand() const override
+		{
+			return DebugPanelCommand{
+				.Name{ "framegraph" },
+				.Description{ "Frame timing statistics and graphs" },
+				.Usage{ "framegraph" }
+			};
+		}
 
 	private:
 		constexpr static size_t kMaxHistorySize = 360;	// Few seconds at common frame times

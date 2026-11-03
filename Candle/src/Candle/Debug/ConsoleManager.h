@@ -29,8 +29,6 @@ namespace Candle {
 		void ExecuteCommand(const std::string& commandLine);
 
 	private:
-		void Log(const std::string_view& message);
-
 		struct ConsoleCommand
 		{
 			ConsoleCommandCallback Callback{};
