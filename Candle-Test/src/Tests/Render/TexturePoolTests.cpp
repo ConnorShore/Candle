@@ -327,8 +327,10 @@ CDL_TEST_CASE(TexturePool, CaptureStatsListsEachLiveTextureWithItsHandleNameAndF
 
 		CDL_EXPECT_EQ(textureStats->DebugName, "Inspected Texture");
 		CDL_EXPECT_EQ(textureStats->Format, vk::Format::eR8G8B8A8Srgb);
+		CDL_EXPECT_FALSE(textureStats->IsRenderTarget);
 		CDL_EXPECT_EQ(targetStats->DebugName, "Inspected Target");
 		CDL_EXPECT_EQ(targetStats->Format, vk::Format::eB8G8R8A8Unorm);
+		CDL_EXPECT(targetStats->IsRenderTarget);
 		CDL_EXPECT(targetStats->Extent == glm::uvec2(5, 3));
 		CDL_EXPECT_GT(targetStats->SizeBytes, 0u);
 	}

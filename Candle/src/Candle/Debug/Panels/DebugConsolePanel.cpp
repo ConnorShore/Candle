@@ -60,13 +60,21 @@ namespace Candle {
 	void DebugConsolePanel::OnUpdate(const DebugContext& context)
 	{
 		// Show with "~" key
-		if (context.Input.IsKeyPressed(KeyCode::GraveAccent))
-			IsOpen = true;
+		if (context.Input.IsKeyPressed(KeyCode::GraveAccent)) 
+		{
+			IsOpen = !IsOpen;
+
+			if (IsOpen)
+				m_FocusInput = true;
+		}
 	}
 
 	void DebugConsolePanel::OnRender(const DebugContext& context)
 	{
 		ImGui::SetNextWindowSize({ 800.0f, 400.0f }, ImGuiCond_FirstUseEver);
+		if (m_FocusInput)
+			ImGui::SetNextWindowFocus();
+
 		if (ImGui::Begin(GetName(), &IsOpen))
 		{
 			DrawFilterRegion();
@@ -214,6 +222,13 @@ namespace Candle {
 		// TODO: Autocomplete and suggestions from ConsoleManager's commands (ImGuiInputTextFlags_CallbackCompletion), and history (CallbackHistory)
 		//  Should be selectable items that will autofill if selected (if hovered it will show a tooltip with the description and usage)
 		ImGui::SetNextItemWidth(-FLT_MIN);
+
+		// Cleared here rather than in OnRender, so a collapsed window still focuses the input once it is expanded
+		if (m_FocusInput)
+		{
+			ImGui::SetKeyboardFocusHere();
+			m_FocusInput = false;
+		}
 		const bool submitted = ImGui::InputTextWithHint("##CommandInput", "Enter a command", m_InputBuffer.data(), m_InputBuffer.size(), ImGuiInputTextFlags_EnterReturnsTrue);
 		ImGui::SetItemDefaultFocus();
 

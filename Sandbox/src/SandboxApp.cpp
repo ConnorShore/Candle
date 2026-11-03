@@ -127,7 +127,7 @@ namespace Candle {
 				context.AppContext.ActiveWorld.Projection = glm::perspective(glm::radians(45.0f), static_cast<float>(outputSize.x) / outputSize.y, 0.1f, 100.0f);
 			}
 
-			ImGui::ShowDemoWindow();
+			//ImGui::ShowDemoWindow();
 		}
 
 		void OnShutdown() override

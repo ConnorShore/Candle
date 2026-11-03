@@ -3,7 +3,8 @@
 #include "DebugContext.h"
 
 namespace Candle {
-
+	
+	// TODO: Might be able to remove this if we don't use it
 	enum class DebugPanelCategory
 	{
 		General,
@@ -24,7 +25,7 @@ namespace Candle {
 	class DebugPanel
 	{
 	public:
-		bool IsOpen = true;
+		bool IsOpen{ false };
 
 	public:
 		DebugPanel() = default;

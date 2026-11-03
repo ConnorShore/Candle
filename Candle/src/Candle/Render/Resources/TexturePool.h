@@ -59,6 +59,7 @@ namespace Candle {
 		glm::uvec2 Extent{ 0, 0 };
 		uint8_t MipLevels{ 1 };
 		vk::Format Format{ vk::Format::eUndefined };	// Raw, since render targets have formats TextureFormat can't name
+		bool IsRenderTarget{ false };
 	};
 
 	struct TexturePoolStats

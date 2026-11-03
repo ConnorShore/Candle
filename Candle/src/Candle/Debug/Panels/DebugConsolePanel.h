@@ -74,5 +74,6 @@ namespace Candle {
 
 		std::array<char, 256> m_InputBuffer{};
 		bool m_ScrollToBottom{ false };
+		bool m_FocusInput{ false };	// Set when the console opens, used up by the next DrawCommandInputRegion
 	};
 }

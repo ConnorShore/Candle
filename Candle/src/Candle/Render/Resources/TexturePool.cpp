@@ -155,7 +155,8 @@ namespace Candle {
 				.SizeBytes = info.SizeBytes,
 				.Extent = info.Extent,
 				.MipLevels = info.MipLevels,
-				.Format = info.Format });
+				.Format = info.Format,
+				.IsRenderTarget = info.IsRenderTarget });
 		}
 
 		return TexturePoolStats{
