@@ -11,9 +11,9 @@ namespace Candle {
 	// Threading: built and read on the main thread only.
 	struct DebugContext
 	{
-		TimeStep DeltaTime;
+		TimeStep DeltaTime;			// Frame to frame, which is what sets the frame rate. The threads overlap, so it isn't Main plus Render.
 		InputSnapshot Input;		// This frame's input, the same capture OnUpdate gets; keys ImGui captured never reach it
-		ThreadFrameTimings Main;	// The main thread's last completed frame
+		ThreadFrameTimings Main;	// The main (game) thread's last completed frame
 		RenderStats Render;			// The render thread's last completed frame to reach the main thread; a few frames behind Main
 	};
 

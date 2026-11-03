@@ -1,5 +1,5 @@
 #include "cdlpch.h"
-#include "FrameStatsPanel.h"
+#include "FrameGraphPanel.h"
 
 #include <imgui.h>
 
@@ -28,38 +28,38 @@ namespace Candle {
 	// StatHistory
 	// -------------------------------------------------------
 
-	void FrameStatsPanel::StatHistory::Push(float value)
+	void FrameGraphPanel::StatHistory::Push(float value)
 	{
 		Values[CurrentIndex] = value;
 		CurrentIndex = (CurrentIndex + 1) % kMaxHistorySize;
 		Count = std::min<uint32_t>(Count + 1, kMaxHistorySize);
 	}
 
-	float FrameStatsPanel::StatHistory::Max()
+	float FrameGraphPanel::StatHistory::Max()
 	{
 		return *std::max_element(Values.begin(), Values.begin() + Count);
 	}
 
-	float FrameStatsPanel::StatHistory::Min()
+	float FrameGraphPanel::StatHistory::Min()
 	{
 		return *std::min_element(Values.begin(), Values.begin() + Count);
 	}
 
-	float FrameStatsPanel::StatHistory::Average()
+	float FrameGraphPanel::StatHistory::Average()
 	{
 		return std::accumulate(Values.begin(), Values.begin() + Count, 0.0f) / static_cast<float>(Count);
 	}
 
-	float FrameStatsPanel::StatHistory::AtAge(uint32_t age) const
+	float FrameGraphPanel::StatHistory::AtAge(uint32_t age) const
 	{
 		return Values[(CurrentIndex + kMaxHistorySize - 1 - age) % kMaxHistorySize];
 	}
 
 	// -------------------------------------------------------
-	// FrameStatsPanel
+	// panelCommand
 	// -------------------------------------------------------
 
-	void FrameStatsPanel::OnUpdate(const DebugContext& context)
+	void FrameGraphPanel::OnUpdate(const DebugContext& context)
 	{
 		// Paused frames are dropped rather than buffered, so the graph and the selection hold still
 		if (m_Paused)
@@ -74,12 +74,12 @@ namespace Candle {
 		++m_SampleCount;
 	}
 
-	void FrameStatsPanel::OnRender(const DebugContext& context)
+	void FrameGraphPanel::OnRender(const DebugContext& context)
 	{
 		RenderWindow();
 	}
 
-	void FrameStatsPanel::RenderWindow()
+	void FrameGraphPanel::RenderWindow()
 	{
 		ImGui::SetNextWindowSize({ 760.0f, 280.0f }, ImGuiCond_FirstUseEver);
 		if (ImGui::Begin(GetName(), &IsOpen))
@@ -147,7 +147,7 @@ namespace Candle {
 		ImGui::End();
 	}
 
-	void FrameStatsPanel::DrawUnitGraph(ImDrawList* drawList, const ImVec2& min, const ImVec2& size, std::optional<uint32_t> hoveredAge)
+	void FrameGraphPanel::DrawUnitGraph(ImDrawList* drawList, const ImVec2& min, const ImVec2& size, std::optional<uint32_t> hoveredAge)
 	{
 		const ImVec2 max(min.x + size.x, min.y + size.y);
 		drawList->AddRectFilled(min, max, IM_COL32(15, 15, 15, 200));
@@ -271,7 +271,7 @@ namespace Candle {
 		drawList->PopClipRect();
 	}
 
-	void FrameStatsPanel::DrawFrameDetails()
+	void FrameGraphPanel::DrawFrameDetails()
 	{
 		if (!m_SelectedFrame)
 		{
@@ -316,7 +316,7 @@ namespace Candle {
 		drawThread("Render", kRenderColor, frame.Render);
 	}
 
-	std::optional<uint32_t> FrameStatsPanel::SampleAgeAt(float x, float graphMinX, float graphWidth) const
+	std::optional<uint32_t> FrameGraphPanel::SampleAgeAt(float x, float graphMinX, float graphWidth) const
 	{
 		// The inverse of DrawUnitGraph's sampleX, rounded to the nearest sample
 		const float step = graphWidth / static_cast<float>(kMaxHistorySize - 1);
@@ -328,7 +328,7 @@ namespace Candle {
 		return age;
 	}
 
-	FrameStatsPanel::FrameSample FrameStatsPanel::CaptureFrame(uint32_t age) const
+	FrameGraphPanel::FrameSample FrameGraphPanel::CaptureFrame(uint32_t age) const
 	{
 		// All four histories are pushed together in OnUpdate, so one age indexes the same frame in each
 		return {

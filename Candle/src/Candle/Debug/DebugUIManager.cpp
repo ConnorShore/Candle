@@ -1,7 +1,8 @@
 #include "cdlpch.h"
 #include "DebugUIManager.h"
 
-#include "Panels/FrameStatsPanel.h"
+#include "Panels/FrameStatsOverlay.h"
+#include "Panels/FrameGraphPanel.h"
 #include "Panels/DebugConsolePanel.h"
 
 #include "Candle/Debug/ConsoleManager.h"
@@ -12,7 +13,8 @@ namespace Candle {
 	DebugUIManager::DebugUIManager(ConsoleManager& consoleManager, MainThreadLogSink& mainThreadLogSink)
 		: m_ConsoleManager(consoleManager)
 	{
-		AddPanel<FrameStatsPanel>();
+		AddPanel<FrameStatsOverlay>();
+		AddPanel<FrameGraphPanel>();
 		AddPanel<DebugConsolePanel>(consoleManager, mainThreadLogSink);
 
 		RegisterPanelCommands();
@@ -87,7 +89,7 @@ namespace Candle {
 				}
 			}
 
-			CDL_CORE_WARN(LogChannel::Command, "No panel found for command '{}'", kDebugUICommand);
+			CDL_CORE_WARN(LogChannel::Command, "No panel found for command '{} {}'", kDebugUICommand, panelCommand);
 		});
 	}
 

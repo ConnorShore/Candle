@@ -212,6 +212,7 @@ namespace Candle {
 	void DebugConsolePanel::DrawCommandInputRegion()
 	{
 		// TODO: Autocomplete and suggestions from ConsoleManager's commands (ImGuiInputTextFlags_CallbackCompletion), and history (CallbackHistory)
+		//  Should be selectable items that will autofill if selected (if hovered it will show a tooltip with the description and usage)
 		ImGui::SetNextItemWidth(-FLT_MIN);
 		const bool submitted = ImGui::InputTextWithHint("##CommandInput", "Enter a command", m_InputBuffer.data(), m_InputBuffer.size(), ImGuiInputTextFlags_EnterReturnsTrue);
 		ImGui::SetItemDefaultFocus();

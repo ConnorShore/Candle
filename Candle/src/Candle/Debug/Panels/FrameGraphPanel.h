@@ -12,16 +12,16 @@ struct ImVec2;
 
 namespace Candle {
 
-	class FrameStatsPanel : public DebugPanel
+	class FrameGraphPanel : public DebugPanel
 	{
 	public:
-		FrameStatsPanel() = default;
-		~FrameStatsPanel() override = default;
+		FrameGraphPanel() = default;
+		~FrameGraphPanel() override = default;
 
 		virtual void OnUpdate(const DebugContext& context) override;
 		virtual void OnRender(const DebugContext& context) override;
 
-		inline virtual const char* GetName() const override { return "Frame Stats"; }
+		inline virtual const char* GetName() const override { return "Frame Graph"; }
 		inline virtual DebugPanelCategory GetCategory() const override { return DebugPanelCategory::General; }
 		inline virtual DebugPanelCommand GetCommand() const override
 		{
