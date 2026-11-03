@@ -14,12 +14,15 @@ namespace Candle {
 	template<typename T>
 	concept IsDebugPanel = std::derived_from<T, DebugPanel>;
 
+	class ConsoleManager;
+	class MainThreadLogSink;
+
 	// Owns the debug panels and drives them each frame.
 	// Threading: main thread only; OnRender must run between GuiSystem::StartFrame and EndFrame.
 	class DebugUIManager
 	{
 	public:
-		DebugUIManager();	// Registers the engine's panels
+		DebugUIManager(ConsoleManager& consoleManager, MainThreadLogSink& mainThreadLogSink);	// Registers the engine's panels
 		~DebugUIManager() = default;
 
 		// Delete copy and move constructors and assignment operators

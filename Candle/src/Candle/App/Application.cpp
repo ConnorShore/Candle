@@ -35,7 +35,12 @@ namespace Candle {
 	Application::PlatformScope::PlatformScope() { Platform::Init(); }
 	Application::PlatformScope::~PlatformScope() { Platform::Shutdown(); }
 
-	Application::LoggerScope::LoggerScope(const LoggerSpecification& spec) { Logger::Init(spec); }
+	Application::LoggerScope::LoggerScope(const LoggerSpecification& spec) 
+	{ 
+		MainThreadSink = &Logger::AddSink(ScopedPtr<MainThreadLogSink>::Create(1024));
+
+		Logger::Init(spec); 
+	}
 	Application::LoggerScope::~LoggerScope() { Logger::Shutdown(); }
 
 	Application::WindowingScope::WindowingScope(bool enabled) : Enabled(enabled)
@@ -56,7 +61,8 @@ namespace Candle {
 		, m_Window(m_Specification.Headless ? ScopedPtr<Window>() : ScopedPtr<Window>::Create(m_Specification.WindowSpec))
 		, m_RenderManager(m_Specification.Headless ? ScopedPtr<RenderManager>() : ScopedPtr<RenderManager>::Create(m_Specification.RenderSpec, m_Specification.AppInfo, m_Specification.EngineAssetDir, *m_Window, m_JobSystem))
 		, m_GuiSystem(m_Specification.Headless ? ScopedPtr<GuiSystem>() : ScopedPtr<GuiSystem>::Create(*m_Window, m_RenderManager->GetTexturePool()))
-		, m_DebugUIManager(m_Specification.Headless ? ScopedPtr<DebugUIManager>() : ScopedPtr<DebugUIManager>::Create())
+		, m_DebugUIManager(m_Specification.Headless ? ScopedPtr<DebugUIManager>() : ScopedPtr<DebugUIManager>::Create(m_ConsoleManager, *m_LoggerScope.MainThreadSink))
+		, m_ConsoleManager()
 		, m_RenderContext(m_RenderManager.Get(), m_Specification.RenderSpec.RenderToSwapChain, { m_Specification.WindowSpec.Width, m_Specification.WindowSpec.Height })
 	{
 		CDL_CORE_INFO(LogChannel::Application, "Application created: {}", m_Specification.AppInfo.Name);
@@ -93,6 +99,10 @@ namespace Candle {
 
 			// Moves inside the fixed-step tick loop once there is one, so each tick consumes the edges exactly once
 			InputSnapshot inputSnapshot = m_InputSystem.CaptureSnapshot();
+
+			// Dispatch the logger's main thread sink
+			if (m_LoggerScope.MainThreadSink)
+				m_LoggerScope.MainThreadSink->Dispatch();
 
 			// Call the GUI system to start a new frame
 			if (m_GuiSystem)

@@ -3,7 +3,8 @@
 #include <string>
 #include <filesystem>
 
-#include "Candle/Core/ApplicationInfo.h"
+#include "ApplicationInfo.h"
+
 #include "Candle/Core/Logger.h"
 #include "Candle/Platform/WindowSpecification.h"
 #include "Candle/Render/RenderSpecification.h"

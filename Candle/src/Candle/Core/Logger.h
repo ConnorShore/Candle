@@ -43,10 +43,11 @@ namespace Candle {
 		FileSystem		= 1 << 12,
 		Asset			= 1 << 13,
 		Debug			= 1 << 14,
+		Command			= 1 << 15
 	};
 
 	// Bitwise OR/AND operators for LogChannel to allow combining channels
-inline LogChannel operator|(LogChannel lhs, LogChannel rhs) { return static_cast<LogChannel>(static_cast<uint16_t>(lhs) | static_cast<uint16_t>(rhs)); }
+	inline LogChannel operator|(LogChannel lhs, LogChannel rhs) { return static_cast<LogChannel>(static_cast<uint16_t>(lhs) | static_cast<uint16_t>(rhs)); }
 	inline uint16_t operator&(LogChannel lhs, LogChannel rhs) { return static_cast<uint16_t>(lhs) & static_cast<uint16_t>(rhs); }
 
 	struct LogRecord
@@ -91,6 +92,14 @@ inline LogChannel operator|(LogChannel lhs, LogChannel rhs) { return static_cast
 
 		static void Init(const LoggerSpecification& spec = {});
 		static void Shutdown();
+
+		template<std::derived_from<LogSink> T>
+		inline static T& AddSink(ScopedPtr<T> sink)
+		{
+			T* raw = sink.Get();
+			AddSink(ScopedPtr<LogSink>(std::move(sink)));
+			return *raw;
+		}
 
 		static void AddSink(ScopedPtr<LogSink> sink);
 		static bool Flush();

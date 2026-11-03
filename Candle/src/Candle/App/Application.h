@@ -1,17 +1,22 @@
 #pragma once
 
 #include "Candle/Core/Core.h"
-#include "Candle/App/ApplicationSpecification.h"
 #include "Candle/Core/Time.h"
+#include "Candle/Core/Job/JobSystem.h"
+#include "Candle/Core/FrameTimings.h"
+#include "Candle/Core/MainThreadLogSink.h"
+
+#include "Candle/App/ApplicationSpecification.h"
 #include "Candle/Platform/Window.h"
 #include "Candle/World/World.h"
+
 #include "Candle/Render/GUI/GuiSystem.h"
 #include "Candle/Render/RenderContext.h"
 
 #include "Candle/Asset/AssetManager.h"
 #include "Candle/Input/InputSystem.h"
-#include "Candle/Core/Job/JobSystem.h"
-#include "Candle/Core/FrameTimings.h"
+
+#include "Candle/Debug/ConsoleManager.h"
 
 #include <atomic>
 
@@ -70,9 +75,25 @@ namespace Candle {
 			float WorstFrameTime = 0.0f;	// Milliseconds
 		};
 
-		struct PlatformScope { PlatformScope(); ~PlatformScope(); };
-		struct LoggerScope { explicit LoggerScope(const LoggerSpecification& spec); ~LoggerScope(); };
-		struct WindowingScope { explicit WindowingScope(bool enabled); ~WindowingScope(); bool Enabled; };
+		struct PlatformScope 
+		{ 
+			PlatformScope();
+			~PlatformScope(); 
+		};
+		struct LoggerScope 
+		{ 
+			MainThreadLogSink* MainThreadSink{ nullptr };
+
+			explicit LoggerScope(const LoggerSpecification& spec); 
+			~LoggerScope(); 
+		};
+		struct WindowingScope 
+		{
+			bool Enabled;
+
+			explicit WindowingScope(bool enabled);
+			~WindowingScope();
+		};
 
     private:
 		// Declared in startup order so that they are destroyed in reverse order
@@ -85,6 +106,7 @@ namespace Candle {
 		JobSystem m_JobSystem;
 		ScopedPtr<RenderManager> m_RenderManager;	// Empty when headless
 		ScopedPtr<GuiSystem> m_GuiSystem;			// Empty when headless
+		ConsoleManager m_ConsoleManager;			// Always present, even when headless, so the application can log and execute commands
 		ScopedPtr<DebugUIManager> m_DebugUIManager;	// Empty when headless
 		RenderContext m_RenderContext;				// After the render manager, which it releases its output target through
 		AssetManager m_AssetManager;

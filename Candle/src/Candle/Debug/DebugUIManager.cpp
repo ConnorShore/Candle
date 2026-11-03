@@ -2,14 +2,18 @@
 #include "DebugUIManager.h"
 
 #include "Panels/FrameStatsPanel.h"
+#include "Panels/DebugConsolePanel.h"
+
+#include "Candle/Debug/ConsoleManager.h"
+#include "Candle/Core/MainThreadLogSink.h"
 
 namespace Candle {
 
-	DebugUIManager::DebugUIManager()
+	DebugUIManager::DebugUIManager(ConsoleManager& consoleManager, MainThreadLogSink& mainThreadLogSink)
 	{
 		AddPanel<FrameStatsPanel>();
+		AddPanel<DebugConsolePanel>(consoleManager, mainThreadLogSink);
 	}
-
 
 	void DebugUIManager::ConsumeEvent(const InputEvent& event)
 	{
