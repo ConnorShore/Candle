@@ -1,24 +1,11 @@
 #include "cdlpch.h"
 #include "TextureInspectorPanel.h"
+#include "Candle/Render/Resources/TexturePool.h"
+#include "Candle/Render/GUI/GuiTextureID.h"
 
 #include <imgui.h>
 
 namespace Candle {
-
-	namespace {
-
-		std::string FormatToString(TextureFormat format)
-		{
-			switch (format)
-			{
-			case TextureFormat::Rgba8: return "RGBA8";
-			case TextureFormat::Rg8: return "RG8";
-			case TextureFormat::R8: return "R8";
-			default: return "Unknown";
-			}
-		}
-
-	}
 
 	void TextureInspectorPanel::OnUpdate(const DebugContext& context)
 	{
@@ -29,24 +16,47 @@ namespace Candle {
 	{
 		ImGui::Begin("Texture Inspector", &IsOpen);
 
-		if (ImGui::BeginTable("TextureTable", 4, ImGuiTableFlags_Borders | ImGuiTableFlags_RowBg | ImGuiTableFlags_Resizable))
+		const TexturePoolStats stats = m_TexturePool.CaptureStats();
+		if (ImGui::BeginTable("TextureTable", 6, ImGuiTableFlags_Borders | ImGuiTableFlags_RowBg | ImGuiTableFlags_Resizable))
 		{
-			for (const auto& textureInfo : context.Render.TextureStats.ActiveTextures)
+			for (const auto& textureInfo : stats.ActiveTextures)
 			{
 				ImGui::TableNextRow();
 				ImGui::TableNextColumn();
-				ImGui::Text("%s", textureInfo.Index == std::numeric_limits<uint32_t>::max() ? "Invalid" : std::to_string(textureInfo.Index).c_str());
+
+				ImGui::PushID(textureInfo.Handle.Index);
+
+				bool isSelected = (m_SelectedTexture == textureInfo.Handle);
+				if (ImGui::Selectable(std::to_string(textureInfo.Handle.Index).c_str(), isSelected, ImGuiSelectableFlags_SpanAllColumns))
+					m_SelectedTexture = textureInfo.Handle;
+
+				ImGui::TableNextColumn();
+				ImGui::Text("%s", textureInfo.DebugName.c_str());
 				ImGui::TableNextColumn();
 				ImGui::Text("%u x %u", textureInfo.Extent.x, textureInfo.Extent.y);
 				ImGui::TableNextColumn();
-				ImGui::Text("%s", FormatToString(textureInfo.Format).c_str());
+				ImGui::Text("%s", vk::to_string(textureInfo.Format).c_str());
 				ImGui::TableNextColumn();
 				ImGui::Text("%u mip levels", textureInfo.MipLevels);
 				ImGui::TableNextColumn();
 				ImGui::Text("%u bytes", textureInfo.SizeBytes);
+
+
+				ImGui::PopID();
 			}
 
 			ImGui::EndTable();
+		}
+
+		ImGui::Separator();
+
+		// A selection outlives its texture, and a released handle must never reach the packet
+		if (!m_TexturePool.IsAlive(m_SelectedTexture))
+			m_SelectedTexture = {};
+
+		if (m_SelectedTexture.IsValid())
+		{
+			ImGui::Image(ToGuiTextureID(m_SelectedTexture), ImVec2(256, 256));
 		}
 
 		ImGui::End();

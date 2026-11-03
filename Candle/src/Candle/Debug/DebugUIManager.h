@@ -13,6 +13,7 @@ namespace Candle {
 
 	class ConsoleManager;
 	class MainThreadLogSink;
+	class TexturePool;
 
 	template<typename T>
 	concept IsDebugPanel = std::derived_from<T, DebugPanel>;
@@ -22,7 +23,7 @@ namespace Candle {
 	class DebugUIManager
 	{
 	public:
-		DebugUIManager(ConsoleManager& consoleManager, MainThreadLogSink& mainThreadLogSink);	// Registers the engine's panels
+		DebugUIManager(ConsoleManager& consoleManager, MainThreadLogSink& mainThreadLogSink, const TexturePool& texturePool);	// Registers the engine's panels
 		~DebugUIManager() = default;
 
 		// Delete copy and move constructors and assignment operators

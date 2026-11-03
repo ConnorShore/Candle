@@ -303,6 +303,75 @@ CDL_TEST_CASE(TexturePool, HandlesItNeverIssuedAreNotAlive, Gpu)
 	ExpectNoVulkanDebugMessages(logs);
 }
 
+// What the texture inspector lists. The handle must be whole to round-trip through ImGui, and BGRA is a swapchain-style
+// format TextureFormat can't name, which the stats once asserted on.
+CDL_TEST_CASE(TexturePool, CaptureStatsListsEachLiveTextureWithItsHandleNameAndFormat, Gpu)
+{
+	LoggerFixture logs(LogLevel::Warn, kRenderChannelMask);
+	{
+		TestTextures gpu;
+		const GPUTextureHandle texture = gpu.Pool.CreateTexture({
+			.Data = std::as_bytes(std::span(&kWhite, 1)), .Extent = { 1, 1 }, .Format = TextureFormat::Rgba8,
+			.ColorSpace = TextureColorSpace::Srgb, .DebugName = "Inspected Texture" });
+		const GPUTextureHandle target = gpu.Pool.CreateRenderTarget({
+			.Extent = { 5, 3 }, .Format = vk::Format::eB8G8R8A8Unorm, .DebugName = "Inspected Target" });
+
+		const TexturePoolStats stats = gpu.Pool.CaptureStats();
+		CDL_EXPECT_EQ(stats.ActiveTextures.size(), kDefaultTextureAllocations + 2u);
+		CDL_EXPECT_EQ(stats.PoolStats.LiveSlots, kDefaultTextureAllocations + 2u);
+
+		const auto textureStats = std::ranges::find(stats.ActiveTextures, texture, &TextureStats::Handle);
+		const auto targetStats = std::ranges::find(stats.ActiveTextures, target, &TextureStats::Handle);
+		CDL_CHECK(textureStats != stats.ActiveTextures.end());
+		CDL_CHECK(targetStats != stats.ActiveTextures.end());
+
+		CDL_EXPECT_EQ(textureStats->DebugName, "Inspected Texture");
+		CDL_EXPECT_EQ(textureStats->Format, vk::Format::eR8G8B8A8Srgb);
+		CDL_EXPECT_EQ(targetStats->DebugName, "Inspected Target");
+		CDL_EXPECT_EQ(targetStats->Format, vk::Format::eB8G8R8A8Unorm);
+		CDL_EXPECT(targetStats->Extent == glm::uvec2(5, 3));
+		CDL_EXPECT_GT(targetStats->SizeBytes, 0u);
+	}
+	ExpectNoVulkanDebugMessages(logs);
+}
+
+// The inspector drops a selection that isn't alive, so a released texture must leave the list before the GPU is done with it.
+CDL_TEST_CASE(TexturePool, ReleasedTextureLeavesTheStatsAtOnce, Gpu)
+{
+	LoggerFixture logs(LogLevel::Warn, kRenderChannelMask);
+	{
+		TestTextures gpu;
+		const GPUTextureHandle texture = CreateTexel(gpu.Pool);
+		gpu.Pool.ReleaseTexture(texture);
+
+		const TexturePoolStats stats = gpu.Pool.CaptureStats();
+		CDL_EXPECT(std::ranges::find(stats.ActiveTextures, texture, &TextureStats::Handle) == stats.ActiveTextures.end());
+		CDL_EXPECT_EQ(stats.PoolStats.PendingSlots, 1u);
+	}
+	ExpectNoVulkanDebugMessages(logs);
+}
+
+// Names are kept per slot, so the texture that reuses one must not show its predecessor's.
+CDL_TEST_CASE(TexturePool, ReusedSlotReportsTheNewTexturesName, Gpu)
+{
+	LoggerFixture logs(LogLevel::Warn, kRenderChannelMask);
+	{
+		TestTextures gpu;
+		const GPUTextureHandle released = CreateRenderTarget(gpu.Pool, { 1, 1 });
+		gpu.Pool.ReleaseTexture(released);
+		RunReleaseFrame(gpu);
+
+		const GPUTextureHandle reused = gpu.Pool.CreateRenderTarget({ .Extent = { 1, 1 }, .Format = kRenderTargetFormat, .DebugName = "Second Target" });
+		CDL_CHECK_EQ(reused.Index, released.Index);
+
+		const TexturePoolStats stats = gpu.Pool.CaptureStats();
+		const auto reusedStats = std::ranges::find(stats.ActiveTextures, reused, &TextureStats::Handle);
+		CDL_CHECK(reusedStats != stats.ActiveTextures.end());
+		CDL_EXPECT_EQ(reusedStats->DebugName, "Second Target");
+	}
+	ExpectNoVulkanDebugMessages(logs);
+}
+
 // Every texel of a non-square texture, read at its centre with no filtering, so swapped extents or rows show up. The
 // caller's bytes are overwritten straight after CreateTexture, which its contract allows, before the GPU has run anything.
 CDL_TEST_CASE(TexturePool, SamplesBackTheTexelsItWasGiven, Gpu)

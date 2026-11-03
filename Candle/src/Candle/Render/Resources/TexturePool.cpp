@@ -6,6 +6,7 @@
 #include "Candle/Render/Vulkan/BindlessTable.h"
 
 #include "Candle/Render/Vulkan/VulkanUtils.h"
+#include "Candle/Platform/Platform.h"
 
 namespace Candle {
 
@@ -71,6 +72,7 @@ namespace Candle {
 
 		vk::ImageView view = image.GetImageView();
 		GPUTextureHandle handle = m_Textures.Insert(TextureEntry{ .Image = std::move(image), .Extent = spec.Extent });
+		StoreDebugName(handle, std::move(spec.DebugName));
 
 		// Published here so no texture can be handed out before a shader can sample it
 		m_BindlessTable.WriteTexture(handle.Index, view);
@@ -91,6 +93,7 @@ namespace Candle {
 
 		vk::ImageView view = image.GetImageView();
 		GPUTextureHandle handle = m_Textures.Insert(TextureEntry{ .Image = std::move(image), .Extent = spec.Extent, .IsRenderTarget = true });
+		StoreDebugName(handle, std::move(spec.DebugName));
 
 		m_BindlessTable.WriteTexture(handle.Index, view);
 		return handle;
@@ -137,24 +140,36 @@ namespace Candle {
 
 	TexturePoolStats TexturePool::CaptureStats() const
 	{
-		auto liveSlots = m_Textures.GetLiveHandles();
+		CDL_CORE_ASSERT(Platform::IsMainThread(), "TexturePool::CaptureStats must be called on the main thread");
+
+		const std::vector<GPUTextureHandle> liveHandles = m_Textures.GetLiveHandles();
 
 		std::vector<TextureStats> activeTextures;
-		activeTextures.reserve(liveSlots.size());
-		for (GPUTextureHandle& texHandle : liveSlots)
+		activeTextures.reserve(liveHandles.size());
+		for (const GPUTextureHandle& handle : liveHandles)
 		{
-			const TextureInfo info = GetTextureInfo(texHandle);
+			const TextureInfo info = GetTextureInfo(handle);
 			activeTextures.push_back(TextureStats{
-				.Index = texHandle.Index,
+				.Handle = handle,
+				.DebugName = m_DebugNames[handle.Index],
 				.SizeBytes = info.SizeBytes,
 				.Extent = info.Extent,
 				.MipLevels = info.MipLevels,
-				.Format = ToTextureFormat(info.Format) });
+				.Format = info.Format });
 		}
 
 		return TexturePoolStats{
 			.PoolStats = m_Textures.CaptureStats(),
 			.ActiveTextures = std::move(activeTextures) };
+	}
+
+	void TexturePool::StoreDebugName(GPUTextureHandle handle, std::string name)
+	{
+		// Slots are handed out from the bottom, so this grows with the pool's high-water mark rather than its capacity
+		if (handle.Index >= m_DebugNames.size())
+			m_DebugNames.resize(handle.Index + 1);
+
+		m_DebugNames[handle.Index] = std::move(name);
 	}
 
 }

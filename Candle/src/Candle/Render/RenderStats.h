@@ -1,7 +1,6 @@
 #pragma once
 
 #include "Candle/Core/FrameTimings.h"
-#include "Candle/Render/Resources/TexturePool.h"
 
 namespace Candle {
 
@@ -10,7 +9,6 @@ namespace Candle {
 	struct RenderStats
 	{
 		ThreadFrameTimings Timings;
-		TexturePoolStats TextureStats;
 	};
 
 }

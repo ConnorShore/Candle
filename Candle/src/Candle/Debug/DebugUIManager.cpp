@@ -11,13 +11,13 @@
 
 namespace Candle {
 
-	DebugUIManager::DebugUIManager(ConsoleManager& consoleManager, MainThreadLogSink& mainThreadLogSink)
+	DebugUIManager::DebugUIManager(ConsoleManager& consoleManager, MainThreadLogSink& mainThreadLogSink, const TexturePool& texturePool)
 		: m_ConsoleManager(consoleManager)
 	{
 		AddPanel<FrameStatsOverlay>();
 		AddPanel<FrameGraphPanel>();
 		AddPanel<DebugConsolePanel>(consoleManager, mainThreadLogSink);
-		AddPanel<TextureInspectorPanel>();
+		AddPanel<TextureInspectorPanel>(texturePool);
 
 		RegisterPanelCommands();
 	}

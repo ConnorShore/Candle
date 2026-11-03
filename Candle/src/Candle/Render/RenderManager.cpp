@@ -76,7 +76,6 @@ namespace Candle {
 				// Update the render stats for this frame
 				stats.Timings.TotalMs = static_cast<float>(frameTimer.ElapsedMilliseconds());
 				m_CompletedRenderStats = stats;
-				m_CompletedRenderStats.TextureStats = m_TexturePool.CaptureStats();
 
 				CDL_PROFILE_FRAME_NAMED("RenderFrame");
 			}

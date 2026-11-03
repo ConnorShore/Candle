@@ -1,13 +1,17 @@
 #pragma once
 
 #include "Candle/Debug/DebugPanel.h"
+#include "Candle/Render/Resources/GPUHandles.h"
 
 namespace Candle {
 
+	class TexturePool;
+
+	// Threading: main thread only, which is what lets it read the pool's live handles and debug names
 	class TextureInspectorPanel : public DebugPanel
 	{
 	public:
-		TextureInspectorPanel() = default;
+		explicit TextureInspectorPanel(const TexturePool& texturePool) : m_TexturePool(texturePool) {}
 		virtual ~TextureInspectorPanel() override = default;
 
 		virtual void OnUpdate(const DebugContext& context) override;
@@ -25,7 +29,8 @@ namespace Candle {
 		}
 
 	private:
-
+		const TexturePool& m_TexturePool;
+		GPUTextureHandle m_SelectedTexture;
 	};
 
 }

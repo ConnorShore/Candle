@@ -24,6 +24,17 @@ CDL_TEST_CASE(GPUHandles, AnyIndexButTheSentinelIsValid, Unit)
 	CDL_EXPECT((GPUMeshHandle{ .Index = 41, .Generation = 3 }.IsValid()));
 }
 
+// A slot reused by another resource keeps its index, so only the generation tells the two apart.
+CDL_TEST_CASE(GPUHandles, EqualOnlyWhenIndexAndGenerationBothMatch, Unit)
+{
+	const GPUMeshHandle handle{ .Index = 4, .Generation = 2 };
+
+	CDL_EXPECT((handle == GPUMeshHandle{ .Index = 4, .Generation = 2 }));
+	CDL_EXPECT((handle != GPUMeshHandle{ .Index = 4, .Generation = 3 }));
+	CDL_EXPECT((handle != GPUMeshHandle{ .Index = 5, .Generation = 2 }));
+	CDL_EXPECT((GPUMeshHandle{} == GPUMeshHandle{}));
+}
+
 namespace {
 
 	struct OtherTag {};

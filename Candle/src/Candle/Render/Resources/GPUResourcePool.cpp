@@ -42,11 +42,18 @@ namespace Candle {
 
 	GPUResourcePoolStats GPUResourcePoolBase::CaptureStats() const
 	{
+		CDL_CORE_ASSERT(Platform::IsMainThread(), "GPUResourcePool stats are captured on the main thread");
+
+		// Every slot below m_NextUnused is live, on the free list, or released and still on its way back.
+		// Main-thread state only, so the retiring list the render thread owns isn't read here.
+		const uint32_t total = static_cast<uint32_t>(m_Handles.size());
+		const uint32_t freeListed = static_cast<uint32_t>(m_FreeIndices.size());
+		const uint32_t pending = m_NextUnused - m_LiveCount - freeListed;
 		return GPUResourcePoolStats{
-			.TotalSlots = static_cast<uint32_t>(m_Handles.size()),
-			.LiveSlots = static_cast<uint32_t>(m_NextUnused - m_FreeIndices.size()),
-			.RetiringSlots = static_cast<uint32_t>(m_RetiringSlots.size()),
-			.FreeSlots = static_cast<uint32_t>(m_FreeIndices.size())
+			.TotalSlots = total,
+			.LiveSlots = m_LiveCount,
+			.PendingSlots = pending,
+			.FreeSlots = total - m_LiveCount - pending
 		};
 	}
 
@@ -70,6 +77,7 @@ namespace Candle {
 
 		HandleState& state = m_Handles[index];
 		state.Live = true;
+		++m_LiveCount;
 		m_SlotGenerations[index] = state.Generation;
 
 		return { .PoolID = m_PoolID, .Index = index, .Generation = state.Generation };
@@ -82,6 +90,7 @@ namespace Candle {
 
 		HandleState& state = m_Handles[index];
 		state.Live = false;
+		--m_LiveCount;
 		++state.Generation;
 		m_Registry.QueueReleasedSlot({ .PoolID = m_PoolID, .Index = index, .Generation = generation });
 	}

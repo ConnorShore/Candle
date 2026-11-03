@@ -53,11 +53,12 @@ namespace Candle {
 
 	struct TextureStats
 	{
-		uint32_t Index{ std::numeric_limits<uint32_t>::max() };
+		GPUTextureHandle Handle;
+		std::string DebugName;
 		uint32_t SizeBytes{ 0 };
 		glm::uvec2 Extent{ 0, 0 };
 		uint8_t MipLevels{ 1 };
-		TextureFormat Format{ TextureFormat::Rgba8 };
+		vk::Format Format{ vk::Format::eUndefined };	// Raw, since render targets have formats TextureFormat can't name
 	};
 
 	struct TexturePoolStats
@@ -66,7 +67,7 @@ namespace Candle {
 		std::vector<TextureStats> ActiveTextures{};
 	};
 
-	// Threading: CreateTexture, CreateRenderTarget, ReleaseTexture and IsAlive on the main thread. GetTextureInfo on the main thread for a live
+	// Threading: CreateTexture, CreateRenderTarget, ReleaseTexture, IsAlive and CaptureStats on the main thread. GetTextureInfo on the main thread for a live
 	//   handle, or on the render thread for a handle in the packet it is rendering, which stays valid until that frame retires.
 	//   GetDefaultTexture from any thread, since the defaults never change after construction.
 	// A released texture keeps its image until the GPU retires the frame that carried the release.
@@ -109,10 +110,14 @@ namespace Candle {
 		};
 
 	private:
+		void StoreDebugName(GPUTextureHandle handle, std::string name);
+
+	private:
 		GPUAllocator& m_Allocator;
 		GPUUploader& m_Uploader;
 		BindlessTable& m_BindlessTable;
 		GPUResourcePool<TextureEntry, TextureTag> m_Textures;
+		std::vector<std::string> m_DebugNames;	// Main thread only, indexed by slot. Kept out of the entries since the render thread never needs them, so it can grow.
 		std::array<GPUTextureHandle, static_cast<size_t>(DefaultTexture::Count)> m_DefaultTextures;	// After m_Textures, which the constructor creates them in
 	};
 

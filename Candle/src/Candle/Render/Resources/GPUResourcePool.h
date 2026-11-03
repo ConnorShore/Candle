@@ -18,12 +18,12 @@ namespace Candle {
 	{
 		uint32_t TotalSlots{ 0 };
 		uint32_t LiveSlots{ 0 };
-		uint32_t RetiringSlots{ 0 };
-		uint32_t FreeSlots{ 0 };
+		uint32_t PendingSlots{ 0 };	// Released but not back on the free list yet: riding a packet, or waiting on the GPU
+		uint32_t FreeSlots{ 0 };	// The free list plus slots never used: what Insert can still take
 	};
 
 	// Handle bookkeeping shared by every pool; GPUResourcePool<T, Tag> adds the payloads.
-	// Threading: AllocateSlot, ReleaseSlot, IsSlotAlive and RecycleSlot on the main thread; SlotHoldsGeneration, RetireSlot
+	// Threading: AllocateSlot, ReleaseSlot, IsSlotAlive, RecycleSlot, CaptureStats and GetLiveHandles on the main thread; SlotHoldsGeneration, RetireSlot
 	//   and FreeRetiredSlots on the render thread. The main thread fills a slot before its handle is first published, the
 	//   render thread reads it and destroys its payload once the GPU has retired it, and the index returns to the main
 	//   thread through RecycleSlot. Destroying a pool frees every payload it still holds, so the GPU must be idle by then.
@@ -86,6 +86,7 @@ namespace Candle {
 		std::vector<HandleState> m_Handles;
 		std::vector<uint32_t> m_FreeIndices;
 		uint32_t m_NextUnused{ 0 };
+		uint32_t m_LiveCount{ 0 };
 
 		// Render thread only
 		std::deque<RetiringSlot> m_RetiringSlots;

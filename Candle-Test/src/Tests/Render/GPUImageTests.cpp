@@ -181,6 +181,27 @@ CDL_TEST_CASE(GPUImage, MoveConstructionTransfersOwnership, Gpu)
 	ExpectNoVulkanDebugMessages(logs);
 }
 
+// TexturePool moves every image into its slot, so a description dropped by either move would be lost from every texture.
+CDL_TEST_CASE(GPUImage, KeepsItsDescriptionThroughEitherMove, Gpu)
+{
+	LoggerFixture logs(LogLevel::Warn, kRenderChannelMask);
+	{
+		TestAllocator gpu;
+		GPUImage source = gpu.Allocator.CreateImage(kDepthSpec);
+		CDL_CHECK_EQ(source.GetFormat(), vk::Format::eD16Unorm);
+
+		GPUImage constructed(std::move(source));
+		CDL_EXPECT_EQ(constructed.GetFormat(), vk::Format::eD16Unorm);
+		CDL_EXPECT_EQ(constructed.GetMipLevels(), uint8_t{ 1 });
+
+		GPUImage assigned = CreateImage(gpu.Allocator);
+		assigned = std::move(constructed);
+		CDL_EXPECT_EQ(assigned.GetFormat(), vk::Format::eD16Unorm);
+		CDL_EXPECT_EQ(assigned.GetMipLevels(), uint8_t{ 1 });
+	}
+	ExpectNoVulkanDebugMessages(logs);
+}
+
 // The image being overwritten must be freed, or every texture reloaded into a slot would leak its predecessor.
 CDL_TEST_CASE(GPUImage, MoveAssignmentFreesTheImageItReplaces, Gpu)
 {
