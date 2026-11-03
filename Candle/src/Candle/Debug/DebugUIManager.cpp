@@ -4,6 +4,7 @@
 #include "Panels/FrameStatsOverlay.h"
 #include "Panels/FrameGraphPanel.h"
 #include "Panels/DebugConsolePanel.h"
+#include "Panels/TextureInspectorPanel.h"
 
 #include "Candle/Debug/ConsoleManager.h"
 #include "Candle/Core/MainThreadLogSink.h"
@@ -16,6 +17,7 @@ namespace Candle {
 		AddPanel<FrameStatsOverlay>();
 		AddPanel<FrameGraphPanel>();
 		AddPanel<DebugConsolePanel>(consoleManager, mainThreadLogSink);
+		AddPanel<TextureInspectorPanel>();
 
 		RegisterPanelCommands();
 	}

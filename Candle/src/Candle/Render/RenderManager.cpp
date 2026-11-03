@@ -70,9 +70,13 @@ namespace Candle {
 				// Timed here rather than inside, so every early return in RenderThreadMain still completes the frame's stats
 				Timer frameTimer;
 				RenderStats stats;
+
 				RenderThreadMain(stats);
+
+				// Update the render stats for this frame
 				stats.Timings.TotalMs = static_cast<float>(frameTimer.ElapsedMilliseconds());
 				m_CompletedRenderStats = stats;
+				m_CompletedRenderStats.TextureStats = m_TexturePool.CaptureStats();
 
 				CDL_PROFILE_FRAME_NAMED("RenderFrame");
 			}

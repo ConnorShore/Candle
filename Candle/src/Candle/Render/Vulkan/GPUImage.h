@@ -64,6 +64,10 @@ namespace Candle {
 		inline vk::ImageView GetImageView() const { return *m_ImageView; }	// Non-owning, so handing it out leaves the image const
 		inline VmaAllocation GetAllocation() const { return m_Allocation; }
 
+		inline vk::Format GetFormat() const { return m_Format; }
+		inline uint8_t GetMipLevels() const { return m_MipLevels; }
+		uint32_t GetSizeBytes() const;
+
 	private:
 		void Create(const GPUImageSpec& spec, GPUAllocator& allocator);
 		void Destroy();
@@ -73,6 +77,9 @@ namespace Candle {
 		vk::Image m_Image{ nullptr };
 		VmaAllocation m_Allocation{ nullptr };
 		vk::raii::ImageView m_ImageView{ nullptr };
+
+		vk::Format m_Format{ vk::Format::eUndefined };
+		uint8_t m_MipLevels{ 1 };
 	};
 
 }

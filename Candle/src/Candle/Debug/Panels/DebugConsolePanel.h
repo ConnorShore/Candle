@@ -30,9 +30,9 @@ namespace Candle {
 		inline virtual DebugPanelCommand GetCommand() const override
 		{
 			return DebugPanelCommand{
-				.Name{"console"},
+				.Name{"Console"},
 				.Description{"Debug console for viewing logs and executing commands"},
-				.Usage{"console"}
+				.Usage{"Console"}
 			};
 		}
 	private:

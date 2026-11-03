@@ -5,9 +5,15 @@
 #include "Candle/Render/Resources/GPUResourcePool.h"
 #include "Candle/Render/Assets/TextureData.h"
 
+#include "Candle/Render/Vulkan/VulkanUtils.h"
+
+#include <glm/glm.hpp>
+
 #include <array>
 #include <span>
 #include <string>
+#include <vector>
+#include <cstdint>
 
 namespace Candle {
 
@@ -22,7 +28,10 @@ namespace Candle {
 		uint32_t Index{ std::numeric_limits<uint32_t>::max() };
 		vk::ImageView ImageView{ nullptr };
 		vk::Image Image{ nullptr };		// For barriers, when the renderer draws into a render target
+		vk::Format Format{ vk::Format::eUndefined };
 		glm::uvec2 Extent{ 0, 0 };
+		uint32_t SizeBytes{ 0 };
+		uint8_t MipLevels{ 1 };
 		bool IsRenderTarget{ false };	// Made by CreateRenderTarget, so it can be drawn into as well as sampled
 	};
 
@@ -40,6 +49,21 @@ namespace Candle {
 		glm::uvec2 Extent;
 		vk::Format Format;	// Raw rather than TextureFormat, since it must match what the pipelines drawing into it target
 		std::string DebugName;
+	};
+
+	struct TextureStats
+	{
+		uint32_t Index{ std::numeric_limits<uint32_t>::max() };
+		uint32_t SizeBytes{ 0 };
+		glm::uvec2 Extent{ 0, 0 };
+		uint8_t MipLevels{ 1 };
+		TextureFormat Format{ TextureFormat::Rgba8 };
+	};
+
+	struct TexturePoolStats
+	{
+		GPUResourcePoolStats PoolStats;
+		std::vector<TextureStats> ActiveTextures{};
 	};
 
 	// Threading: CreateTexture, CreateRenderTarget, ReleaseTexture and IsAlive on the main thread. GetTextureInfo on the main thread for a live
@@ -71,6 +95,7 @@ namespace Candle {
 
 		// The default handle resolves to DefaultTexture::Error; a stale one asserts, and resolves to it too outside Debug
 		TextureInfo GetTextureInfo(GPUTextureHandle handle) const;
+		TexturePoolStats CaptureStats() const;
 
 		// Created and written into the bindless table with the pool, and never released
 		inline GPUTextureHandle GetDefaultTexture(DefaultTexture texture) const { return m_DefaultTextures[static_cast<size_t>(texture)]; }

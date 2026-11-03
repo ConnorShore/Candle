@@ -8,10 +8,19 @@
 #include <deque>
 #include <optional>
 #include <vector>
+#include <span>
 
 namespace Candle {
 
 	class GPUResourceRegistry;
+
+	struct GPUResourcePoolStats
+	{
+		uint32_t TotalSlots{ 0 };
+		uint32_t LiveSlots{ 0 };
+		uint32_t RetiringSlots{ 0 };
+		uint32_t FreeSlots{ 0 };
+	};
 
 	// Handle bookkeeping shared by every pool; GPUResourcePool<T, Tag> adds the payloads.
 	// Threading: AllocateSlot, ReleaseSlot, IsSlotAlive and RecycleSlot on the main thread; SlotHoldsGeneration, RetireSlot
@@ -30,6 +39,8 @@ namespace Candle {
 		void FreeRetiredSlots(uint64_t completedValue, std::vector<GPUSlotRef>& freedSlots);
 		void RecycleSlot(uint32_t index);	// Back on the free list
 
+		GPUResourcePoolStats CaptureStats() const;
+
 	protected:
 		GPUResourcePoolBase(GPUResourceRegistry& registry, uint32_t capacity);
 
@@ -39,6 +50,18 @@ namespace Candle {
 		bool SlotHoldsGeneration(uint32_t index, uint32_t generation) const;	// The render thread's view of whether the slot still holds that resource
 
 		virtual void DestroyPayload(uint32_t index) = 0;
+
+		inline std::vector<std::pair<uint32_t, uint32_t>> GetLiveHandles() const
+		{
+			std::vector<std::pair<uint32_t, uint32_t>> liveHandles;
+			liveHandles.reserve(m_Handles.size());
+			for (uint32_t i = 0; i < m_Handles.size(); ++i)
+			{
+				if (m_Handles[i].Live)
+					liveHandles.push_back({ i, m_SlotGenerations[i] });
+			}
+			return liveHandles;
+		}
 
 	private:
 		struct HandleState
@@ -102,7 +125,23 @@ namespace Candle {
 		{
 			if (!SlotHoldsGeneration(handle.Index, handle.Generation) || !m_Payloads[handle.Index])
 				return nullptr;
+
 			return &*m_Payloads[handle.Index];
+		}
+
+		inline std::vector<Handle> GetLiveHandles() const
+		{
+			const auto livePairs = GPUResourcePoolBase::GetLiveHandles();
+
+			std::vector<Handle> liveHandles;
+			liveHandles.reserve(livePairs.size());
+			for (const auto& [index, generation] : livePairs)
+			{
+				Handle handle{ .Index = index, .Generation = generation };
+				liveHandles.push_back({ .Index = index, .Generation = generation });
+			}
+
+			return std::move(liveHandles);
 		}
 
 	protected:

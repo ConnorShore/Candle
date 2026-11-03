@@ -1,8 +1,22 @@
 #include "cdlpch.h"
 #include "ConsoleManager.h"
 
+#include <sstream>
+#include <algorithm>
+#include <ranges>
 
 namespace Candle {
+
+	namespace {
+		// Converts a string to lowercase for case-insensitive command matching
+		std::string ToLower(const std::string& str)
+		{
+			std::string lowerStr = str;
+			std::transform(lowerStr.begin(), lowerStr.end(), lowerStr.begin(),
+				[](unsigned char c) { return std::tolower(c); });
+			return lowerStr;
+		}
+	}
 
 	void ConsoleManager::RegisterCommand(const std::string& command, ConsoleCommandCallback callback, 
 										 const std::string& description /*= "No Description"*/, const std::string& usage /*= "Unknown Usage"*/)
@@ -52,8 +66,11 @@ namespace Candle {
 			return;
 		}
 
+		// Convert command to lowercase for case-insensitive matching
+		command = ToLower(command);
+
 		// Check to ensure the command is registered
-		if (m_Commands.find(command) == m_Commands.end())
+		if (!ContainsCommand(command))
 		{
 			CDL_CORE_WARN(LogChannel::Command, "Command not found: {}", command);
 			return;
@@ -69,6 +86,11 @@ namespace Candle {
 
 		// Call the registered callback for the command
 		m_Commands[command].Callback(args);
+	}
+
+	bool ConsoleManager::ContainsCommand(const std::string& command) const
+	{
+		return m_Commands.find(ToLower(command)) != m_Commands.end();
 	}
 
 }

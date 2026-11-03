@@ -19,8 +19,9 @@ namespace Candle {
 
 	// Only formats every Vulkan device must sample with linear filtering, so RGB data is expanded to RGBA8, as stb does.
 	// R8 and RG8 hold data such as masks or normal XY, and their sRGB variants are optional, so they are linear only.
-	enum class TextureFormat
+	enum class TextureFormat : uint8_t
 	{
+		Undefined,
 		Rgba8,
 		Rg8,
 		R8

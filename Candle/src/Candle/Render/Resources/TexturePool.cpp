@@ -17,8 +17,8 @@ namespace Candle {
 		{
 			switch (texture)
 			{
-				case DefaultTexture::Error: return { std::byte{ 255 }, std::byte{ 0 }, std::byte{ 255 }, std::byte{ 255 } };	// No real texture is flat magenta
-				default: break;
+			case DefaultTexture::Error: return { std::byte{ 255 }, std::byte{ 0 }, std::byte{ 255 }, std::byte{ 255 } };	// No real texture is flat magenta
+			default: break;
 			}
 			std::unreachable();	// Not constexpr, so a DefaultTexture with no case fails kDefaultTexels' constant evaluation
 		}
@@ -29,7 +29,7 @@ namespace Candle {
 			for (size_t i = 0; i < texels.size(); ++i)
 				texels[i] = GetDefaultTexel(static_cast<DefaultTexture>(i));
 			return texels;
-		}();
+			}();
 	}
 
 	TexturePool::TexturePool(GPUAllocator& allocator, GPUUploader& uploader, GPUResourceRegistry& registry, BindlessTable& bindlessTable)
@@ -64,7 +64,7 @@ namespace Candle {
 			.DestinationLayout = vk::ImageLayout::eShaderReadOnlyOptimal,
 			.Extent = spec.Extent
 		};
-		
+
 		m_Uploader.UploadImage(uploadSpec,
 			vk::PipelineStageFlagBits2::eVertexShader | vk::PipelineStageFlagBits2::eComputeShader | vk::PipelineStageFlagBits2::eFragmentShader,
 			vk::AccessFlagBits2::eShaderSampledRead);
@@ -127,9 +127,34 @@ namespace Candle {
 			.Index = handle.Index,
 			.ImageView = entry->Image.GetImageView(),
 			.Image = entry->Image.GetImage(),
+			.Format = entry->Image.GetFormat(),
 			.Extent = entry->Extent,
+			.SizeBytes = entry->Image.GetSizeBytes(),
+			.MipLevels = entry->Image.GetMipLevels(),
 			.IsRenderTarget = entry->IsRenderTarget
 		};
+	}
+
+	TexturePoolStats TexturePool::CaptureStats() const
+	{
+		auto liveSlots = m_Textures.GetLiveHandles();
+
+		std::vector<TextureStats> activeTextures;
+		activeTextures.reserve(liveSlots.size());
+		for (GPUTextureHandle& texHandle : liveSlots)
+		{
+			const TextureInfo info = GetTextureInfo(texHandle);
+			activeTextures.push_back(TextureStats{
+				.Index = texHandle.Index,
+				.SizeBytes = info.SizeBytes,
+				.Extent = info.Extent,
+				.MipLevels = info.MipLevels,
+				.Format = ToTextureFormat(info.Format) });
+		}
+
+		return TexturePoolStats{
+			.PoolStats = m_Textures.CaptureStats(),
+			.ActiveTextures = std::move(activeTextures) };
 	}
 
 }

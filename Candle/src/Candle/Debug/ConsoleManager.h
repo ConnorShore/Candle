@@ -29,6 +29,9 @@ namespace Candle {
 		void ExecuteCommand(const std::string& commandLine);
 
 	private:
+		bool ContainsCommand(const std::string& command) const;
+
+	private:
 		struct ConsoleCommand
 		{
 			ConsoleCommandCallback Callback{};

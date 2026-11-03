@@ -40,6 +40,16 @@ namespace Candle {
 		m_FreeIndices.push_back(index);
 	}
 
+	GPUResourcePoolStats GPUResourcePoolBase::CaptureStats() const
+	{
+		return GPUResourcePoolStats{
+			.TotalSlots = static_cast<uint32_t>(m_Handles.size()),
+			.LiveSlots = static_cast<uint32_t>(m_NextUnused - m_FreeIndices.size()),
+			.RetiringSlots = static_cast<uint32_t>(m_RetiringSlots.size()),
+			.FreeSlots = static_cast<uint32_t>(m_FreeIndices.size())
+		};
+	}
+
 	GPUSlotRef GPUResourcePoolBase::AllocateSlot()
 	{
 		CDL_CORE_ASSERT(Platform::IsMainThread(), "GPUResourcePool slots are allocated on the main thread");

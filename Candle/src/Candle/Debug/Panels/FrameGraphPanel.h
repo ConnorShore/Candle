@@ -26,9 +26,9 @@ namespace Candle {
 		inline virtual DebugPanelCommand GetCommand() const override
 		{
 			return DebugPanelCommand{
-				.Name{ "framegraph" },
+				.Name{ "FrameGraph" },
 				.Description{ "Frame timing statistics and graphs" },
-				.Usage{ "framegraph" }
+				.Usage{ "FrameGraph" }
 			};
 		}
 

@@ -57,4 +57,23 @@ namespace Candle {
 		return vk::Format::eUndefined;
 	}
 
+	inline TextureFormat ToTextureFormat(vk::Format format)
+	{
+		switch (format)
+		{
+		case vk::Format::eR8G8B8A8Srgb:
+		case vk::Format::eR8G8B8A8Unorm:
+			return TextureFormat::Rgba8;
+		case vk::Format::eR8G8Unorm:
+			return TextureFormat::Rg8;
+		case vk::Format::eR8Unorm:
+			return TextureFormat::R8;
+		case vk::Format::eUndefined:
+			return TextureFormat::Undefined;
+		default:
+			CDL_CORE_ASSERT(false, "Unhandled Vulkan format");
+			return TextureFormat::Undefined;
+		}
+	}
+
 }

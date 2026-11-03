@@ -18,9 +18,9 @@ namespace Candle {
 		inline virtual DebugPanelCommand GetCommand() const override
 		{
 			return DebugPanelCommand{
-				.Name{ "frame" },
+				.Name{ "Frame" },
 				.Description{ "Frame timing statistics overlay" },
-				.Usage{ "frame" }
+				.Usage{ "Frame" }
 			};
 		}
 

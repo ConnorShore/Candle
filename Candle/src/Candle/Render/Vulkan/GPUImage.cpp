@@ -21,6 +21,13 @@ namespace Candle {
 		Create(spec, allocator);
 	}
 
+	uint32_t GPUImage::GetSizeBytes() const
+	{
+		VmaAllocationInfo info;
+		vmaGetAllocationInfo(m_Allocator, m_Allocation, &info); 
+		return static_cast<uint32_t>(info.size);
+	}
+
 	void GPUImage::Create(const GPUImageSpec& spec, GPUAllocator& allocator)
 	{
 		// From the argument, not the constructor: a default-constructed or moved-from image has none until Recreate gives it one
