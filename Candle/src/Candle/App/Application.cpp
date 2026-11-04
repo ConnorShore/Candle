@@ -104,48 +104,53 @@ namespace Candle {
 			if (m_LoggerScope.MainThreadSink)
 				m_LoggerScope.MainThreadSink->Dispatch();
 
-			// Call the GUI system to start a new frame
-			if (m_GuiSystem)
-				m_GuiSystem->StartFrame();
-
 			// Call the application update callback
 			ApplicationContext appContext{ m_AssetManager, m_ActiveWorld };
 			UpdateContext updateContext{ appContext, m_FrameStats.DeltaTime, inputSnapshot, m_RenderContext };
 			OnUpdate(updateContext);
 
-			// Call the debug UI manager to update and render its panels
-			if (m_DebugUIManager)
+			// TODO: Implement game logic //
+
+			if (!m_Specification.Headless && m_RenderManager)
 			{
+				// Capture the render stats from the last completed frame
+				RenderStats renderStats = m_RenderManager->GetRenderStats();
+				GPUResourceStats resourceStats = m_RenderManager->CaptureResourceStats();
+
+				// Call the debug UI manager to update and render its panels
 				DebugContext debugContext{
 					.DeltaTime = m_FrameStats.DeltaTime,
 					.Input = inputSnapshot,
 					.Main = m_LastMainTimings,
-					.Render = m_RenderManager ? m_RenderManager->GetRenderStats() : RenderStats{}
+					.Render = renderStats,
+					.Resources = resourceStats
 				};
+
+				// Call the GUI system to start a new frame
+				m_GuiSystem->StartFrame();
 
 				m_DebugUIManager->OnUpdate(debugContext);
 				m_DebugUIManager->OnRender(debugContext);
-			}
 
-			// Call the GUI system to end the frame
-			if (m_GuiSystem)
+				// Call the GUI system to end the frame
 				m_GuiSystem->EndFrame();
 
-			// TODO: Implement game logic
-			if (m_RenderManager)
-			{
-				CDL_PROFILE_SCOPE("Application::Run::FramePacket");
-				Timer pumpWaitTimer;
-				FramePacket& packet = m_RenderManager->BeginFramePacket();
-				mainTimings.PumpWaitMs = static_cast<float>(pumpWaitTimer.ElapsedMilliseconds());
-				CDL_PROFILE_SCOPE_METADATA(packet.FrameIndex);
+				// Submit a frame packet to the render thread
+				{
+					CDL_PROFILE_SCOPE("Application::Run::FramePacket");
+					Timer pumpWaitTimer;
+					FramePacket& packet = m_RenderManager->BeginFramePacket();
+					packet.RenderStats = renderStats;	// The render thread's last completed frame, which is a few frames behind the main thread
+					mainTimings.PumpWaitMs = static_cast<float>(pumpWaitTimer.ElapsedMilliseconds());
+					CDL_PROFILE_SCOPE_METADATA(packet.FrameIndex);
 
-				ExtractToFramePacket(packet);
-				m_RenderManager->SubmitFramePacket(packet);
+					ExtractToFramePacket(packet);
+					m_RenderManager->SubmitFramePacket(packet);
 
-				// Nothing is presented while minimized, so nothing else holds the loop back
-				if (m_Window->IsMinimized())
-					Platform::SleepCurrentThread(10);
+					// Nothing is presented while minimized, so nothing else holds the loop back
+					if (m_Window->IsMinimized())
+						Platform::SleepCurrentThread(10);
+				}
 			}
 
 			// Update the frame stats

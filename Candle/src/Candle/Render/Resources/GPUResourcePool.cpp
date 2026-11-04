@@ -50,6 +50,7 @@ namespace Candle {
 		const uint32_t freeListed = static_cast<uint32_t>(m_FreeIndices.size());
 		const uint32_t pending = m_NextUnused - m_LiveCount - freeListed;
 		return GPUResourcePoolStats{
+			.SizeBytes = GetSizeBytes(),
 			.TotalSlots = total,
 			.LiveSlots = m_LiveCount,
 			.PendingSlots = pending,

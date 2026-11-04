@@ -30,11 +30,58 @@ namespace Candle {
 
 	GPUBuffer GPUAllocator::CreateBuffer(GPUBufferSpec spec)
 	{
-		return { spec, *this };
+		GPUBuffer ret{ spec, *this };
+
+		m_UploadStats.Count++;
+		m_UploadStats.Bytes += static_cast<uint64_t>(ret.GetSize());
+
+		return ret;
 	}
 
 	GPUImage GPUAllocator::CreateImage(GPUImageSpec spec)
 	{
-		return { spec, *this };
+		GPUImage ret{ spec, *this };
+
+		m_UploadStats.Count++;
+		m_UploadStats.Bytes += ret.GetSizeBytes();
+
+		return ret;
 	}
+
+	GPUAllocatorStats GPUAllocator::CaptureStats() const
+	{
+		const VkPhysicalDeviceMemoryProperties* memoryProps{ nullptr };
+		vmaGetMemoryProperties(m_Allocator, &memoryProps);
+
+		VmaTotalStatistics stats;
+		vmaCalculateStatistics(m_Allocator, &stats);
+
+		std::array<GPUHeapStats, VK_MAX_MEMORY_HEAPS> heapStats{};
+		for (uint32_t i = 0; i < memoryProps->memoryHeapCount; ++i)
+		{
+			VmaDetailedStatistics heapStatsVma = stats.memoryHeap[i];
+
+			uint64_t totalBytes = static_cast<uint64_t>(heapStatsVma.statistics.blockBytes);
+			uint64_t usedBytes = static_cast<uint64_t>(heapStatsVma.statistics.blockBytes - heapStatsVma.statistics.allocationBytes);
+			uint64_t unusedBytes = totalBytes - usedBytes;
+			heapStats[i] = GPUHeapStats{
+				.HeapType = memoryProps->memoryHeaps[i].flags,
+				.SizeBytes = totalBytes,
+				.UsedBytes = usedBytes,
+				.UnusedBytes = unusedBytes
+			};
+		}
+
+		return GPUAllocatorStats{
+			.Heaps = std::move(heapStats),
+			.TotalUploads = m_UploadStats.Count,
+			.TotalUploadBytes = m_UploadStats.Bytes
+		};
+	}
+
+	void GPUAllocator::UpdateFrameCount(uint32_t frameCount)
+	{
+		vmaSetCurrentFrameIndex(m_Allocator, frameCount);
+	}
+
 }

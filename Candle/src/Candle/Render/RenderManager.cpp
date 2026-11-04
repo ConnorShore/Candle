@@ -75,7 +75,7 @@ namespace Candle {
 
 				// Update the render stats for this frame
 				stats.Timings.TotalMs = static_cast<float>(frameTimer.ElapsedMilliseconds());
-				m_CompletedRenderStats = stats;
+				m_CompletedRenderStats = std::move(stats);
 
 				CDL_PROFILE_FRAME_NAMED("RenderFrame");
 			}
@@ -136,6 +136,16 @@ namespace Candle {
 			.DebugName = std::format("Output Target {}x{}", extent.x, extent.y) });
 	}
 
+	GPUResourceStats RenderManager::CaptureResourceStats() const
+	{
+		CDL_CORE_ASSERT(Platform::IsMainThread(), "RenderManager::CaptureResourceStats() must be called from the main thread.");
+		return {
+			.GeometryPoolStats = m_GeometryPool.CapturePoolStats(),
+			.TexturePoolStats = m_TexturePool.CapturePoolStats(),
+			.AllocatorStats = m_GPUAllocator.CaptureStats()
+		};
+	}
+
 	void RenderManager::RenderThreadMain(RenderStats& stats)
 	{
 		CDL_PROFILE_SCOPE("RenderManager::RenderThreadMain");
@@ -148,6 +158,7 @@ namespace Candle {
 			return;	// Closed by JoinRenderThread
 
 		CDL_PROFILE_SCOPE_METADATA(packet->FrameIndex);
+		m_GPUAllocator.UpdateFrameCount(packet->FrameIndex);
 
 		// A minimized surface reports a zero extent, and a swapchain can't be created at that size
 		glm::uvec2 surfaceSize = packet->SurfaceSize;

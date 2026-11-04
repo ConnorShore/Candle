@@ -56,6 +56,9 @@ namespace Candle {
 		// the swapchain; release it through the texture pool like any texture.
 		GPUTextureHandle CreateOutputTarget(glm::uvec2 extent);
 
+		// Main thread only
+		GPUResourceStats CaptureResourceStats() const;
+
 		inline RenderDevice& GetRenderDevice() { return m_RenderDevice; }
 		inline GeometryPool& GetGeometryPool() { return m_GeometryPool; }	// For tests only; the application goes through asset handlers
 		inline TexturePool& GetTexturePool() { return m_TexturePool; }

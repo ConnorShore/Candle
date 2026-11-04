@@ -9,6 +9,7 @@
 #include <optional>
 #include <vector>
 #include <span>
+#include <concepts>
 
 namespace Candle {
 
@@ -16,10 +17,12 @@ namespace Candle {
 
 	struct GPUResourcePoolStats
 	{
+		uint64_t SizeBytes{ 0 };	// The sum of the payloads' sizes, for tuning the pool's capacity}
 		uint32_t TotalSlots{ 0 };
 		uint32_t LiveSlots{ 0 };
 		uint32_t PendingSlots{ 0 };	// Released but not back on the free list yet: riding a packet, or waiting on the GPU
 		uint32_t FreeSlots{ 0 };	// The free list plus slots never used: what Insert can still take
+		uint32_t MaxUsedSlots{ 0 };	// The most slots ever used at once, for tuning the pool's capacity
 	};
 
 	// Handle bookkeeping shared by every pool; GPUResourcePool<T, Tag> adds the payloads.
@@ -40,6 +43,10 @@ namespace Candle {
 		void RecycleSlot(uint32_t index);	// Back on the free list
 
 		GPUResourcePoolStats CaptureStats() const;
+
+		uint32_t GetCapacity() const { return static_cast<uint32_t>(m_Handles.size()); }
+
+		virtual uint64_t GetSizeBytes() const = 0;
 
 	protected:
 		GPUResourcePoolBase(GPUResourceRegistry& registry, uint32_t capacity);
@@ -92,7 +99,11 @@ namespace Candle {
 		std::deque<RetiringSlot> m_RetiringSlots;
 	};
 
-	template<typename T, typename Tag>
+	// Ensure the payload type implements GetSizeBytes
+	template<typename T>
+	concept GPUResourcePayload = requires(const T & payload) { { payload.GetSizeBytes() } -> std::convertible_to<uint64_t>; };
+
+	template<GPUResourcePayload T, typename Tag>
 	class GPUResourcePool final : public GPUResourcePoolBase
 	{
 	public:
@@ -143,6 +154,17 @@ namespace Candle {
 			}
 
 			return std::move(liveHandles);
+		}
+
+		inline uint64_t GetSizeBytes() const override
+		{
+			uint64_t totalSize = 0;
+			for (const auto& payloadOpt : m_Payloads)
+			{
+				if (payloadOpt)
+					totalSize += payloadOpt->GetSizeBytes();
+			}
+			return totalSize;
 		}
 
 	protected:

@@ -6,6 +6,7 @@
 #include "Panels/FrameGraphPanel.h"
 #include "Panels/DebugConsolePanel.h"
 #include "Panels/TextureInspectorPanel.h"
+#include "Panels/GPUResourceInspectorPanel.h"
 
 #include "Candle/Debug/ConsoleManager.h"
 #include "Candle/Core/MainThreadLogSink.h"
@@ -19,6 +20,7 @@ namespace Candle {
 		AddPanel<FrameGraphPanel>();
 		AddPanel<DebugConsolePanel>(consoleManager, mainThreadLogSink);
 		AddPanel<TextureInspectorPanel>(texturePool);
+		AddPanel<GPUResourceInspectorPanel>();
 	}
 
 	void DebugUIManager::ConsumeEvent(const InputEvent& event)

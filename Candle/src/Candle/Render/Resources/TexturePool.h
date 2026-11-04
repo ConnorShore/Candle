@@ -102,12 +102,16 @@ namespace Candle {
 		// Created and written into the bindless table with the pool, and never released
 		inline GPUTextureHandle GetDefaultTexture(DefaultTexture texture) const { return m_DefaultTextures[static_cast<size_t>(texture)]; }
 
+		inline GPUResourcePoolStats CapturePoolStats() const { return m_Textures.CaptureStats(); }
+
 	private:
 		struct TextureEntry
 		{
 			GPUImage Image;
 			glm::uvec2 Extent;
 			bool IsRenderTarget{ false };
+
+			uint64_t GetSizeBytes() const { return Image.GetSizeBytes(); }
 		};
 
 	private:
