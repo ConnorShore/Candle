@@ -1,6 +1,7 @@
 #pragma once
 
 #include "DebugContext.h"
+#include "ConsoleTypes.h"
 
 namespace Candle {
 	
@@ -17,9 +18,10 @@ namespace Candle {
 
 	struct DebugPanelCommand
 	{
-		std::string Name;
-		std::string Description;
-		std::string Usage;
+		std::string Name{ "" };
+		std::string Description{ "No Description" };
+		std::string Usage{ "Unknown Usage" };
+		ConsoleCommandCallback Callback{ nullptr };
 	};
 
 	class DebugPanel
@@ -42,7 +44,7 @@ namespace Candle {
 
 		virtual const char* GetName() const = 0;
 		virtual DebugPanelCategory GetCategory() const = 0;
-		virtual DebugPanelCommand GetCommand() const = 0;	// Single command to show/hide panel for now; TODO: may add ability to add more commands later
+		virtual DebugPanelCommand GetCommand() = 0;	// Single command to show/hide panel for now; TODO: may add ability to add more commands later
 	};
 
 }

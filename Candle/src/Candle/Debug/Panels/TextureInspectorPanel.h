@@ -26,12 +26,13 @@ namespace Candle {
 
 		inline virtual const char* GetName() const override { return "Texture Inspector"; }
 		inline virtual DebugPanelCategory GetCategory() const override { return DebugPanelCategory::Rendering; }
-		inline virtual DebugPanelCommand GetCommand() const override
+		inline virtual DebugPanelCommand GetCommand() override
 		{
 			return DebugPanelCommand{
 				.Name{ "TextureInspector" },
 				.Description{ "Inspect textures in the texture pool" },
-				.Usage{ "TextureInspector" }
+				.Usage{ "TextureInspector" },
+				.Callback{ nullptr }	// Opt for default callback to open/close for now (in future can pass in texture name to select)
 			};
 		}
 

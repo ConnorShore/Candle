@@ -41,6 +41,7 @@ namespace Candle {
 			ScopedPtr<T> panel = ScopedPtr<T>::Create(std::forward<Args>(args)...);
 			T* raw = panel.Get();
 			m_Panels.emplace_back(std::move(panel));
+			RegisterPanelCommand(raw);
 			return *raw;
 		}
 
@@ -53,11 +54,11 @@ namespace Candle {
 		inline bool IsVisible() const { return m_IsVisible; }
 
 	private:
-		constexpr static const char* kDebugUICommand = "debug";	// All debug ui commands start with this prefix, followed by the panel's command name
-		constexpr static const char* kDebugUICommandUsage = "debug <panel>";	// Usage for the debug command, which is the same for all panels
+		constexpr static std::string_view kDebugUICommand = "Debug";	// All debug ui commands start with this prefix, followed by the panel's command name
+		constexpr static std::string_view kDebugUICommandUsage = "Debug.<panel>";	// Usage for the debug command, which is the same for all panels
 
 	private:
-		void RegisterPanelCommands();
+		void RegisterPanelCommand(DebugPanel* panel);
 
 	private:
 		ConsoleManager& m_ConsoleManager;

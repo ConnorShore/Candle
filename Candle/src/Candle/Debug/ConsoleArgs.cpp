@@ -26,7 +26,7 @@ namespace Candle {
 		return m_Args;
 	}
 
-	std::optional<std::string_view> ConsoleArgs::GetString(size_t index) const
+	std::optional<std::string_view> ConsoleArgs::TryGetString(size_t index) const
 	{
 		for (size_t i = 0; i < m_Args.size(); ++i)
 		{

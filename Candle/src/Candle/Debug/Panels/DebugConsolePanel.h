@@ -27,12 +27,13 @@ namespace Candle {
 
 		inline virtual const char* GetName() const override { return "Debug Console"; }
 		inline virtual DebugPanelCategory GetCategory() const override { return DebugPanelCategory::General; }
-		inline virtual DebugPanelCommand GetCommand() const override
+		inline virtual DebugPanelCommand GetCommand() override
 		{
 			return DebugPanelCommand{
 				.Name{"Console"},
 				.Description{"Debug console for viewing logs and executing commands"},
-				.Usage{"Console"}
+				.Usage{"Console"},
+				.Callback{ nullptr }	// Opt for default callback to open/close for now
 			};
 		}
 	private:

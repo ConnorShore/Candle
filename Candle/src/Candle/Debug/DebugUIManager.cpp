@@ -19,8 +19,6 @@ namespace Candle {
 		AddPanel<FrameGraphPanel>();
 		AddPanel<DebugConsolePanel>(consoleManager, mainThreadLogSink);
 		AddPanel<TextureInspectorPanel>(texturePool);
-
-		RegisterPanelCommands();
 	}
 
 	void DebugUIManager::ConsumeEvent(const InputEvent& event)
@@ -62,41 +60,20 @@ namespace Candle {
 		}
 	}
 
-	void DebugUIManager::RegisterPanelCommands()
+
+	void DebugUIManager::RegisterPanelCommand(DebugPanel* panel)
 	{
-		CDL_CORE_ASSERT(m_RegisteredPanelCommands == false, "Panel commands have already been registered.");
-		m_RegisteredPanelCommands = true;
+		DebugPanelCommand command = panel->GetCommand();
+		static ConsoleCommandCallback defaultCallbackFunc([this, panel](ConsoleArgs&& args) {
+			panel->IsOpen = !panel->IsOpen;
+		});
 
-		ConsoleCommandSpec debugCommandSpec{
-			.Name{ kDebugUICommand },
-			.Description{ "Toggles the visibility of a debug panel" },
-			.Usage{ kDebugUICommandUsage },
-			.Callback{ [this](ConsoleArgs&& args) {
-				if (args.GetCount() == 0)
-				{
-					CDL_CORE_WARN(LogChannel::Command, "No panel specified. Usage: {}", kDebugUICommandUsage);
-					return;
-				}
-				if (args.GetCount() > 1)
-				{
-					CDL_CORE_WARN(LogChannel::Command, "Command '{}' takes 1 argument. Usage: {}", kDebugUICommand, kDebugUICommandUsage);
-					return;
-				}
-				// Toggle the panel's open state
-				for (ScopedPtr<DebugPanel>& panel : m_Panels)
-				{
-					if (args.Matches(0, panel->GetCommand().Name))
-					{
-						panel->IsOpen = !panel->IsOpen;
-						CDL_CORE_INFO(LogChannel::Command, "Panel '{}' is now {}", panel->GetName(), panel->IsOpen ? "open" : "closed");
-						return;
-					}
-				}
-				CDL_CORE_WARN(LogChannel::Command, "No panel found for command '{} {}'", kDebugUICommand, args.GetString(0).value_or(""));
-			} }
-		};
-
-		[[maybe_unused]] ConsoleCommandHandle handle = m_ConsoleManager.RegisterCommand(debugCommandSpec);
+		 m_ConsoleManager.RegisterCommand({
+			.CommandParts = { std::string(kDebugUICommand), command.Name},
+			.Description{ command.Description },
+			.Usage{ command.Usage },
+			.Callback{ command.Callback != nullptr ? command.Callback : defaultCallbackFunc }
+			});
 	}
 
 }

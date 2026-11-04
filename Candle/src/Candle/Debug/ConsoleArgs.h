@@ -65,7 +65,7 @@ namespace Candle {
 
 		[[nodiscard]] size_t GetCount() const;
 		[[nodiscard]] std::span<ArgToken> GetAll();
-		[[nodiscard]] std::optional<std::string_view> GetString(size_t index) const;
+		[[nodiscard]] std::optional<std::string_view> TryGetString(size_t index) const;
 
 	private:
 		std::vector<ArgToken> ParseArgs(std::string_view args);

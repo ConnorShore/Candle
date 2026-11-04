@@ -24,11 +24,11 @@ namespace {
 	void RegisterRecording(ConsoleManager& console, std::string name, CommandRecord& record)
 	{
 		[[maybe_unused]] const ConsoleCommandHandle handle = console.RegisterCommand({
-			.Name{ std::move(name) },
+			.Command{ std::move(name) },
 			.Callback{ [&record](ConsoleArgs&& args) {
 				++record.Calls;
 				for (size_t i = 0; i < args.GetCount(); ++i)
-					record.Args.emplace_back(args.GetString(i).value_or(""));
+					record.Args.emplace_back(args.TryGetString(i).value_or(""));
 			} }
 		});
 	}

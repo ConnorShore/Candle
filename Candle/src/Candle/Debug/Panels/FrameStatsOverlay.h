@@ -19,12 +19,22 @@ namespace Candle {
 
 		inline virtual const char* GetName() const override { return "Frame Stats Overlay"; }
 		inline virtual DebugPanelCategory GetCategory() const override { return DebugPanelCategory::General; }
-		inline virtual DebugPanelCommand GetCommand() const override
+		inline virtual DebugPanelCommand GetCommand() override
 		{
 			return DebugPanelCommand{
 				.Name{ "Frame" },
-				.Description{ "Frame timing statistics overlay" },
-				.Usage{ "Frame" }
+				.Description{ "FrameStatsOverlay timing statistics overlay" },
+				.Usage{ "Frame" },
+				.Callback = [this](ConsoleArgs&& args) {
+					if (args.GetCount() == 0)
+					{
+						IsOpen = !IsOpen;
+						return;
+					}
+
+					IsOpen = true;
+					CDL_CORE_INFO(LogChannel::Command, "FrameStatsOverlay command received with {} arguments. First arg: {}", args.GetCount(), args.TryGetString(0).value_or(""));
+				}
 			};
 		}
 

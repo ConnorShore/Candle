@@ -12,7 +12,7 @@ namespace Candle {
 
 	ConsoleManager::ConsoleManager()
 	{
-		m_Commands.push_back({});	// Reserve index 0 for invalid handle
+		m_Commands.push_back(ConsoleCommandSpec{});	// Reserve index 0 for invalid handle)
 	}
 
 	ConsoleManager::~ConsoleManager()
@@ -26,9 +26,18 @@ namespace Candle {
 
 	ConsoleCommandHandle ConsoleManager::RegisterCommand(ConsoleCommandSpec commandSpec)
 	{
+		CDL_CORE_ASSERT(IsValidCommandName(commandSpec.CommandParts), "Command name parts can't be empty or contain the delimiter or a space.");
+
 		m_Commands.push_back(std::move(commandSpec));
-		m_CommandLookup[ToLower(m_Commands.back().Name)] = m_NextCommandHandle;
+		m_CommandLookup[GetCommandKey(m_Commands.back().CommandParts)] = m_NextCommandHandle;
 		return m_NextCommandHandle++;
+	}
+
+	void ConsoleManager::UnregisterCommand(ConsoleCommandHandle handle)
+	{
+		ConsoleCommandSpec& commandSpec = m_Commands[handle];
+		m_CommandLookup.erase(GetCommandKey(commandSpec.CommandParts));
+		m_Commands[handle] = {};	// Reset the command spec to default
 	}
 
 	AutoCompleteResult ConsoleManager::AutoCompleteCommand(std::string_view input) const
@@ -36,18 +45,6 @@ namespace Candle {
 		// TODO: Implement this in the future
 		CDL_CORE_ERROR(LogChannel::Command, "AutoCompleteCommand is not implemented yet.");
 		return {};
-	}
-
-	bool ConsoleManager::ContainsCommand(const std::string_view command) const
-	{
-		return m_CommandLookup.contains(ToLower(command));
-	}
-
-	void ConsoleManager::UnregisterCommand(ConsoleCommandHandle handle)
-	{
-		const std::string commandName = ToLower(m_Commands[handle].Name);
-		m_CommandLookup.erase(commandName);
-		m_Commands[handle] = {};	// Reset the command spec to default
 	}
 
 	void ConsoleManager::ExecuteCommand(const std::string_view commandLine)
@@ -76,4 +73,20 @@ namespace Candle {
 		m_Commands[handle].Callback(std::move(consoleArgs));
 	}
 
+	bool ConsoleManager::ContainsCommand(const std::string_view command) const
+	{
+		return m_CommandLookup.contains(ToLower(command));
+	}
+
+	bool ConsoleManager::IsValidCommandName(std::span<const std::string> nameParts)
+	{
+		return !nameParts.empty() && std::ranges::all_of(nameParts, [](std::string_view part) {
+			return !part.empty() && !part.contains(kCommandDelimiter) && !part.contains(' ');
+			});
+	}
+
+	std::string ConsoleManager::GetCommandKey(std::span<const std::string> nameParts)
+	{
+		return ToLower(nameParts | std::views::join_with(kCommandDelimiter) | std::ranges::to<std::string>());
+	}
 }

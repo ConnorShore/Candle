@@ -1,6 +1,6 @@
 #pragma once
 
-#include "ConsoleArgs.h"
+#include "ConsoleTypes.h"
 
 #include <vector>
 #include <string_view>
@@ -11,11 +11,10 @@
 
 namespace Candle {
 
-	using ConsoleCommandCallback = std::function<void(ConsoleArgs&& args)>;
 	using ConsoleCommandHandle = uint64_t;
 	struct ConsoleCommandSpec
 	{
-		std::string Name{ "" };
+		std::vector<std::string> CommandParts;	// Either a single name or multiple names for hierarchical commands
 		std::string Description{ "No Description" };
 		std::string Usage{ "Unknown Usage" };
 		ConsoleCommandCallback Callback{};
@@ -33,17 +32,23 @@ namespace Candle {
 	class ConsoleManager
 	{
 	public:
+		inline static constexpr std::string_view kCommandDelimiter = ".";
+
+	public:
 		ConsoleManager();
 		~ConsoleManager();
 
-		[[nodiscard]] ConsoleCommandHandle RegisterCommand(ConsoleCommandSpec commandSpec);
+		ConsoleCommandHandle RegisterCommand(ConsoleCommandSpec commandSpec);
+		void UnregisterCommand(ConsoleCommandHandle handle);
 		[[nodiscard]] AutoCompleteResult AutoCompleteCommand(std::string_view input) const;	// TODO: Implement this in the future
 		
 		void ExecuteCommand(const std::string_view commandLine);
 
 	private:
 		bool ContainsCommand(const std::string_view command) const;
-		void UnregisterCommand(ConsoleCommandHandle handle);
+
+		[[maybe_unused]] bool IsValidCommandName(std::span<const std::string> nameParts);
+		std::string GetCommandKey(std::span<const std::string> nameParts);
 
 	private:
 		// Keeping here for now, may add a CommandRegistry in the future (maybe when cvar system is added)
