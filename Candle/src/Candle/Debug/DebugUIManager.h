@@ -32,17 +32,14 @@ namespace Candle {
 		DebugUIManager& operator=(const DebugUIManager&) = delete;
 		DebugUIManager& operator=(DebugUIManager&&) = delete;
 
-		// Panels are heap-allocated and never move, so the reference stays valid for the manager's lifetime
 		template<IsDebugPanel T, typename... Args>
-		T& AddPanel(Args&&... args)
+		void AddPanel(Args&&... args)
 		{
 			CDL_CORE_ASSERT(m_RegisteredPanelCommands == false, "Cannot add panels after registering panel commands.");
 
 			ScopedPtr<T> panel = ScopedPtr<T>::Create(std::forward<Args>(args)...);
-			T* raw = panel.Get();
-			m_Panels.emplace_back(std::move(panel));
-			RegisterPanelCommand(raw);
-			return *raw;
+			ScopedCommandHandle cmdHandle = RegisterPanelCommand(panel.Get());
+			m_Panels.emplace_back(std::move(panel), std::move(cmdHandle));
 		}
 
 		void ConsumeEvent(const InputEvent& event);
@@ -54,15 +51,21 @@ namespace Candle {
 		inline bool IsVisible() const { return m_IsVisible; }
 
 	private:
-		constexpr static std::string_view kDebugUICommand = "Debug";	// All debug ui commands start with this prefix, followed by the panel's command name
-		constexpr static std::string_view kDebugUICommandUsage = "Debug.<panel>";	// Usage for the debug command, which is the same for all panels
+		inline static constexpr std::string_view kDebugUICommand = "Debug";					// All debug ui commands start with this prefix, followed by the panel's command name
+		inline static constexpr std::string_view kDebugUICommandUsage = "Debug.<panel>";	// Usage for the debug command, which is the same for all panels
 
 	private:
-		void RegisterPanelCommand(DebugPanel* panel);
+		ScopedCommandHandle RegisterPanelCommand(DebugPanel* panel);
+
+		struct PanelEntry
+		{
+			ScopedPtr<DebugPanel> Panel;
+			ScopedCommandHandle CmdHandle;
+		};
 
 	private:
 		ConsoleManager& m_ConsoleManager;
-		std::vector<ScopedPtr<DebugPanel>> m_Panels;
+		std::vector<PanelEntry> m_Panels;
 		bool m_IsVisible{ true };
 		bool m_RegisteredPanelCommands{ false };
 	};

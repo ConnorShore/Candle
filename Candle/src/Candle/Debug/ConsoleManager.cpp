@@ -24,13 +24,13 @@ namespace Candle {
 		}
 	}
 
-	ConsoleCommandHandle ConsoleManager::RegisterCommand(ConsoleCommandSpec commandSpec)
+	ScopedCommandHandle ConsoleManager::RegisterCommand(ConsoleCommandSpec commandSpec)
 	{
 		CDL_CORE_ASSERT(IsValidCommandName(commandSpec.CommandParts), "Command name parts can't be empty or contain the delimiter or a space.");
 
 		m_Commands.push_back(std::move(commandSpec));
 		m_CommandLookup[GetCommandKey(m_Commands.back().CommandParts)] = m_NextCommandHandle;
-		return m_NextCommandHandle++;
+		return ScopedCommandHandle(this, m_NextCommandHandle++);
 	}
 
 	void ConsoleManager::UnregisterCommand(ConsoleCommandHandle handle)

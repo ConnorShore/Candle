@@ -1,17 +1,17 @@
 #pragma once
 
 #include "ConsoleTypes.h"
+#include "ScopedCommandHandle.h"
 
 #include <vector>
 #include <string_view>
-#include <unordered_map>
+#include <map>
 #include <functional>
 #include <span>
 #include <cstdint>
 
 namespace Candle {
 
-	using ConsoleCommandHandle = uint64_t;
 	struct ConsoleCommandSpec
 	{
 		std::vector<std::string> CommandParts;	// Either a single name or multiple names for hierarchical commands
@@ -27,6 +27,8 @@ namespace Candle {
 		std::span<std::string_view> Suggestions;	// List of suggestions to replace the input string with
 	};
 
+	class ConsoleManager;
+
 	// A console command manager that allows registering commands and executing them by name
 	// Threading: main thread only; all commands are called and executed on the main thread
 	class ConsoleManager
@@ -38,7 +40,7 @@ namespace Candle {
 		ConsoleManager();
 		~ConsoleManager();
 
-		ConsoleCommandHandle RegisterCommand(ConsoleCommandSpec commandSpec);
+		[[nodiscard]] ScopedCommandHandle RegisterCommand(ConsoleCommandSpec commandSpec);
 		void UnregisterCommand(ConsoleCommandHandle handle);
 		[[nodiscard]] AutoCompleteResult AutoCompleteCommand(std::string_view input) const;	// TODO: Implement this in the future
 		
@@ -53,9 +55,9 @@ namespace Candle {
 	private:
 		// Keeping here for now, may add a CommandRegistry in the future (maybe when cvar system is added)
 		std::vector<ConsoleCommandSpec> m_Commands;	// Index is the command handle, starting at 1; 0 is reserved for invalid handle
-		std::unordered_map<std::string, ConsoleCommandHandle> m_CommandLookup;	// Maps lowercased command names to their handles
+		std::map<std::string, ConsoleCommandHandle> m_CommandLookup;	// Lowercase names. Sorted map so commands with same prefix can sit together
 
-		ConsoleCommandHandle m_NextCommandHandle{ 1 };	// Start at 1, 0 is reserved for invalid handle
+		ConsoleCommandHandle m_NextCommandHandle{ kInvalidCommandHandle + 1 };	// Start at 1, 0 is reserved for invalid handle
 	};
 
 }

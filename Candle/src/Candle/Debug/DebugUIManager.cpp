@@ -44,8 +44,10 @@ namespace Candle {
 
 	void DebugUIManager::OnUpdate(const DebugContext& context)
 	{
-		for (ScopedPtr<DebugPanel>& panel : m_Panels)
+		for (auto& [panel, cmdHandle] : m_Panels)
+		{
 			panel->OnUpdate(context);
+		}
 	}
 
 	void DebugUIManager::OnRender(const DebugContext& context)
@@ -53,27 +55,28 @@ namespace Candle {
 		if (!m_IsVisible)
 			return;
 
-		for (ScopedPtr<DebugPanel>& panel : m_Panels)
+		for (auto& [panel, cmdHandle] : m_Panels)
 		{
 			if (panel->IsOpen)
 				panel->OnRender(context);
 		}
 	}
 
-
-	void DebugUIManager::RegisterPanelCommand(DebugPanel* panel)
+	ScopedCommandHandle DebugUIManager::RegisterPanelCommand(DebugPanel* panel)
 	{
 		DebugPanelCommand command = panel->GetCommand();
-		static ConsoleCommandCallback defaultCallbackFunc([this, panel](ConsoleArgs&& args) {
+		ConsoleCommandCallback defaultCallbackFunc([this, panel](ConsoleArgs&& args) {
 			panel->IsOpen = !panel->IsOpen;
-		});
+			});
 
-		 m_ConsoleManager.RegisterCommand({
+		ScopedCommandHandle handle = m_ConsoleManager.RegisterCommand({
 			.CommandParts = { std::string(kDebugUICommand), command.Name},
 			.Description{ command.Description },
 			.Usage{ command.Usage },
 			.Callback{ command.Callback != nullptr ? command.Callback : defaultCallbackFunc }
 			});
+
+		return std::move(handle);
 	}
 
 }
