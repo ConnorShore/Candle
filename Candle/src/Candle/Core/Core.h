@@ -28,7 +28,6 @@
 
 #include "Candle/Core/Profiler.h"
 
-
 namespace Candle {
 
 	// Helper for std::visit with multiple lambdas

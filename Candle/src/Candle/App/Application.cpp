@@ -159,23 +159,6 @@ namespace Candle {
 			mainTimings.TotalMs = m_FrameStats.DeltaTime.GetMilliseconds();
 			m_LastMainTimings = mainTimings;
 
-			// Display log every 1/2 second, averaged over the window: one frame's 1/dt depends on where it lands in the present cycle
-			m_FrameStats.TimeSinceLastLog += m_FrameStats.DeltaTime;
-			m_FrameStats.FramesSinceLastLog++;
-			m_FrameStats.WorstFrameTime = std::max(m_FrameStats.WorstFrameTime, m_FrameStats.DeltaTime.GetMilliseconds());
-			if (m_FrameStats.TimeSinceLastLog >= 0.5f)
-			{
-				CDL_CORE_INFO(LogChannel::Application, "Application running: {}; Avg FPS: {:.0f} ({:.2f} ms), worst frame: {:.2f} ms",
-					m_Specification.AppInfo.Name,
-					m_FrameStats.FramesSinceLastLog / m_FrameStats.TimeSinceLastLog,
-					m_FrameStats.TimeSinceLastLog * 1000.0 / m_FrameStats.FramesSinceLastLog,
-					m_FrameStats.WorstFrameTime);
-
-				m_FrameStats.TimeSinceLastLog = 0.0f;
-				m_FrameStats.FramesSinceLastLog = 0;
-				m_FrameStats.WorstFrameTime = 0.0f;
-			}
-
 			CDL_PROFILE_FRAME_NAMED("SimFrame");
 		}
 

@@ -4,6 +4,10 @@
 
 namespace Candle {
 
+	// TODO:
+	//  * Add param for level of info to show in the overlay
+	//		* 1 being least info to 3 being most info
+
 	class FrameStatsOverlay : public DebugPanel
 	{
 	public:

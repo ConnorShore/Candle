@@ -57,9 +57,8 @@ namespace Candle {
 
 	uint64_t AssetManager::HashToUUID(std::string_view name, AssetType type) const
 	{
-		// TODO: Use much better hashing algorithm, this is just a placeholder for now
 		std::string hashInput = std::string(name) + std::to_string(static_cast<int>(type));
-		return std::hash<std::string_view>{}(hashInput);
+		return HashStringToUUID(hashInput);
 	}
 
 	SharedPtr<Asset> AssetManager::GetAsset(uint64_t uuid) const

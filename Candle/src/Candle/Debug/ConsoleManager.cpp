@@ -2,50 +2,55 @@
 #include "ConsoleManager.h"
 
 #include <sstream>
+#include <vector>
 #include <algorithm>
 #include <ranges>
+#include <string_view>
+#include <tuple>
 
 namespace Candle {
 
-	namespace {
-		// Converts a string to lowercase for case-insensitive command matching
-		std::string ToLower(const std::string& str)
-		{
-			std::string lowerStr = str;
-			std::transform(lowerStr.begin(), lowerStr.end(), lowerStr.begin(),
-				[](unsigned char c) { return std::tolower(c); });
-			return lowerStr;
-		}
-	}
-
-	void ConsoleManager::RegisterCommand(const std::string& command, ConsoleCommandCallback callback, 
-										 const std::string& description /*= "No Description"*/, const std::string& usage /*= "Unknown Usage"*/)
+	ConsoleManager::ConsoleManager()
 	{
-		if (m_Commands.find(command) != m_Commands.end())
-		{
-			CDL_CORE_WARN(LogChannel::Debug, "Console command '{}' is already registered. Overwriting.", command);
-		}
-
-		CDL_CORE_INFO(LogChannel::Debug, "Registering console command '{}'", command);
-		m_Commands[command] = ConsoleCommand{ 
-			.Callback = callback,
-			.Description = description,
-			.Usage = usage };
+		m_Commands.push_back({});	// Reserve index 0 for invalid handle
 	}
 
-	void ConsoleManager::UnregisterCommand(const std::string& command)
+	ConsoleManager::~ConsoleManager()
 	{
-		if (m_Commands.find(command) == m_Commands.end())
+		for (size_t i = 1; i < m_Commands.size(); ++i)
 		{
-			CDL_CORE_WARN(LogChannel::Debug, "Console command '{}' is not registered. Cannot unregister.", command);
-			return;
+			if (m_Commands[i].Callback)
+				UnregisterCommand(i);
 		}
-
-		CDL_CORE_INFO(LogChannel::Debug, "Unregistering console command '{}'.", command);
-		m_Commands.erase(command);
 	}
 
-	void ConsoleManager::ExecuteCommand(const std::string& commandLine)
+	ConsoleCommandHandle ConsoleManager::RegisterCommand(ConsoleCommandSpec commandSpec)
+	{
+		m_Commands.push_back(std::move(commandSpec));
+		m_CommandLookup[ToLower(m_Commands.back().Name)] = m_NextCommandHandle;
+		return m_NextCommandHandle++;
+	}
+
+	AutoCompleteResult ConsoleManager::AutoCompleteCommand(std::string_view input) const
+	{
+		// TODO: Implement this in the future
+		CDL_CORE_ERROR(LogChannel::Command, "AutoCompleteCommand is not implemented yet.");
+		return {};
+	}
+
+	bool ConsoleManager::ContainsCommand(const std::string_view command) const
+	{
+		return m_CommandLookup.contains(ToLower(command));
+	}
+
+	void ConsoleManager::UnregisterCommand(ConsoleCommandHandle handle)
+	{
+		const std::string commandName = ToLower(m_Commands[handle].Name);
+		m_CommandLookup.erase(commandName);
+		m_Commands[handle] = {};	// Reset the command spec to default
+	}
+
+	void ConsoleManager::ExecuteCommand(const std::string_view commandLine)
 	{
 		if (commandLine.empty())
 		{
@@ -53,44 +58,22 @@ namespace Candle {
 			return;
 		}
 
-		// Tokenize the command line into command and arguments
-		// TODO: See if can optimize this somehow without vectors and pushing without known sizes of args and such
-		std::istringstream iss(commandLine);
-		std::string command;
-		std::vector<std::string> args;
-		
-		// Extract the command
-		if (!(iss >> command))
-		{
-			CDL_CORE_WARN(LogChannel::Command, "Failed to parse command.");
-			return;
-		}
+		size_t spaceIndex = commandLine.find(' ');
+		bool hasArgs = spaceIndex != std::string_view::npos;
+		std::string_view command = commandLine.substr(0, spaceIndex);
+		std::string_view argsStr = hasArgs ? commandLine.substr(spaceIndex + 1) : std::string_view{};
 
-		// Convert command to lowercase for case-insensitive matching
-		command = ToLower(command);
-
-		// Check to ensure the command is registered
 		if (!ContainsCommand(command))
 		{
-			CDL_CORE_WARN(LogChannel::Command, "Command not found: {}", command);
+			CDL_CORE_WARN(LogChannel::Command, "Unknown command: {}", command);
 			return;
-		}
-
-		// Extract the arguments
-		std::string arg;
-		while (iss >> arg)
-		{
-			// TODO: Handle quoted arguments and escape sequences if needed
-			args.push_back(arg);
 		}
 
 		// Call the registered callback for the command
-		m_Commands[command].Callback(args);
-	}
+		ConsoleCommandHandle handle = m_CommandLookup.at(ToLower(command));
+		ConsoleArgs consoleArgs{ argsStr };
 
-	bool ConsoleManager::ContainsCommand(const std::string& command) const
-	{
-		return m_Commands.find(ToLower(command)) != m_Commands.end();
+		m_Commands[handle].Callback(std::move(consoleArgs));
 	}
 
 }
