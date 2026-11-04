@@ -7,8 +7,8 @@ namespace Candle {
 	class GPUResourceInspectorPanel : public DebugPanel
 	{
 	public:
-		GPUResourceInspectorPanel() = default;
-		~GPUResourceInspectorPanel() override = default;
+		GPUResourceInspectorPanel();
+		~GPUResourceInspectorPanel() override;
 
 		virtual void OnUpdate(const DebugContext& context) override;
 		virtual void OnRender(const DebugContext& context) override;
@@ -25,7 +25,8 @@ namespace Candle {
 		}
 
 	private:
-
+		void RenderHeapStats(const char* heapName, const GPUHeapStats& stats);
+		void RenderPoolStats(const char* poolName, const GPUResourcePoolStats& stats);
 	};
 
 }

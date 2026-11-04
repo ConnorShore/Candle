@@ -25,6 +25,9 @@ namespace Candle {
 		std::array<GPUHeapStats, VK_MAX_MEMORY_HEAPS> Heaps;
 		uint32_t TotalUploads{ 0 };
 		uint64_t TotalUploadBytes{ 0 };
+		uint64_t CurrentVramUsageBytes{ 0 };	// The sum of the heaps' used bytes, for tuning the allocator's capacity
+		uint64_t OsVramBudgetBytes{ 0 };	// The sum of the heaps' total bytes, for tuning the allocator's capacity
+		uint64_t DeviceMaxVramBytes{ 0 };	// The sum of the heaps' total bytes, for tuning the allocator's capacity
 	};
 
 	struct GPUAllocatorSpec

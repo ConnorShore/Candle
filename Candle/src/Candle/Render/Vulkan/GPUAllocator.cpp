@@ -56,6 +56,13 @@ namespace Candle {
 		VmaTotalStatistics stats;
 		vmaCalculateStatistics(m_Allocator, &stats);
 
+		std::vector<VmaBudget> budgets(memoryProps->memoryHeapCount);
+		vmaGetHeapBudgets(m_Allocator, budgets.data());
+
+		VkDeviceSize totalUsedVRAM = 0;
+		VkDeviceSize totalBudgetVRAM = 0;
+		VkDeviceSize hardwareMaxVRAM = 0;
+
 		std::array<GPUHeapStats, VK_MAX_MEMORY_HEAPS> heapStats{};
 		for (uint32_t i = 0; i < memoryProps->memoryHeapCount; ++i)
 		{
@@ -70,12 +77,21 @@ namespace Candle {
 				.UsedBytes = usedBytes,
 				.UnusedBytes = unusedBytes
 			};
+
+			if (memoryProps->memoryHeaps[i].flags & VK_MEMORY_HEAP_DEVICE_LOCAL_BIT) {
+				totalUsedVRAM += budgets[i].usage;       // VRAM currently used by your app/system
+				totalBudgetVRAM += budgets[i].budget;    // OS-allocated VRAM budget for your app
+				hardwareMaxVRAM += memoryProps->memoryHeaps[i].size; // The absolute physical maximum VRAM
+			}
 		}
 
 		return GPUAllocatorStats{
 			.Heaps = std::move(heapStats),
 			.TotalUploads = m_UploadStats.Count,
-			.TotalUploadBytes = m_UploadStats.Bytes
+			.TotalUploadBytes = m_UploadStats.Bytes,
+			.CurrentVramUsageBytes = totalUsedVRAM,
+			.OsVramBudgetBytes = totalBudgetVRAM,
+			.DeviceMaxVramBytes = hardwareMaxVRAM
 		};
 	}
 
