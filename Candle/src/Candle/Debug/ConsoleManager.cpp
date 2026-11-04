@@ -20,7 +20,7 @@ namespace Candle {
 		for (size_t i = 1; i < m_Commands.size(); ++i)
 		{
 			if (m_Commands[i].Callback)
-				UnregisterCommand(i);
+				UnregisterCommand(static_cast<ConsoleCommandHandle>(i));
 		}
 	}
 

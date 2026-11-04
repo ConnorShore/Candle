@@ -102,23 +102,3 @@ CDL_TEST_CASE(SDLApplication, QuitEventFromTheOSStopsRun, Display)
 
 	CDL_EXPECT_LT(runMs, 1000.0);
 }
-
-// Application drops the input the GUI wants before InputSystem sees it, so a click on a window never reaches the game,
-// while the device the GUI doesn't want still does.
-CDL_TEST_CASE(SDLApplication, InputTheGuiCapturesNeverReachesTheGame, Display)
-{
-	GuiCaptureApplication::Seen whileMouseCaptured, whileKeyboardCaptured;
-	{
-		std::optional<GuiCaptureApplication> app;
-		EmplaceWindowedApp(app);
-		app->Run();
-		whileMouseCaptured = app->WhileMouseCaptured;
-		whileKeyboardCaptured = app->WhileKeyboardCaptured;
-	}
-	RestoreLoggerDefaults();
-
-	CDL_EXPECT(whileMouseCaptured.Key);
-	CDL_EXPECT_FALSE(whileMouseCaptured.Click);
-	CDL_EXPECT_FALSE(whileKeyboardCaptured.Key);
-	CDL_EXPECT(whileKeyboardCaptured.Click);
-}

@@ -27,19 +27,26 @@ namespace Candle {
 		}
 		ScopedCommandHandle& operator=(ScopedCommandHandle&& other) noexcept
 		{
+			if (this == &other)
+				return *this;
+
+			Reset();	// Unregisters the command this handle already owns
 			m_Handle = other.m_Handle;
 			m_Manager = other.m_Manager;
 
 			other.m_Handle = kInvalidCommandHandle;
 			other.m_Manager = nullptr;
+			return *this;
 		}
 
-		operator ConsoleCommandHandle() { return m_Handle; }
-		operator ConsoleCommandHandle() const { return m_Handle; }
+		[[nodiscard]] ConsoleCommandHandle GetHandle() const { return m_Handle; }
 
 	private:
 		friend class ConsoleManager;
 
+		void Reset();
+
+	private:
 		ConsoleManager* m_Manager;
 		ConsoleCommandHandle m_Handle;
 	};
