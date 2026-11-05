@@ -15,16 +15,15 @@ namespace Candle {
 
 	void MainThreadLogSink::Dispatch()
 	{
-		for (const auto& [handle, listener] : m_Listeners)
+		// Left pending, so startup's records reach the first listener to register
+		if (m_Listeners.empty())
+			return;
+
+		LogRecord batch[64];
+		while (const size_t count = m_Pending.PopBatch(batch, 64))
 		{
-			while (true)
-			{
-				LogRecord batch[64];
-				const size_t count = m_Pending.PopBatch(batch, 64);
-				if (count == 0)
-					break;
+			for (const auto& [handle, listener] : m_Listeners)
 				listener(std::span<const LogRecord>(batch, count));
-			}
 		}
 	}
 

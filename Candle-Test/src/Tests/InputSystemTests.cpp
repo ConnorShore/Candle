@@ -132,6 +132,34 @@ CDL_TEST_CASE(InputSystem, UnknownKeyIsIgnored, Unit)
 	CDL_EXPECT(snapshot.KeysPressed.none());
 }
 
+// The press went to the GUI, so this system never saw the key go down and has no edge to report.
+CDL_TEST_CASE(InputSystem, ReleaseOfAKeyNeverPressedIsIgnored, Unit)
+{
+	InputSystem input;
+	const InputSnapshot snapshot = Frame(input, { KeyReleasedEvent{ KeyCode::W } });
+
+	CDL_EXPECT_FALSE(snapshot.IsKeyReleased(KeyCode::W));
+	CDL_EXPECT(snapshot.KeysReleased.none());
+}
+
+CDL_TEST_CASE(InputSystem, SecondReleaseOfAKeyIsIgnored, Unit)
+{
+	InputSystem input;
+	Frame(input, { KeyPressedEvent{ KeyCode::W } });
+	Frame(input, { KeyReleasedEvent{ KeyCode::W } });
+	const InputSnapshot snapshot = Frame(input, { KeyReleasedEvent{ KeyCode::W } });
+
+	CDL_EXPECT_FALSE(snapshot.IsKeyReleased(KeyCode::W));
+}
+
+CDL_TEST_CASE(InputSystem, UnknownKeyReleaseIsIgnored, Unit)
+{
+	InputSystem input;
+	const InputSnapshot snapshot = Frame(input, { KeyPressedEvent{ KeyCode::Unknown }, KeyReleasedEvent{ KeyCode::Unknown } });
+
+	CDL_EXPECT(snapshot.KeysReleased.none());
+}
+
 //////////////////////////////////////////////////////////////////////////
 // Mouse buttons
 //////////////////////////////////////////////////////////////////////////
@@ -174,6 +202,25 @@ CDL_TEST_CASE(InputSystem, ClickWithinOneFrameReportsBothEdges, Unit)
 	CDL_EXPECT_FALSE(clicked.IsMouseDown(MouseButton::Left));
 	CDL_EXPECT(clicked.IsMousePressed(MouseButton::Left));
 	CDL_EXPECT(clicked.IsMouseReleased(MouseButton::Left));
+}
+
+CDL_TEST_CASE(InputSystem, ReleaseOfAMouseButtonNeverPressedIsIgnored, Unit)
+{
+	InputSystem input;
+	const InputSnapshot snapshot = Frame(input, { MouseButtonReleasedEvent{ MouseButton::Left } });
+
+	CDL_EXPECT_FALSE(snapshot.IsMouseReleased(MouseButton::Left));
+	CDL_EXPECT_EQ(snapshot.MouseReleased, 0);
+}
+
+CDL_TEST_CASE(InputSystem, ReleasingOneMouseButtonLeavesTheOthersDown, Unit)
+{
+	InputSystem input;
+	Frame(input, { MouseButtonPressedEvent{ MouseButton::Left }, MouseButtonPressedEvent{ MouseButton::Right } });
+	const InputSnapshot snapshot = Frame(input, { MouseButtonReleasedEvent{ MouseButton::Left } });
+
+	CDL_EXPECT(snapshot.IsMouseDown(MouseButton::Right));
+	CDL_EXPECT_FALSE(snapshot.IsMouseReleased(MouseButton::Right));
 }
 
 // Unknown is 0, so the (button - 1) shift must never be taken for it.

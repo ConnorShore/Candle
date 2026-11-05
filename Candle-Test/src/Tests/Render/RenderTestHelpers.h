@@ -1,6 +1,6 @@
 #pragma once
 
-// Shared setup for the Vulkan-backed tests. Only test files under Tests/Render include Vulkan.
+// Shared setup for the Vulkan-backed tests, so only tests that need a real device include this.
 
 #include "TestFramework.h"
 #include "TestHelpers.h"

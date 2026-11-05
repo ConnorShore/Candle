@@ -36,7 +36,11 @@ namespace Candle {
 	void ConsoleManager::UnregisterCommand(ConsoleCommandHandle handle)
 	{
 		ConsoleCommandSpec& commandSpec = m_Commands[handle];
-		m_CommandLookup.erase(GetCommandKey(commandSpec.CommandParts));
+
+		// A newer command can hold the name by now, as when a handle is assigned a replacement of the same name
+		if (auto it = m_CommandLookup.find(GetCommandKey(commandSpec.CommandParts)); it != m_CommandLookup.end() && it->second == handle)
+			m_CommandLookup.erase(it);
+
 		m_Commands[handle] = {};	// Reset the command spec to default
 	}
 

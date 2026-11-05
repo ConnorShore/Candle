@@ -69,7 +69,7 @@ namespace Candle {
 			}
 			else
 			{
-				size_t end = lineView.find_first_of(" \t", start);
+				size_t end = std::min(lineView.find_first_of(" \t", start), lineView.size());	// The last token runs to the line's end, not npos
 				std::string_view token = lineView.substr(start, end - start);
 				parsedArgs.push_back({
 					.Value = token, 

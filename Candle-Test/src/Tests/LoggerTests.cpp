@@ -17,6 +17,9 @@ using namespace Candle::Test;
 using Candle::Test::Type::Unit;
 using Candle::Test::Type::Stress;
 
+// DebugConsolePanel sizes its per-channel state by this and indexes it by the channel's bit
+CDL_STATIC_ASSERT(static_cast<uint16_t>(LogChannel::Command) == 1u << (kLogChannelCount - 1), "kLogChannelCount must count every channel");
+
 namespace {
 
 	const LogRecord* FindMessage(const std::vector<LogRecord>& records, std::string_view message)
@@ -73,8 +76,9 @@ CDL_TEST_CASE(Logger, LevelChannelAndTypeNames, Unit)
 	CDL_EXPECT_EQ(std::string_view(LogChannelName(LogChannel::None)), "None");
 	CDL_EXPECT_EQ(std::string_view(LogChannelName(LogChannel::Application)), "App");
 	CDL_EXPECT_EQ(std::string_view(LogChannelName(LogChannel::Math)), "Math");
+	CDL_EXPECT_EQ(std::string_view(LogChannelName(LogChannel::Debug)), "Debug");
 	// The last channel, so a channel added without a name fails here rather than asserting in a sink
-	CDL_EXPECT_EQ(std::string_view(LogChannelName(LogChannel::Asset)), "Asset");
+	CDL_EXPECT_EQ(std::string_view(LogChannelName(LogChannel::Command)), "Cmd");
 	// A combined mask is named after its lowest set bit.
 	CDL_EXPECT_EQ(std::string_view(LogChannelName(LogChannel::Render | LogChannel::Input)), "Render");
 
@@ -224,6 +228,23 @@ CDL_TEST_CASE(Logger, CanReinitialiseAfterShutdown, Unit)
 	CDL_CHECK(Logger::Flush());
 	CDL_CHECK(FindMessage(second.Records, "LoggerTests: second cycle") != nullptr);
 	CDL_CHECK(FindMessage(second.Records, "LoggerTests: first cycle") == nullptr);
+}
+
+// For a caller that keeps talking to its sink, as Application does with the main thread sink
+CDL_TEST_CASE(Logger, AddSinkHandsBackTheSinkItNowOwns, Unit)
+{
+	std::vector<LogRecord> records;
+	ScopedPtr<CaptureSink> sink = ScopedPtr<CaptureSink>::Create(records);
+	const CaptureSink* const owned = sink.Get();
+
+	const CaptureSink& added = Logger::AddSink(std::move(sink));
+	CDL_EXPECT(&added == owned);
+
+	LoggerFixture logger;
+	CDL_CORE_INFO(LogChannel::Application, "LoggerTests: typed sink");
+	CDL_CHECK(Logger::Flush());
+
+	CDL_EXPECT(FindMessage(records, "LoggerTests: typed sink") != nullptr);
 }
 
 CDL_TEST_CASE(Logger, ConcurrentProducersLoseNothingAndKeepPerThreadOrder, Stress)

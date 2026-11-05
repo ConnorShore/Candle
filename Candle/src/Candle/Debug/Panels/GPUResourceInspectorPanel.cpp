@@ -426,7 +426,7 @@ namespace Candle {
 		ImGui::TableNextColumn();
 		DrawNumberCell(std::to_string(stats.PendingSlots), pendingStuck ? kWarnColor : TextColor());
 		if (pendingStuck)
-			ImGui::SetItemTooltip("No release for %u frames, yet these haven't come back. Slots should return within a few frames, so check the GPU is still making progress.", activity.FramesSinceRelease);
+			ImGui::SetItemTooltip("No release for %u frames, yet these haven't come back. A stalled GPU would stop this panel too, so a slot got lost between the registry and its pool.", activity.FramesSinceRelease);
 
 		ImGui::TableNextColumn();
 		DrawNumberCell(std::to_string(stats.FreeSlots));

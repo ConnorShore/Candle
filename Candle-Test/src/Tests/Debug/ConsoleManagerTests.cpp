@@ -18,6 +18,12 @@ namespace {
 	// Converting to the id would let a temporary handle die at the end of the line and take its command with it
 	CDL_STATIC_ASSERT(!std::is_convertible_v<ScopedCommandHandle, ConsoleCommandHandle>, "ScopedCommandHandle must not convert to its id");
 
+	// A copy would be a second owner unregistering the same command
+	CDL_STATIC_ASSERT(!std::is_copy_constructible_v<ScopedCommandHandle>);
+	CDL_STATIC_ASSERT(!std::is_copy_assignable_v<ScopedCommandHandle>);
+	CDL_STATIC_ASSERT(std::is_nothrow_move_constructible_v<ScopedCommandHandle>);
+	CDL_STATIC_ASSERT(std::is_nothrow_move_assignable_v<ScopedCommandHandle>);
+
 	struct CommandRecord
 	{
 		int Calls{ 0 };
@@ -94,6 +100,79 @@ CDL_TEST_CASE(ConsoleManager, UnknownCommandWarnsEveryTimeAndRunsNothing, Unit)
 		});
 	CDL_EXPECT_EQ(warnings, 2);
 	CDL_EXPECT_EQ(record.Calls, 0);
+}
+
+CDL_TEST_CASE(ConsoleManager, EmptyLineWarnsAndRunsNothing, Unit)
+{
+	LoggerFixture logger;
+	ConsoleManager console;
+	CommandRecord record;
+	const ScopedCommandHandle command = RegisterRecording(console, { "echo" }, record);
+
+	console.ExecuteCommand("");
+	CDL_CHECK(Logger::Flush());
+
+	const auto warnings = std::ranges::count_if(logger.Records, [](const LogRecord& logRecord) {
+		return std::string_view(logRecord.Message) == "No command entered.";
+		});
+	CDL_EXPECT_EQ(warnings, 1);
+	CDL_EXPECT_EQ(record.Calls, 0);
+}
+
+CDL_TEST_CASE(ConsoleManager, ExtraSpacesAfterTheCommandAreIgnored, Unit)
+{
+	ConsoleManager console;
+	CommandRecord record;
+	const ScopedCommandHandle command = RegisterRecording(console, { "echo" }, record);
+
+	console.ExecuteCommand("echo    one   ");
+
+	CDL_EXPECT_EQ(record.Calls, 1);
+	CDL_CHECK_EQ(record.Args.size(), 1u);
+	CDL_EXPECT(record.Args[0] == "one");
+}
+
+CDL_TEST_CASE(ConsoleManager, TrailingSpaceAddsNoArg, Unit)
+{
+	ConsoleManager console;
+	CommandRecord record;
+	const ScopedCommandHandle command = RegisterRecording(console, { "echo" }, record);
+
+	console.ExecuteCommand("echo ");
+
+	CDL_EXPECT_EQ(record.Calls, 1);
+	CDL_EXPECT(record.Args.empty());
+}
+
+CDL_TEST_CASE(ConsoleManager, NameIsFreeAgainOnceItsCommandIsGone, Unit)
+{
+	ConsoleManager console;
+	CommandRecord firstRecord;
+	CommandRecord secondRecord;
+	{
+		const ScopedCommandHandle first = RegisterRecording(console, { "echo" }, firstRecord);
+	}
+
+	const ScopedCommandHandle second = RegisterRecording(console, { "echo" }, secondRecord);
+	console.ExecuteCommand("echo");
+
+	CDL_EXPECT_EQ(firstRecord.Calls, 0);
+	CDL_EXPECT_EQ(secondRecord.Calls, 1);
+}
+
+// The new registration runs first, so the old handle's unregister mustn't take the name away from it
+CDL_TEST_CASE(ConsoleManager, ReplacingACommandUnderItsOwnNameKeepsTheNewOne, Unit)
+{
+	ConsoleManager console;
+	CommandRecord oldRecord;
+	CommandRecord newRecord;
+	ScopedCommandHandle command = RegisterRecording(console, { "echo" }, oldRecord);
+
+	command = RegisterRecording(console, { "echo" }, newRecord);
+	console.ExecuteCommand("echo");
+
+	CDL_EXPECT_EQ(oldRecord.Calls, 0);
+	CDL_EXPECT_EQ(newRecord.Calls, 1);
 }
 
 // Enough commands that m_Commands and the handles both reallocate, which must not unregister anything

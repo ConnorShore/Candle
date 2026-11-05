@@ -104,6 +104,10 @@ namespace Candle {
 			if (m_LoggerScope.MainThreadSink)
 				m_LoggerScope.MainThreadSink->Dispatch();
 
+			// Call the GUI system to start a new frame
+			if (!m_Specification.Headless)
+				m_GuiSystem->StartFrame();
+
 			// Call the application update callback
 			ApplicationContext appContext{ m_AssetManager, m_ActiveWorld };
 			UpdateContext updateContext{ appContext, m_FrameStats.DeltaTime, inputSnapshot, m_RenderContext };
@@ -111,7 +115,7 @@ namespace Candle {
 
 			// TODO: Implement game logic //
 
-			if (!m_Specification.Headless && m_RenderManager)
+			if (!m_Specification.Headless)
 			{
 				// Capture the render stats from the last completed frame
 				RenderStats renderStats = m_RenderManager->GetRenderStats();
@@ -125,9 +129,6 @@ namespace Candle {
 					.Render = renderStats,
 					.Resources = resourceStats
 				};
-
-				// Call the GUI system to start a new frame
-				m_GuiSystem->StartFrame();
 
 				m_DebugUIManager->OnUpdate(debugContext);
 				m_DebugUIManager->OnRender(debugContext);
