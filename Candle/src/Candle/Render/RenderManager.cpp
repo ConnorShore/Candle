@@ -138,6 +138,8 @@ namespace Candle {
 
 	GPUResourceStats RenderManager::CaptureResourceStats() const
 	{
+		CDL_PROFILE_SCOPE("RenderManager::CaptureResourceStats");
+
 		CDL_CORE_ASSERT(Platform::IsMainThread(), "RenderManager::CaptureResourceStats() must be called from the main thread.");
 
 		// Completed first: read second, the GPU could overtake the submitted value and the lag would underflow

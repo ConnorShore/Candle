@@ -10,6 +10,7 @@
 
 #include "Candle/Debug/ConsoleManager.h"
 #include "Candle/Core/MainThreadLogSink.h"
+#include "Candle/Core/Profiler.h"
 
 namespace Candle {
 
@@ -46,6 +47,8 @@ namespace Candle {
 
 	void DebugUIManager::OnUpdate(const DebugContext& context)
 	{
+		CDL_PROFILE_SCOPE("DebugUIManager::OnUpdate");
+
 		for (auto& [panel, cmdHandle] : m_Panels)
 		{
 			panel->OnUpdate(context);
@@ -54,6 +57,8 @@ namespace Candle {
 
 	void DebugUIManager::OnRender(const DebugContext& context)
 	{
+		CDL_PROFILE_SCOPE("DebugUIManager::OnRender");
+
 		if (!m_IsVisible)
 			return;
 

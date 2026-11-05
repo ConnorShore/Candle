@@ -6,6 +6,7 @@
 #include <vulkan/vulkan_raii.hpp>
 
 #include <array>
+#include <atomic>
 #include <optional>
 #include <span>
 #include <string>
@@ -60,7 +61,7 @@ namespace Candle {
 
 		void WaitFor(QueueType queue, uint64_t value) const;	// Blocks until the queue's timeline reaches value; 0 returns at once
 		uint64_t GetCompletedTimelineValue(QueueType queue) const;	// The value the GPU has reached on the queue's timeline; never blocks
-		uint64_t GetLastSubmittedTimelineValue(QueueType queue) const;	// The newest value handed out; takes the queue's submit lock
+		uint64_t GetLastSubmittedTimelineValue(QueueType queue) const;	// The newest value handed out; never blocks
 		void WaitIdle(); // Shutdown only, never in the frame loop. vkDeviceWaitIdle synchronizes on every queue, so it takes every submit lock.
 
 		inline vk::raii::Device& GetDevice() { return m_LogicalDevice; }
@@ -90,7 +91,7 @@ namespace Candle {
 		{
 			vk::raii::Queue Queue{ nullptr };
 			vk::raii::Semaphore Timeline{ nullptr };
-			uint64_t LastSubmitted{ 0 };	// Guarded by SubmitLock
+			std::atomic<uint64_t> LastSubmitted{ 0 };	// Written under SubmitLock; read without it, since Present can hold that lock for a long time
 			AdaptiveSpinLock SubmitLock;
 		};
 

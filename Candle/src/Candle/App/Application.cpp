@@ -124,7 +124,7 @@ namespace Candle {
 				// Call the debug UI manager to update and render its panels
 				DebugContext debugContext{
 					.DeltaTime = m_FrameStats.DeltaTime,
-					.Input = inputSnapshot,
+					.Input = m_DebugInputSystem.CaptureSnapshot(),
 					.Main = m_LastMainTimings,
 					.Render = renderStats,
 					.Resources = resourceStats
@@ -141,7 +141,6 @@ namespace Candle {
 					CDL_PROFILE_SCOPE("Application::Run::FramePacket");
 					Timer pumpWaitTimer;
 					FramePacket& packet = m_RenderManager->BeginFramePacket();
-					packet.RenderStats = renderStats;	// The render thread's last completed frame, which is a few frames behind the main thread
 					mainTimings.PumpWaitMs = static_cast<float>(pumpWaitTimer.ElapsedMilliseconds());
 					CDL_PROFILE_SCOPE_METADATA(packet.FrameIndex);
 
@@ -197,11 +196,15 @@ namespace Candle {
 					if (m_DebugUIManager)
 						m_DebugUIManager->ConsumeEvent(e);
 
-					// TODO: Not sure if I want to cut off input to the input system if the GUI wants it, but for now, let the input system consume everything
-					//const bool guiWantsInput = m_GuiSystem && m_GuiSystem->WantsInput(e);
-					//const bool isRelease = std::holds_alternative<KeyReleasedEvent>(e) || std::holds_alternative<MouseButtonReleasedEvent>(e);
-					//if (!isRelease && guiWantsInput)
-					//		return;
+					// Ahead of the gate, so the console's hotkey can still close it while its input box has the keyboard
+					m_DebugInputSystem.ConsumeEvent(e);
+
+					// Releases always pass, or a key held when the GUI took focus would stay down for the game
+					const bool guiWantsInput = m_GuiSystem && m_GuiSystem->WantsInput(e);
+					const bool isRelease = std::holds_alternative<KeyReleasedEvent>(e) || std::holds_alternative<MouseButtonReleasedEvent>(e);
+					if (!isRelease && guiWantsInput)
+						return;
+
 					m_InputSystem.ConsumeEvent(e);
 				}
 				}, evt);

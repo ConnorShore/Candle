@@ -20,7 +20,7 @@
 #include "Candle/Render/Resources/GeometryPool.h"
 #include "Candle/Render/Resources/TexturePool.h"
 
-#include "Candle/App/ApplicationInfo.h"
+#include "Candle/Core/ApplicationInfo.h"
 #include "Candle/Core/Threading/Thread.h"
 
 #include <atomic>

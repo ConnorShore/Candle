@@ -1,6 +1,8 @@
 #include "cdlpch.h"
 #include "MainThreadLogSink.h"
 
+#include "Candle/Core/Profiler.h"
+
 namespace Candle {
 
 	MainThreadLogSink::MainThreadLogSink(size_t capacity)
@@ -15,6 +17,8 @@ namespace Candle {
 
 	void MainThreadLogSink::Dispatch()
 	{
+		CDL_PROFILE_SCOPE("MainThreadLogSink::Dispatch");
+
 		// Left pending, so startup's records reach the first listener to register
 		if (m_Listeners.empty())
 			return;

@@ -141,10 +141,13 @@ a packet that still draws the mesh.
 
 ## Adding a new resource kind
 
-1. A payload struct whose members free themselves (`GPUBuffer`, `vk::raii::*`), so destroying it frees everything.
+1. A payload struct whose members free themselves (`GPUBuffer`, `vk::raii::*`), so destroying it frees everything. It
+   also needs a `GetSizeBytes()`, which the `GPUResourcePayload` concept requires and the pool counts into its stats.
 2. A tag and handle alias in `GPUHandles.h`, e.g. `struct TextureTag {}; using GPUTextureHandle = GPUHandle<TextureTag>;`.
 3. An owning class (e.g. `TexturePool`) with a private `GPUResourcePool<Payload, TextureTag>`, built in `RenderManager`
    with `m_ResourceRegistry`. It exposes create, release and alive checks, plus whatever view the renderer needs.
+4. To appear in the GPU resource inspector, a `CapturePoolStats` on the owning class, a field for it in
+   `GPUResourceStats` filled by `RenderManager::CaptureResourceStats`, and a place in `GPUResourceInspectorPanel`.
 
 The packet, the registry and `RenderManager`'s frame loop don't change.
 

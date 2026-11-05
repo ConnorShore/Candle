@@ -97,7 +97,8 @@ namespace Candle {
 		LoggerScope m_LoggerScope;
 		WindowingScope m_WindowingScope;			// After the logger, so a backend failure can be logged
 		ScopedPtr<Window> m_Window;					// Empty when headless
-		InputSystem m_InputSystem;					// Never fed when headless, since nothing is pumped
+		InputSystem m_InputSystem;					// The game's input, minus what the GUI captured. Never fed when headless, since nothing is pumped
+		InputSystem m_DebugInputSystem;				// Every event, for the debug UI. Never fed when headless either
 		JobSystem m_JobSystem;
 		ScopedPtr<RenderManager> m_RenderManager;	// Empty when headless
 		ScopedPtr<GuiSystem> m_GuiSystem;			// Empty when headless
