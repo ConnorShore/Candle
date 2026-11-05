@@ -4,6 +4,7 @@
 #include "Candle/Render/Vulkan/SamplerType.h"
 #include "Candle/Render/GUI/GuiDrawData.h"
 #include "Candle/Render/RenderStats.h"
+#include "Candle/Render/Camera.h"
 
 #include <vector>
 #include <glm/glm.hpp>
@@ -25,8 +26,7 @@ namespace Candle {
 		// Vector not span as data is copied to the render thread, and the simulation thread may modify its own copy of the vector after sending it to the render thread
 		std::vector<DrawItem> DrawItems;
 		std::vector<glm::mat4> TransformData;	// Model matrices for each draw item; the renderer writes them into a GPU buffer and shaders read them by address
-		glm::mat4 ViewMatrix{ 1.0f };
-		glm::mat4 ProjectionMatrix{ 1.0f };
+		Candle::RenderView RenderView;
 		double Time{ 0.0 };		// Simulation time in seconds at extraction; the renderer never reads a clock of its own
 
 		Candle::GuiDrawData GuiDrawData;	// Draw data for the GUI layer; the renderer will render this on top of the 3D scene
