@@ -6,6 +6,7 @@
 #include "Candle/Render/RenderConstants.h"
 
 #include "Candle/Platform/Window.h"
+#include "Candle/Core/Time.h"
 #include "Candle/Core/Profiler.h"
 #include "Candle/Core/Job/JobSystem.h"
 #include "Candle/Core/Memory/ScopedPtr.h"
@@ -66,7 +67,16 @@ namespace Candle {
 	{
 		m_RenderThread.Start([this](std::stop_token stoken){
 			while (!stoken.stop_requested()) {
-				RenderThreadMain();
+				// Timed here rather than inside, so every early return in RenderThreadMain still completes the frame's stats
+				Timer frameTimer;
+				RenderStats stats;
+
+				RenderThreadMain(stats);
+
+				// Update the render stats for this frame
+				stats.Timings.TotalMs = static_cast<float>(frameTimer.ElapsedMilliseconds());
+				m_CompletedRenderStats = std::move(stats);
+
 				CDL_PROFILE_FRAME_NAMED("RenderFrame");
 			}
 
@@ -104,6 +114,7 @@ namespace Candle {
 		CDL_CORE_ASSERT(Platform::IsMainThread(), "RenderManager::BeginFramePacket() must be called from the main thread.");
 
 		FramePacket& packet = m_FramePump.AquireForWriting();
+		m_LatestRenderStats = packet.RenderStats;
 		m_GPUUploader.FreeCompletedStagingBuffers();
 		m_ResourceRegistry.ReturnRecycledSlotsToPools(packet);
 		m_ResourceRegistry.MoveReleasedSlotsIntoPacket(packet);
@@ -125,15 +136,38 @@ namespace Candle {
 			.DebugName = std::format("Output Target {}x{}", extent.x, extent.y) });
 	}
 
-	void RenderManager::RenderThreadMain()
+	GPUResourceStats RenderManager::CaptureResourceStats() const
+	{
+		CDL_PROFILE_SCOPE("RenderManager::CaptureResourceStats");
+
+		CDL_CORE_ASSERT(Platform::IsMainThread(), "RenderManager::CaptureResourceStats() must be called from the main thread.");
+
+		// Completed first: read second, the GPU could overtake the submitted value and the lag would underflow
+		const uint64_t completedValue = m_RenderDevice.GetCompletedTimelineValue(QueueType::Graphics);
+		const uint64_t submittedValue = m_RenderDevice.GetLastSubmittedTimelineValue(QueueType::Graphics);
+
+		return {
+			.GeometryPoolStats = m_GeometryPool.CapturePoolStats(),
+			.TexturePoolStats = m_TexturePool.CapturePoolStats(),
+			.AllocatorStats = m_GPUAllocator.CaptureStats(),
+			.UploaderStats = m_GPUUploader.GetStats(),
+			.GraphicsTimelineLag = submittedValue >= completedValue ? submittedValue - completedValue : 0
+		};
+	}
+
+	void RenderManager::RenderThreadMain(RenderStats& stats)
 	{
 		CDL_PROFILE_SCOPE("RenderManager::RenderThreadMain");
+
 		// A minimized surface reports a zero extent, and a swapchain can't be created at that size
+		Timer pumpWaitTimer;
 		FramePacket* packet = m_FramePump.AquireForReading();
+		stats.Timings.PumpWaitMs = static_cast<float>(pumpWaitTimer.ElapsedMilliseconds());
 		if (!packet)
 			return;	// Closed by JoinRenderThread
 
 		CDL_PROFILE_SCOPE_METADATA(packet->FrameIndex);
+		m_GPUAllocator.UpdateFrameCount(packet->FrameIndex);
 
 		// A minimized surface reports a zero extent, and a swapchain can't be created at that size
 		glm::uvec2 surfaceSize = packet->SurfaceSize;
@@ -214,6 +248,9 @@ namespace Candle {
 	{
 		m_ResourceRegistry.RetireReleasedSlots(packet, retireValue);
 		m_ResourceRegistry.FreeRetiredSlots(m_RenderDevice.GetCompletedTimelineValue(QueueType::Graphics), packet);
+
+		// The previous frame's, since this one has yet to present; every path through RenderThreadMain releases through here
+		packet.RenderStats = m_CompletedRenderStats;
 
 		// The main thread can write into it again
 		m_FramePump.Release(packet);

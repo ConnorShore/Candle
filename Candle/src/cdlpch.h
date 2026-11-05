@@ -39,3 +39,4 @@
 #endif
 
 #include "Candle/Core/Core.h"
+#include "Candle/Core/StringUtils.h"

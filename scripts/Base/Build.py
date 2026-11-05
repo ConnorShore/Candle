@@ -184,7 +184,7 @@ def compile_project_shaders() -> int:
     return 1 if failed else 0
 
 
-VALID_COMMANDS = ("clean", "generate", "shaders", "build", "test")
+VALID_COMMANDS = ("clean", "generate", "shaders", "build", "test", "all")
 
 def main():
     commands = []
@@ -203,7 +203,7 @@ def main():
             print(f"Unknown argument: '{arg}'")
             sys.exit(1)
 
-    if test_args and "test" not in commands:
+    if test_args and "test" not in commands and "all" not in commands:
         print(f"Test arguments {test_args} given without the 'test' command.")
         sys.exit(1)
 
@@ -224,6 +224,18 @@ def main():
             if code != 0:
                 sys.exit(code)
         elif command == "test":
+            code = run_tests(configuration, test_args)
+            if code != 0:
+                sys.exit(code)
+        elif command == "all":
+            clean()
+            generate_projects()
+            code = compile_project_shaders()
+            if code != 0:
+                sys.exit(code)
+            code = build(configuration)
+            if code != 0:
+                sys.exit(code)
             code = run_tests(configuration, test_args)
             if code != 0:
                 sys.exit(code)

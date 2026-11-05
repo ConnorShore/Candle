@@ -1,4 +1,4 @@
-// VulkanUtils: conversions from engine types to Vulkan's. Headers only, so Unit: no driver needed.
+// VulkanUtils: conversions between engine types and Vulkan's. Headers only, so Unit: no driver needed.
 
 #include "TestFramework.h"
 
@@ -33,4 +33,21 @@ CDL_TEST_CASE(VulkanUtils, ToVulkanFormatMapsDataFormatsToUnorm, Unit)
 {
 	CDL_EXPECT(ToVulkanFormat(TextureFormat::Rg8, TextureColorSpace::Linear) == vk::Format::eR8G8Unorm);
 	CDL_EXPECT(ToVulkanFormat(TextureFormat::R8, TextureColorSpace::Linear) == vk::Format::eR8Unorm);
+}
+
+CDL_TEST_CASE(VulkanUtils, ToTextureFormatUndoesToVulkanFormat, Unit)
+{
+	for (const TextureFormat format : { TextureFormat::Rgba8, TextureFormat::Rg8, TextureFormat::R8 })
+		CDL_EXPECT_EQ(ToTextureFormat(ToVulkanFormat(format, TextureColorSpace::Linear)), format);
+}
+
+// TextureFormat has no colour space, so both Rgba8 variants come back the same
+CDL_TEST_CASE(VulkanUtils, ToTextureFormatDropsTheColorSpace, Unit)
+{
+	CDL_EXPECT_EQ(ToTextureFormat(vk::Format::eR8G8B8A8Srgb), TextureFormat::Rgba8);
+}
+
+CDL_TEST_CASE(VulkanUtils, ToTextureFormatKeepsUndefined, Unit)
+{
+	CDL_EXPECT_EQ(ToTextureFormat(vk::Format::eUndefined), TextureFormat::Undefined);
 }

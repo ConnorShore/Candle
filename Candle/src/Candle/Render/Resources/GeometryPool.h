@@ -36,12 +36,16 @@ namespace Candle {
 
 		MeshDrawInfo GetMeshInfo(GPUMeshHandle handle) const;
 
+		inline GPUResourcePoolStats CapturePoolStats() const { return m_Meshes.CaptureStats(); }
+
 	private:
 		struct MeshEntry
 		{
 			GPUBuffer VertexBuffer;
 			GPUBuffer IndexBuffer;
 			uint32_t IndexCount;
+
+			uint64_t GetSizeBytes() const { return VertexBuffer.GetSize() + IndexBuffer.GetSize(); }
 		};
 
 	private:

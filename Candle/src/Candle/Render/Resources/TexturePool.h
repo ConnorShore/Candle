@@ -5,9 +5,15 @@
 #include "Candle/Render/Resources/GPUResourcePool.h"
 #include "Candle/Render/Assets/TextureData.h"
 
+#include "Candle/Render/Vulkan/VulkanUtils.h"
+
+#include <glm/glm.hpp>
+
 #include <array>
 #include <span>
 #include <string>
+#include <vector>
+#include <cstdint>
 
 namespace Candle {
 
@@ -22,7 +28,10 @@ namespace Candle {
 		uint32_t Index{ std::numeric_limits<uint32_t>::max() };
 		vk::ImageView ImageView{ nullptr };
 		vk::Image Image{ nullptr };		// For barriers, when the renderer draws into a render target
+		vk::Format Format{ vk::Format::eUndefined };
 		glm::uvec2 Extent{ 0, 0 };
+		uint32_t SizeBytes{ 0 };
+		uint8_t MipLevels{ 1 };
 		bool IsRenderTarget{ false };	// Made by CreateRenderTarget, so it can be drawn into as well as sampled
 	};
 
@@ -42,7 +51,24 @@ namespace Candle {
 		std::string DebugName;
 	};
 
-	// Threading: CreateTexture, CreateRenderTarget, ReleaseTexture and IsAlive on the main thread. GetTextureInfo on the main thread for a live
+	struct TextureStats
+	{
+		GPUTextureHandle Handle;
+		std::string DebugName;
+		uint32_t SizeBytes{ 0 };
+		glm::uvec2 Extent{ 0, 0 };
+		uint8_t MipLevels{ 1 };
+		vk::Format Format{ vk::Format::eUndefined };	// Raw, since render targets have formats TextureFormat can't name
+		bool IsRenderTarget{ false };
+	};
+
+	struct TexturePoolStats
+	{
+		GPUResourcePoolStats PoolStats;
+		std::vector<TextureStats> ActiveTextures{};
+	};
+
+	// Threading: CreateTexture, CreateRenderTarget, ReleaseTexture, IsAlive and CaptureStats on the main thread. GetTextureInfo on the main thread for a live
 	//   handle, or on the render thread for a handle in the packet it is rendering, which stays valid until that frame retires.
 	//   GetDefaultTexture from any thread, since the defaults never change after construction.
 	// A released texture keeps its image until the GPU retires the frame that carried the release.
@@ -71,9 +97,12 @@ namespace Candle {
 
 		// The default handle resolves to DefaultTexture::Error; a stale one asserts, and resolves to it too outside Debug
 		TextureInfo GetTextureInfo(GPUTextureHandle handle) const;
+		TexturePoolStats CaptureStats() const;
 
 		// Created and written into the bindless table with the pool, and never released
 		inline GPUTextureHandle GetDefaultTexture(DefaultTexture texture) const { return m_DefaultTextures[static_cast<size_t>(texture)]; }
+
+		inline GPUResourcePoolStats CapturePoolStats() const { return m_Textures.CaptureStats(); }
 
 	private:
 		struct TextureEntry
@@ -81,13 +110,19 @@ namespace Candle {
 			GPUImage Image;
 			glm::uvec2 Extent;
 			bool IsRenderTarget{ false };
+
+			uint64_t GetSizeBytes() const { return Image.GetSizeBytes(); }
 		};
+
+	private:
+		void StoreDebugName(GPUTextureHandle handle, std::string name);
 
 	private:
 		GPUAllocator& m_Allocator;
 		GPUUploader& m_Uploader;
 		BindlessTable& m_BindlessTable;
 		GPUResourcePool<TextureEntry, TextureTag> m_Textures;
+		std::vector<std::string> m_DebugNames;	// Main thread only, indexed by slot. Kept out of the entries since the render thread never needs them, so it can grow.
 		std::array<GPUTextureHandle, static_cast<size_t>(DefaultTexture::Count)> m_DefaultTextures;	// After m_Textures, which the constructor creates them in
 	};
 

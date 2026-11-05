@@ -11,7 +11,7 @@
 namespace Candle {
 
 
-	enum class TextureColorSpace
+	enum class TextureColorSpace : uint8_t
 	{
 		Srgb,
 		Linear,
@@ -19,11 +19,12 @@ namespace Candle {
 
 	// Only formats every Vulkan device must sample with linear filtering, so RGB data is expanded to RGBA8, as stb does.
 	// R8 and RG8 hold data such as masks or normal XY, and their sRGB variants are optional, so they are linear only.
-	enum class TextureFormat
+	enum class TextureFormat : uint8_t
 	{
 		Rgba8,
 		Rg8,
-		R8
+		R8,
+		Undefined
 	};
 
 	// Engine textures TexturePool creates before any other, in this order, so each one's bindless index is its value

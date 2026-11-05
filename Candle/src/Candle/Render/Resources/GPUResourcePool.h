@@ -8,13 +8,26 @@
 #include <deque>
 #include <optional>
 #include <vector>
+#include <span>
+#include <concepts>
 
 namespace Candle {
 
 	class GPUResourceRegistry;
 
+	struct GPUResourcePoolStats
+	{
+		uint64_t SizeBytes{ 0 };	// The live slots' GPU memory. A released slot stops counting at once, though its memory lasts until the GPU retires it
+		uint64_t TotalReleases{ 0 };	// Only ever rises, so two captures can be diffed for a rate
+		uint32_t TotalSlots{ 0 };
+		uint32_t LiveSlots{ 0 };
+		uint32_t PendingSlots{ 0 };	// Released but not back on the free list yet: riding a packet, or waiting on the GPU
+		uint32_t FreeSlots{ 0 };	// The free list plus slots never used: what Insert can still take
+		uint32_t MaxUsedSlots{ 0 };	// The most slots ever live or pending at once. The pool panics if it needs more than TotalSlots
+	};
+
 	// Handle bookkeeping shared by every pool; GPUResourcePool<T, Tag> adds the payloads.
-	// Threading: AllocateSlot, ReleaseSlot, IsSlotAlive and RecycleSlot on the main thread; SlotHoldsGeneration, RetireSlot
+	// Threading: AllocateSlot, ReleaseSlot, IsSlotAlive, RecycleSlot, CaptureStats and GetLiveHandles on the main thread; SlotHoldsGeneration, RetireSlot
 	//   and FreeRetiredSlots on the render thread. The main thread fills a slot before its handle is first published, the
 	//   render thread reads it and destroys its payload once the GPU has retired it, and the index returns to the main
 	//   thread through RecycleSlot. Destroying a pool frees every payload it still holds, so the GPU must be idle by then.
@@ -30,21 +43,38 @@ namespace Candle {
 		void FreeRetiredSlots(uint64_t completedValue, std::vector<GPUSlotRef>& freedSlots);
 		void RecycleSlot(uint32_t index);	// Back on the free list
 
+		GPUResourcePoolStats CaptureStats() const;
+
+		uint32_t GetCapacity() const { return static_cast<uint32_t>(m_Handles.size()); }
+
 	protected:
 		GPUResourcePoolBase(GPUResourceRegistry& registry, uint32_t capacity);
 
-		GPUSlotRef AllocateSlot();
+		GPUSlotRef AllocateSlot(uint64_t sizeBytes);
 		void ReleaseSlot(uint32_t index, uint32_t generation);
 		bool IsSlotAlive(uint32_t index, uint32_t generation) const;
 		bool SlotHoldsGeneration(uint32_t index, uint32_t generation) const;	// The render thread's view of whether the slot still holds that resource
 
 		virtual void DestroyPayload(uint32_t index) = 0;
 
+		inline std::vector<std::pair<uint32_t, uint32_t>> GetLiveHandles() const
+		{
+			std::vector<std::pair<uint32_t, uint32_t>> liveHandles;
+			liveHandles.reserve(m_Handles.size());
+			for (uint32_t i = 0; i < m_Handles.size(); ++i)
+			{
+				if (m_Handles[i].Live)
+					liveHandles.push_back({ i, m_SlotGenerations[i] });
+			}
+			return liveHandles;
+		}
+
 	private:
 		struct HandleState
 		{
 			uint32_t Generation{ 0 };
 			bool Live{ false };
+			uint64_t SizeBytes{ 0 };
 		};
 
 		struct RetiringSlot
@@ -63,12 +93,19 @@ namespace Candle {
 		std::vector<HandleState> m_Handles;
 		std::vector<uint32_t> m_FreeIndices;
 		uint32_t m_NextUnused{ 0 };
+		uint32_t m_LiveCount{ 0 };
+		uint64_t m_LiveBytes{ 0 };	// Kept as a total since the main thread can't walk the payloads: the render thread destroys them
+		uint64_t m_TotalReleases{ 0 };
 
 		// Render thread only
 		std::deque<RetiringSlot> m_RetiringSlots;
 	};
 
-	template<typename T, typename Tag>
+	// Ensure the payload type implements GetSizeBytes
+	template<typename T>
+	concept GPUResourcePayload = requires(const T & payload) { { payload.GetSizeBytes() } -> std::convertible_to<uint64_t>; };
+
+	template<GPUResourcePayload T, typename Tag>
 	class GPUResourcePool final : public GPUResourcePoolBase
 	{
 	public:
@@ -82,7 +119,7 @@ namespace Candle {
 
 		inline Handle Insert(T&& payload)
 		{
-			const GPUSlotRef slot = AllocateSlot();
+			const GPUSlotRef slot = AllocateSlot(payload.GetSizeBytes());
 			m_Payloads[slot.Index].emplace(std::move(payload));
 			return { .Index = slot.Index, .Generation = slot.Generation };
 		}
@@ -102,7 +139,23 @@ namespace Candle {
 		{
 			if (!SlotHoldsGeneration(handle.Index, handle.Generation) || !m_Payloads[handle.Index])
 				return nullptr;
+
 			return &*m_Payloads[handle.Index];
+		}
+
+		inline std::vector<Handle> GetLiveHandles() const
+		{
+			const auto livePairs = GPUResourcePoolBase::GetLiveHandles();
+
+			std::vector<Handle> liveHandles;
+			liveHandles.reserve(livePairs.size());
+			for (const auto& [index, generation] : livePairs)
+			{
+				Handle handle{ .Index = index, .Generation = generation };
+				liveHandles.push_back({ .Index = index, .Generation = generation });
+			}
+
+			return std::move(liveHandles);
 		}
 
 	protected:

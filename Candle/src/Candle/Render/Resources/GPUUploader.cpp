@@ -4,6 +4,7 @@
 #include "Candle/Render/Vulkan/GPUAllocator.h"
 #include "Candle/Render/Vulkan/Image.h"
 
+#include "Candle/Core/Time.h"
 #include "Candle/Platform/Platform.h"
 
 namespace Candle {
@@ -53,8 +54,7 @@ namespace Candle {
 			});
 
 		// The pool can't be reset while the previous upload may still be executing
-		m_RenderDevice.WaitFor(QueueType::Graphics, m_LastUploadValue);
-		m_StagingDeletions.Drain(QueueType::Graphics, m_LastUploadValue);
+		WaitForLastUpload();
 		m_CommandPool.reset();
 		m_CommandBuffer.begin({ .flags = vk::CommandBufferUsageFlagBits::eOneTimeSubmit });
 
@@ -86,6 +86,9 @@ namespace Candle {
 		vk::CommandBufferSubmitInfo commandBufferInfo{ .commandBuffer = *m_CommandBuffer };
 		m_LastUploadValue = m_RenderDevice.Submit(QueueType::Graphics, { .CommandBuffers = { &commandBufferInfo, 1 } });
 		m_StagingDeletions.Enqueue(QueueType::Graphics, m_LastUploadValue, std::move(stagingBuffer));
+
+		++m_Stats.TotalUploads;
+		m_Stats.TotalBytes += totalSize;
 	}
 
 	void GPUUploader::UploadImage(const ImageUploadSpec upload, vk::PipelineStageFlags2 dstStages, vk::AccessFlags2 dstAccess)
@@ -109,8 +112,7 @@ namespace Candle {
 		CDL_CORE_ASSERT(result == VK_SUCCESS, "Failed to write the staging buffer");
 
 		// Wait for the previous upload to finish, then reset the command pool and begin a new command buffer
-		m_RenderDevice.WaitFor(QueueType::Graphics, m_LastUploadValue);
-		m_StagingDeletions.Drain(QueueType::Graphics, m_LastUploadValue);
+		WaitForLastUpload();
 		m_CommandPool.reset();
 		m_CommandBuffer.begin({ .flags = vk::CommandBufferUsageFlagBits::eOneTimeSubmit });
 
@@ -156,12 +158,24 @@ namespace Candle {
 
 		// Free staging buffer
 		m_StagingDeletions.Enqueue(QueueType::Graphics, m_LastUploadValue, std::move(stagingBuffer));
+
+		++m_Stats.TotalUploads;
+		m_Stats.TotalBytes += totalSize;
 	}
 
 	void GPUUploader::FreeCompletedStagingBuffers()
 	{
 		CDL_CORE_ASSERT(Platform::IsMainThread(), "GPUUploader is main thread only");
 		m_StagingDeletions.Drain(QueueType::Graphics, m_RenderDevice.GetCompletedTimelineValue(QueueType::Graphics));
+	}
+
+	void GPUUploader::WaitForLastUpload()
+	{
+		Timer waitTimer;
+		m_RenderDevice.WaitFor(QueueType::Graphics, m_LastUploadValue);
+		m_Stats.TotalWaitMs += waitTimer.ElapsedMilliseconds();
+
+		m_StagingDeletions.Drain(QueueType::Graphics, m_LastUploadValue);
 	}
 
 }

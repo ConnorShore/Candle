@@ -108,7 +108,7 @@ validation wouldn't catch it.
 
 | State | Owner |
 |---|---|
-| Handle state (generation, live flag), free list, registry's pending releases | Main thread only |
+| Handle state (generation, live flag, size), free list, stats counters, registry's pending releases | Main thread only |
 | A slot's payload and generation copy | Main writes it in `Insert`, before the handle is ever in a packet. Render reads it, and destroys it in `FreeRetiredSlots`. The index goes back to main through the packet. One writer at a time. |
 | Each pool's retiring list | Render thread only |
 | `ReleasedSlots` / `RecycledSlots` | Handed between threads by `FramePump` |
@@ -141,10 +141,13 @@ a packet that still draws the mesh.
 
 ## Adding a new resource kind
 
-1. A payload struct whose members free themselves (`GPUBuffer`, `vk::raii::*`), so destroying it frees everything.
+1. A payload struct whose members free themselves (`GPUBuffer`, `vk::raii::*`), so destroying it frees everything. It
+   also needs a `GetSizeBytes()`, which the `GPUResourcePayload` concept requires and the pool counts into its stats.
 2. A tag and handle alias in `GPUHandles.h`, e.g. `struct TextureTag {}; using GPUTextureHandle = GPUHandle<TextureTag>;`.
 3. An owning class (e.g. `TexturePool`) with a private `GPUResourcePool<Payload, TextureTag>`, built in `RenderManager`
    with `m_ResourceRegistry`. It exposes create, release and alive checks, plus whatever view the renderer needs.
+4. To appear in the GPU resource inspector, a `CapturePoolStats` on the owning class, a field for it in
+   `GPUResourceStats` filled by `RenderManager::CaptureResourceStats`, and a place in `GPUResourceInspectorPanel`.
 
 The packet, the registry and `RenderManager`'s frame loop don't change.
 

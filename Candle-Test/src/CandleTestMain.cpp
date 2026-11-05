@@ -33,6 +33,13 @@ namespace {
 		return std::getenv(envName) != nullptr;
 	}
 
+	// What the last test logged with no logger running is still in the ring, and would reach the next test's sink
+	void DiscardPendingLogs()
+	{
+		Candle::Logger::Init({ .LogToConsole = false });
+		Candle::Logger::Shutdown();
+	}
+
 }
 
 int main(int argc, char** argv)
@@ -50,6 +57,7 @@ int main(int argc, char** argv)
 	Candle::Test::RunOptions options;
 	options.TypeFilter = ReadOption(argc, argv, "--filter=", "CDL_TEST_FILTER");
 	options.NameFilter = ReadOption(argc, argv, "--run=", "CDL_TEST_RUN");
+	options.BeforeEachTest = DiscardPendingLogs;
 
 	return Candle::Test::RunAll(options) == 0 ? 0 : 1;
 }

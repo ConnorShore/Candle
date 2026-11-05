@@ -233,8 +233,9 @@ namespace Candle {
 			.signalSemaphoreInfoCount = static_cast<uint32_t>(desc.Signals.size() + 1),
 			.pSignalSemaphoreInfos = signals.data() };
 
+		// Stored before the submit, so whoever sees the GPU reach a value can't then load an older one
 		ScopedLock<AdaptiveSpinLock> lock(state.SubmitLock);
-		timelineSignal.value = ++state.LastSubmitted;
+		timelineSignal.value = state.LastSubmitted.fetch_add(1, std::memory_order_release) + 1;
 		state.Queue.submit2(submitInfo);
 		return timelineSignal.value;
 	}
@@ -261,6 +262,11 @@ namespace Candle {
 	uint64_t RenderDevice::GetCompletedTimelineValue(QueueType queue) const
 	{
 		return m_Queues[std::to_underlying(queue)]->Timeline.getCounterValue();
+	}
+
+	uint64_t RenderDevice::GetLastSubmittedTimelineValue(QueueType queue) const
+	{
+		return m_Queues[std::to_underlying(queue)]->LastSubmitted.load(std::memory_order_acquire);
 	}
 
 	void RenderDevice::WaitIdle()

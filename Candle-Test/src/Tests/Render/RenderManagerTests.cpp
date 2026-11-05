@@ -300,6 +300,62 @@ CDL_TEST_CASE(RenderManager, ReleasesStillRetireWhileFramesAreSkipped, Gpu)
 	ExpectNoVulkanDebugMessages(logs);
 }
 
+// Runs on the main thread with the render thread live, which is how Application calls it each frame.
+CDL_TEST_CASE(RenderManager, CaptureResourceStatsSeesANewMeshAndItsUpload, Gpu)
+{
+	SkipUnlessRendererShadersCompiled();
+
+	LoggerFixture logs(LogLevel::Warn, kRenderChannelMask);
+	{
+		TestRenderManager test;
+		const GPUResourceStats before = test.Manager.CaptureResourceStats();
+
+		test.CreateTriangle();
+		const GPUResourceStats after = test.Manager.CaptureResourceStats();
+
+		CDL_EXPECT_EQ(after.GeometryPoolStats.LiveSlots, before.GeometryPoolStats.LiveSlots + 1);
+		CDL_EXPECT_GT(after.GeometryPoolStats.SizeBytes, before.GeometryPoolStats.SizeBytes);
+		CDL_EXPECT_EQ(after.UploaderStats.TotalUploads, before.UploaderStats.TotalUploads + 1);
+		CDL_EXPECT_GT(after.AllocatorStats.HeapCount, 0u);
+	}
+	ExpectNoVulkanDebugMessages(logs);
+}
+
+// The render thread writes its stats into each packet it releases, so the main thread sees them on acquiring one
+CDL_TEST_CASE(RenderManager, RenderStatsRideThePacketsBackToTheMainThread, Gpu)
+{
+	SkipUnlessRendererShadersCompiled();
+
+	LoggerFixture logs(LogLevel::Warn, kRenderChannelMask);
+	{
+		TestRenderManager test;
+		CDL_EXPECT_EQ(test.Manager.GetRenderStats().Timings.TotalMs, 0.0f);
+
+		SubmitFrames(test, kReleaseRoundTrip, test.CreateTriangle(), WindowSurface(test.AppWindow));
+
+		const ThreadFrameTimings timings = test.Manager.GetRenderStats().Timings;
+		CDL_EXPECT_GT(timings.TotalMs, 0.0f);
+		CDL_EXPECT_GE(timings.BusyMs(), 0.0f);
+	}
+	ExpectNoVulkanDebugMessages(logs);
+}
+
+// Every early return in RenderThreadMain has to finish the frame's stats, or the frame graph freezes while minimized
+CDL_TEST_CASE(RenderManager, RenderStatsKeepComingWhileFramesAreSkipped, Gpu)
+{
+	SkipUnlessRendererShadersCompiled();
+
+	LoggerFixture logs(LogLevel::Warn, kRenderChannelMask);
+	{
+		TestRenderManager test;
+
+		SubmitFrames(test, kReleaseRoundTrip, test.CreateTriangle(), { .Size = test.AppWindow.GetSize(), .Minimized = true });
+
+		CDL_EXPECT_GT(test.Manager.GetRenderStats().Timings.TotalMs, 0.0f);
+	}
+	ExpectNoVulkanDebugMessages(logs);
+}
+
 // The application's path for meshes: RenderManager hands its mesh handler to the AssetManager, which uploads on load.
 CDL_TEST_CASE(RenderManager, RegisteredHandlersUploadMeshAssets, Gpu)
 {

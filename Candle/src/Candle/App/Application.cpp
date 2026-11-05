@@ -6,6 +6,8 @@
 
 #include "Candle/Platform/Platform.h"
 
+#include "Candle/Debug/DebugUIManager.h"
+
 // Temporary, until we have a better way to register asset handlers //
 #include "Candle/Render/Assets/MeshAsset.h"
 #include "Candle/Render/Assets/Texture.h"
@@ -33,7 +35,12 @@ namespace Candle {
 	Application::PlatformScope::PlatformScope() { Platform::Init(); }
 	Application::PlatformScope::~PlatformScope() { Platform::Shutdown(); }
 
-	Application::LoggerScope::LoggerScope(const LoggerSpecification& spec) { Logger::Init(spec); }
+	Application::LoggerScope::LoggerScope(const LoggerSpecification& spec) 
+	{ 
+		MainThreadSink = &Logger::AddSink(ScopedPtr<MainThreadLogSink>::Create(1024));
+
+		Logger::Init(spec); 
+	}
 	Application::LoggerScope::~LoggerScope() { Logger::Shutdown(); }
 
 	Application::WindowingScope::WindowingScope(bool enabled) : Enabled(enabled)
@@ -54,6 +61,8 @@ namespace Candle {
 		, m_Window(m_Specification.Headless ? ScopedPtr<Window>() : ScopedPtr<Window>::Create(m_Specification.WindowSpec))
 		, m_RenderManager(m_Specification.Headless ? ScopedPtr<RenderManager>() : ScopedPtr<RenderManager>::Create(m_Specification.RenderSpec, m_Specification.AppInfo, m_Specification.EngineAssetDir, *m_Window, m_JobSystem))
 		, m_GuiSystem(m_Specification.Headless ? ScopedPtr<GuiSystem>() : ScopedPtr<GuiSystem>::Create(*m_Window, m_RenderManager->GetTexturePool()))
+		, m_DebugUIManager(m_Specification.Headless ? ScopedPtr<DebugUIManager>() : ScopedPtr<DebugUIManager>::Create(m_ConsoleManager, *m_LoggerScope.MainThreadSink, m_RenderManager->GetTexturePool()))
+		, m_ConsoleManager()
 		, m_RenderContext(m_RenderManager.Get(), m_Specification.RenderSpec.RenderToSwapChain, { m_Specification.WindowSpec.Width, m_Specification.WindowSpec.Height })
 	{
 		CDL_CORE_INFO(LogChannel::Application, "Application created: {}", m_Specification.AppInfo.Name);
@@ -83,6 +92,7 @@ namespace Candle {
 		while (!IsQuitRequested())
 		{
 			CDL_PROFILE_SCOPE("Application::Run");
+			ThreadFrameTimings mainTimings;
 
 			// Process events
 			HandlePlatformEvents();
@@ -90,8 +100,12 @@ namespace Candle {
 			// Moves inside the fixed-step tick loop once there is one, so each tick consumes the edges exactly once
 			InputSnapshot inputSnapshot = m_InputSystem.CaptureSnapshot();
 
+			// Dispatch the logger's main thread sink
+			if (m_LoggerScope.MainThreadSink)
+				m_LoggerScope.MainThreadSink->Dispatch();
+
 			// Call the GUI system to start a new frame
-			if (m_GuiSystem)
+			if (!m_Specification.Headless)
 				m_GuiSystem->StartFrame();
 
 			// Call the application update callback
@@ -99,22 +113,44 @@ namespace Candle {
 			UpdateContext updateContext{ appContext, m_FrameStats.DeltaTime, inputSnapshot, m_RenderContext };
 			OnUpdate(updateContext);
 
-			// Call the GUI system to end the frame
-			if (m_GuiSystem)
+			// TODO: Implement game logic //
+
+			if (!m_Specification.Headless)
+			{
+				// Capture the render stats from the last completed frame
+				RenderStats renderStats = m_RenderManager->GetRenderStats();
+				GPUResourceStats resourceStats = m_RenderManager->CaptureResourceStats();
+
+				// Call the debug UI manager to update and render its panels
+				DebugContext debugContext{
+					.DeltaTime = m_FrameStats.DeltaTime,
+					.Input = m_DebugInputSystem.CaptureSnapshot(),
+					.Main = m_LastMainTimings,
+					.Render = renderStats,
+					.Resources = resourceStats
+				};
+
+				m_DebugUIManager->OnUpdate(debugContext);
+				m_DebugUIManager->OnRender(debugContext);
+
+				// Call the GUI system to end the frame
 				m_GuiSystem->EndFrame();
 
-			// TODO: Implement game logic
-			if (m_RenderManager)
-			{
-				CDL_PROFILE_SCOPE("Application::Run::FramePacket");
-				FramePacket& packet = m_RenderManager->BeginFramePacket();
-				CDL_PROFILE_SCOPE_METADATA(packet.FrameIndex);
-				ExtractToFramePacket(packet);
-				m_RenderManager->SubmitFramePacket(packet);
+				// Submit a frame packet to the render thread
+				{
+					CDL_PROFILE_SCOPE("Application::Run::FramePacket");
+					Timer pumpWaitTimer;
+					FramePacket& packet = m_RenderManager->BeginFramePacket();
+					mainTimings.PumpWaitMs = static_cast<float>(pumpWaitTimer.ElapsedMilliseconds());
+					CDL_PROFILE_SCOPE_METADATA(packet.FrameIndex);
 
-				// Nothing is presented while minimized, so nothing else holds the loop back
-				if (m_Window->IsMinimized())
-					Platform::SleepCurrentThread(10);
+					ExtractToFramePacket(packet);
+					m_RenderManager->SubmitFramePacket(packet);
+
+					// Nothing is presented while minimized, so nothing else holds the loop back
+					if (m_Window->IsMinimized())
+						Platform::SleepCurrentThread(10);
+				}
 			}
 
 			// Update the frame stats
@@ -124,22 +160,9 @@ namespace Candle {
 			m_FrameStats.FrameCount++;
 			startTick = endTick;
 
-			// Display log every 1/2 second, averaged over the window: one frame's 1/dt depends on where it lands in the present cycle
-			m_FrameStats.TimeSinceLastLog += m_FrameStats.DeltaTime;
-			m_FrameStats.FramesSinceLastLog++;
-			m_FrameStats.WorstFrameTime = std::max(m_FrameStats.WorstFrameTime, m_FrameStats.DeltaTime.GetMilliseconds());
-			if (m_FrameStats.TimeSinceLastLog >= 0.5f)
-			{
-				CDL_CORE_INFO(LogChannel::Application, "Application running: {}; Avg FPS: {:.0f} ({:.2f} ms), worst frame: {:.2f} ms",
-					m_Specification.AppInfo.Name,
-					m_FrameStats.FramesSinceLastLog / m_FrameStats.TimeSinceLastLog,
-					m_FrameStats.TimeSinceLastLog * 1000.0 / m_FrameStats.FramesSinceLastLog,
-					m_FrameStats.WorstFrameTime);
-
-				m_FrameStats.TimeSinceLastLog = 0.0f;
-				m_FrameStats.FramesSinceLastLog = 0;
-				m_FrameStats.WorstFrameTime = 0.0f;
-			}
+			// DeltaTime already spans the whole iteration, end tick to end tick, so it is the main thread's total
+			mainTimings.TotalMs = m_FrameStats.DeltaTime.GetMilliseconds();
+			m_LastMainTimings = mainTimings;
 
 			CDL_PROFILE_FRAME_NAMED("SimFrame");
 		}
@@ -169,9 +192,19 @@ namespace Candle {
 				[&](const WindowMinimized& e) {},
 				[&](const InputEvent& e) 
 				{
+					// Let the debug UI manager consume the event first so it can toggle visibility of the debug UI before the GUI system or input system consume it
+					if (m_DebugUIManager)
+						m_DebugUIManager->ConsumeEvent(e);
+
+					// Ahead of the gate, so the console's hotkey can still close it while its input box has the keyboard
+					m_DebugInputSystem.ConsumeEvent(e);
+
+					// Releases always pass, or a key held when the GUI took focus would stay down for the game
+					const bool guiWantsInput = m_GuiSystem && m_GuiSystem->WantsInput(e);
 					const bool isRelease = std::holds_alternative<KeyReleasedEvent>(e) || std::holds_alternative<MouseButtonReleasedEvent>(e);
-					if (!isRelease && m_GuiSystem && m_GuiSystem->WantsInput(e))
-							return;
+					if (!isRelease && guiWantsInput)
+						return;
+
 					m_InputSystem.ConsumeEvent(e);
 				}
 				}, evt);

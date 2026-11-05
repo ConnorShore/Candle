@@ -36,6 +36,7 @@ namespace Candle {
 		// Move constructor and assignment operator
 		GPUImage(GPUImage&& other) noexcept
 			: m_Allocator(other.m_Allocator), m_Image(other.m_Image), m_ImageView(std::move(other.m_ImageView)), m_Allocation(other.m_Allocation)
+			, m_Format(other.m_Format), m_MipLevels(other.m_MipLevels)
 		{
 			other.m_Image = nullptr;
 			other.m_Allocator = nullptr;
@@ -49,8 +50,9 @@ namespace Candle {
 				m_Allocator = other.m_Allocator;
 				m_Image = other.m_Image;
 				m_ImageView = std::move(other.m_ImageView);
-				m_Allocator = other.m_Allocator;
 				m_Allocation = other.m_Allocation;
+				m_Format = other.m_Format;
+				m_MipLevels = other.m_MipLevels;
 				other.m_Allocator = nullptr;
 				other.m_Allocation = nullptr;
 				other.m_Image = nullptr;
@@ -64,6 +66,10 @@ namespace Candle {
 		inline vk::ImageView GetImageView() const { return *m_ImageView; }	// Non-owning, so handing it out leaves the image const
 		inline VmaAllocation GetAllocation() const { return m_Allocation; }
 
+		inline vk::Format GetFormat() const { return m_Format; }
+		inline uint8_t GetMipLevels() const { return m_MipLevels; }
+		uint32_t GetSizeBytes() const;
+
 	private:
 		void Create(const GPUImageSpec& spec, GPUAllocator& allocator);
 		void Destroy();
@@ -73,6 +79,9 @@ namespace Candle {
 		vk::Image m_Image{ nullptr };
 		VmaAllocation m_Allocation{ nullptr };
 		vk::raii::ImageView m_ImageView{ nullptr };
+
+		vk::Format m_Format{ vk::Format::eUndefined };
+		uint8_t m_MipLevels{ 1 };
 	};
 
 }

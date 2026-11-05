@@ -6,6 +6,7 @@
 #include "Candle/Render/Vulkan/BindlessTable.h"
 
 #include "Candle/Render/Vulkan/VulkanUtils.h"
+#include "Candle/Platform/Platform.h"
 
 namespace Candle {
 
@@ -17,8 +18,8 @@ namespace Candle {
 		{
 			switch (texture)
 			{
-				case DefaultTexture::Error: return { std::byte{ 255 }, std::byte{ 0 }, std::byte{ 255 }, std::byte{ 255 } };	// No real texture is flat magenta
-				default: break;
+			case DefaultTexture::Error: return { std::byte{ 255 }, std::byte{ 0 }, std::byte{ 255 }, std::byte{ 255 } };	// No real texture is flat magenta
+			default: break;
 			}
 			std::unreachable();	// Not constexpr, so a DefaultTexture with no case fails kDefaultTexels' constant evaluation
 		}
@@ -29,7 +30,7 @@ namespace Candle {
 			for (size_t i = 0; i < texels.size(); ++i)
 				texels[i] = GetDefaultTexel(static_cast<DefaultTexture>(i));
 			return texels;
-		}();
+			}();
 	}
 
 	TexturePool::TexturePool(GPUAllocator& allocator, GPUUploader& uploader, GPUResourceRegistry& registry, BindlessTable& bindlessTable)
@@ -64,13 +65,14 @@ namespace Candle {
 			.DestinationLayout = vk::ImageLayout::eShaderReadOnlyOptimal,
 			.Extent = spec.Extent
 		};
-		
+
 		m_Uploader.UploadImage(uploadSpec,
 			vk::PipelineStageFlagBits2::eVertexShader | vk::PipelineStageFlagBits2::eComputeShader | vk::PipelineStageFlagBits2::eFragmentShader,
 			vk::AccessFlagBits2::eShaderSampledRead);
 
 		vk::ImageView view = image.GetImageView();
 		GPUTextureHandle handle = m_Textures.Insert(TextureEntry{ .Image = std::move(image), .Extent = spec.Extent });
+		StoreDebugName(handle, std::move(spec.DebugName));
 
 		// Published here so no texture can be handed out before a shader can sample it
 		m_BindlessTable.WriteTexture(handle.Index, view);
@@ -91,6 +93,7 @@ namespace Candle {
 
 		vk::ImageView view = image.GetImageView();
 		GPUTextureHandle handle = m_Textures.Insert(TextureEntry{ .Image = std::move(image), .Extent = spec.Extent, .IsRenderTarget = true });
+		StoreDebugName(handle, std::move(spec.DebugName));
 
 		m_BindlessTable.WriteTexture(handle.Index, view);
 		return handle;
@@ -127,9 +130,47 @@ namespace Candle {
 			.Index = handle.Index,
 			.ImageView = entry->Image.GetImageView(),
 			.Image = entry->Image.GetImage(),
+			.Format = entry->Image.GetFormat(),
 			.Extent = entry->Extent,
+			.SizeBytes = entry->Image.GetSizeBytes(),
+			.MipLevels = entry->Image.GetMipLevels(),
 			.IsRenderTarget = entry->IsRenderTarget
 		};
+	}
+
+	TexturePoolStats TexturePool::CaptureStats() const
+	{
+		CDL_CORE_ASSERT(Platform::IsMainThread(), "TexturePool::CaptureStats must be called on the main thread");
+
+		const std::vector<GPUTextureHandle> liveHandles = m_Textures.GetLiveHandles();
+
+		std::vector<TextureStats> activeTextures;
+		activeTextures.reserve(liveHandles.size());
+		for (const GPUTextureHandle& handle : liveHandles)
+		{
+			const TextureInfo info = GetTextureInfo(handle);
+			activeTextures.push_back(TextureStats{
+				.Handle = handle,
+				.DebugName = m_DebugNames[handle.Index],
+				.SizeBytes = info.SizeBytes,
+				.Extent = info.Extent,
+				.MipLevels = info.MipLevels,
+				.Format = info.Format,
+				.IsRenderTarget = info.IsRenderTarget });
+		}
+
+		return TexturePoolStats{
+			.PoolStats = m_Textures.CaptureStats(),
+			.ActiveTextures = std::move(activeTextures) };
+	}
+
+	void TexturePool::StoreDebugName(GPUTextureHandle handle, std::string name)
+	{
+		// Slots are handed out from the bottom, so this grows with the pool's high-water mark rather than its capacity
+		if (handle.Index >= m_DebugNames.size())
+			m_DebugNames.resize(handle.Index + 1);
+
+		m_DebugNames[handle.Index] = std::move(name);
 	}
 
 }

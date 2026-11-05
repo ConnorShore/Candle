@@ -8,7 +8,9 @@
 #include <Candle/Render/Resources/GPUResourcePool.h>
 #include <Candle/Render/Resources/GPUResourceRegistry.h>
 
+#include <algorithm>
 #include <cstdint>
+#include <vector>
 
 using namespace Candle;
 using Candle::Test::Type::Unit;
@@ -23,6 +25,8 @@ namespace {
 		explicit Payload(int value) : Value(value) { ++s_Alive; }
 		Payload(Payload&& other) noexcept : Value(other.Value) { ++s_Alive; }
 		~Payload() { --s_Alive; }
+
+		uint64_t GetSizeBytes() const { return static_cast<uint64_t>(Value); }
 
 		int Value;
 	};
@@ -214,6 +218,112 @@ CDL_TEST_CASE(GPUResourcePool, FreesExactlyTheSlotsTheGPUHasReached, Unit)
 	registry.FreeRetiredSlots(2, packet);
 	CDL_EXPECT_EQ(packet.RecycledSlots.size(), 2u);
 	CDL_EXPECT_EQ(Payload::s_Alive, 1);
+}
+
+// The stats are the main thread's view, so a released slot leaves Live at once but only counts as Free again once it is
+// recycled, however long the GPU takes to reach it.
+CDL_TEST_CASE(GPUResourcePool, StatsCountAReleasedSlotAsPendingUntilItIsRecycled, Unit)
+{
+	GPUResourceRegistry registry;
+	TestPool pool(registry, kCapacity);
+
+	const GPUResourcePoolStats empty = pool.CaptureStats();
+	CDL_EXPECT_EQ(empty.TotalSlots, kCapacity);
+	CDL_EXPECT_EQ(empty.LiveSlots, 0u);
+	CDL_EXPECT_EQ(empty.PendingSlots, 0u);
+	CDL_EXPECT_EQ(empty.FreeSlots, kCapacity);
+
+	pool.Insert(Payload(1));
+	pool.Insert(Payload(2));
+	pool.Release(pool.Insert(Payload(3)));
+	const GPUResourcePoolStats released = pool.CaptureStats();
+	CDL_EXPECT_EQ(released.LiveSlots, 2u);
+	CDL_EXPECT_EQ(released.PendingSlots, 1u);
+	CDL_EXPECT_EQ(released.FreeSlots, kCapacity - 3);
+
+	RunFrame(registry, 1, 0);
+	CDL_EXPECT_EQ(pool.CaptureStats().PendingSlots, 1u);
+
+	RunFrame(registry, 2, 1);
+	const GPUResourcePoolStats recycled = pool.CaptureStats();
+	CDL_EXPECT_EQ(recycled.LiveSlots, 2u);
+	CDL_EXPECT_EQ(recycled.PendingSlots, 0u);
+	CDL_EXPECT_EQ(recycled.FreeSlots, kCapacity - 2);
+}
+
+// A released payload belongs to the render thread, so its bytes leave the total at the release, not when it is destroyed.
+CDL_TEST_CASE(GPUResourcePool, StatsCountTheBytesOfLiveSlotsOnly, Unit)
+{
+	GPUResourceRegistry registry;
+	TestPool pool(registry, kCapacity);
+	pool.Insert(Payload(100));
+	const TestPool::Handle released = pool.Insert(Payload(20));
+	CDL_EXPECT_EQ(pool.CaptureStats().SizeBytes, 120u);
+
+	pool.Release(released);
+	CDL_EXPECT_EQ(pool.CaptureStats().SizeBytes, 100u);
+
+	RunFrame(registry, 1, 1);
+	CDL_EXPECT_EQ(pool.CaptureStats().SizeBytes, 100u);
+}
+
+// A pool panics when it runs out, which pending slots can cause as easily as live ones, so the peak counts both.
+CDL_TEST_CASE(GPUResourcePool, MaxUsedSlotsCountsPendingSlotsAndNeverFalls, Unit)
+{
+	GPUResourceRegistry registry;
+	TestPool pool(registry, kCapacity);
+	CDL_EXPECT_EQ(pool.CaptureStats().MaxUsedSlots, 0u);
+
+	pool.Release(pool.Insert(Payload(1)));
+	pool.Insert(Payload(2));
+	CDL_EXPECT_EQ(pool.CaptureStats().MaxUsedSlots, 2u);
+
+	RunFrame(registry, 1, 1);
+	CDL_EXPECT_EQ(pool.CaptureStats().MaxUsedSlots, 2u);
+
+	pool.Insert(Payload(3));	// Takes the recycled slot, so nothing new is used
+	CDL_EXPECT_EQ(pool.CaptureStats().MaxUsedSlots, 2u);
+
+	pool.Insert(Payload(4));
+	CDL_EXPECT_EQ(pool.CaptureStats().MaxUsedSlots, 3u);
+}
+
+// The inspector diffs two captures for a rate, so the total must keep counting once the slots are reused.
+CDL_TEST_CASE(GPUResourcePool, TotalReleasesKeepsCountingThroughSlotReuse, Unit)
+{
+	GPUResourceRegistry registry;
+	TestPool pool(registry, kCapacity);
+	CDL_EXPECT_EQ(pool.CaptureStats().TotalReleases, 0u);
+
+	pool.Release(pool.Insert(Payload(1)));
+	CDL_EXPECT_EQ(pool.CaptureStats().TotalReleases, 1u);
+
+	RunFrame(registry, 1, 1);
+	pool.Release(pool.Insert(Payload(2)));
+	CDL_EXPECT_EQ(pool.CaptureStats().TotalReleases, 2u);
+}
+
+// The inspector lists live slots by handle, so a released one must drop out at once and a reused one carry its new generation.
+CDL_TEST_CASE(GPUResourcePool, LiveHandlesAreExactlyTheLiveSlots, Unit)
+{
+	GPUResourceRegistry registry;
+	TestPool pool(registry, kCapacity);
+	const TestPool::Handle kept = pool.Insert(Payload(1));
+	const TestPool::Handle released = pool.Insert(Payload(2));
+	pool.Release(released);
+
+	const std::vector<TestPool::Handle> afterRelease = pool.GetLiveHandles();
+	CDL_CHECK_EQ(afterRelease.size(), 1u);
+	CDL_EXPECT(afterRelease[0] == kept);
+
+	RunFrame(registry, 1, 1);
+	const TestPool::Handle reused = pool.Insert(Payload(3));
+	CDL_CHECK_EQ(reused.Index, released.Index);
+
+	const std::vector<TestPool::Handle> afterReuse = pool.GetLiveHandles();
+	CDL_CHECK_EQ(afterReuse.size(), 2u);
+	CDL_EXPECT(std::ranges::find(afterReuse, reused) != afterReuse.end());
+	CDL_EXPECT(std::ranges::find(afterReuse, released) == afterReuse.end());
 }
 
 // The GPU is idle by the time a pool is destroyed, so it frees whatever it still holds: live, retiring or just released.

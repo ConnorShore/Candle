@@ -24,6 +24,14 @@ namespace Candle {
 		glm::uvec2 Extent;
 	};
 
+	// Running totals, so two captures can be diffed for a rate
+	struct GPUUploaderStats
+	{
+		uint64_t TotalUploads{ 0 };
+		uint64_t TotalBytes{ 0 };
+		double TotalWaitMs{ 0.0 };	// Time the main thread spent blocked on the upload before each one
+	};
+
 	// Records and submits one-off copies on the graphics queue.
 	// Threading: main thread only; it owns its command pool.
 	class GPUUploader
@@ -44,6 +52,11 @@ namespace Candle {
 
 		void FreeCompletedStagingBuffers();	// Frees the staging buffers of uploads the GPU has finished
 
+		inline const GPUUploaderStats& GetStats() const { return m_Stats; }
+
+	private:
+		void WaitForLastUpload();
+
 	private:
 		RenderDevice& m_RenderDevice;
 		GPUAllocator& m_Allocator;
@@ -52,6 +65,7 @@ namespace Candle {
 
 		DeletionQueue m_StagingDeletions;
 		uint64_t m_LastUploadValue{ 0 };
+		GPUUploaderStats m_Stats;
 	};
 
 }

@@ -1,22 +1,29 @@
 #pragma once
 
 #include "Candle/Core/Core.h"
-#include "Candle/App/ApplicationSpecification.h"
 #include "Candle/Core/Time.h"
+#include "Candle/Core/Job/JobSystem.h"
+#include "Candle/Core/FrameTimings.h"
+#include "Candle/Core/MainThreadLogSink.h"
+
+#include "Candle/App/ApplicationSpecification.h"
 #include "Candle/Platform/Window.h"
 #include "Candle/World/World.h"
+
 #include "Candle/Render/GUI/GuiSystem.h"
 #include "Candle/Render/RenderContext.h"
 
 #include "Candle/Asset/AssetManager.h"
 #include "Candle/Input/InputSystem.h"
-#include "Candle/Core/Job/JobSystem.h"
+
+#include "Candle/Debug/ConsoleManager.h"
 
 #include <atomic>
 
 namespace Candle {
 
 	class RenderManager;
+	class DebugUIManager;
 	struct FramePacket;
 
 	struct ApplicationContext
@@ -61,16 +68,27 @@ namespace Candle {
 			uint64_t FrameCount = 0;
 			TimeStep DeltaTime = 0.0f;
 			double TotalTime = 0.0f;
-
-			// Accumulated since the last FPS log, then reset
-			double TimeSinceLastLog = 0.0f;
-			uint32_t FramesSinceLastLog = 0;
-			float WorstFrameTime = 0.0f;	// Milliseconds
 		};
 
-		struct PlatformScope { PlatformScope(); ~PlatformScope(); };
-		struct LoggerScope { explicit LoggerScope(const LoggerSpecification& spec); ~LoggerScope(); };
-		struct WindowingScope { explicit WindowingScope(bool enabled); ~WindowingScope(); bool Enabled; };
+		struct PlatformScope 
+		{ 
+			PlatformScope();
+			~PlatformScope(); 
+		};
+		struct LoggerScope 
+		{ 
+			MainThreadLogSink* MainThreadSink{ nullptr };
+
+			explicit LoggerScope(const LoggerSpecification& spec); 
+			~LoggerScope(); 
+		};
+		struct WindowingScope 
+		{
+			bool Enabled;
+
+			explicit WindowingScope(bool enabled);
+			~WindowingScope();
+		};
 
     private:
 		// Declared in startup order so that they are destroyed in reverse order
@@ -79,10 +97,13 @@ namespace Candle {
 		LoggerScope m_LoggerScope;
 		WindowingScope m_WindowingScope;			// After the logger, so a backend failure can be logged
 		ScopedPtr<Window> m_Window;					// Empty when headless
-		InputSystem m_InputSystem;					// Never fed when headless, since nothing is pumped
+		InputSystem m_InputSystem;					// The game's input, minus what the GUI captured. Never fed when headless, since nothing is pumped
+		InputSystem m_DebugInputSystem;				// Every event, for the debug UI. Never fed when headless either
 		JobSystem m_JobSystem;
 		ScopedPtr<RenderManager> m_RenderManager;	// Empty when headless
 		ScopedPtr<GuiSystem> m_GuiSystem;			// Empty when headless
+		ConsoleManager m_ConsoleManager;			// Always present, even when headless, so the application can log and execute commands
+		ScopedPtr<DebugUIManager> m_DebugUIManager;	// Empty when headless
 		RenderContext m_RenderContext;				// After the render manager, which it releases its output target through
 		AssetManager m_AssetManager;
 
@@ -92,6 +113,8 @@ namespace Candle {
 		FrameStats m_FrameStats;
 
 		std::vector<PlatformEvent> m_FrameEvents;
+
+		ThreadFrameTimings m_LastMainTimings;	// Main thread only: its last completed frame, for the debug UI
 	};
 
 	ScopedPtr<Application> CreateApplication(int argc, char** argv);

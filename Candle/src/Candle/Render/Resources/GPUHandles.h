@@ -13,6 +13,7 @@ namespace Candle {
 		uint32_t Generation{ 0 };
 
 		inline bool IsValid() const { return Index != std::numeric_limits<uint32_t>::max(); }
+		bool operator==(const GPUHandle&) const = default;
 	};
 
 	struct MeshTag {};
