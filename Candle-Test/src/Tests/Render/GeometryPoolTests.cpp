@@ -44,6 +44,21 @@ CDL_TEST_CASE(GeometryPool, CreateMeshReturnsAValidHandleAndItsDrawInfo, Gpu)
 	ExpectNoVulkanDebugMessages(logs);
 }
 
+// A mesh is two buffers, and both stop counting at the release even though the frame may still be drawing them.
+CDL_TEST_CASE(GeometryPool, PoolStatsCountALiveMeshsBuffers, Gpu)
+{
+	LoggerFixture logs(LogLevel::Warn, kRenderChannelMask);
+	{
+		TestGeometry gpu;
+		const GPUMeshHandle mesh = CreateTriangle(gpu.Pool);
+		CDL_EXPECT_EQ(gpu.Pool.CapturePoolStats().SizeBytes, sizeof(kTriangleVertices) + sizeof(kTriangleIndices));
+
+		gpu.Pool.ReleaseMesh(mesh);
+		CDL_EXPECT_EQ(gpu.Pool.CapturePoolStats().SizeBytes, 0u);
+	}
+	ExpectNoVulkanDebugMessages(logs);
+}
+
 CDL_TEST_CASE(GeometryPool, LiveMeshesGetDistinctSlotsAndAddresses, Gpu)
 {
 	LoggerFixture logs(LogLevel::Warn, kRenderChannelMask);

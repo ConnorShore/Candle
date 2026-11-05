@@ -162,6 +162,74 @@ CDL_TEST_CASE(GPUUploader, SubmitsNothingWhenEveryRegionIsEmpty, Gpu)
 	ExpectNoVulkanDebugMessages(logs);
 }
 
+// One call is one upload however many regions it carries; the stats count submits, not the buffers behind them.
+CDL_TEST_CASE(GPUUploader, StatsCountEachUploadAndItsBytes, Gpu)
+{
+	LoggerFixture logs(LogLevel::Warn, kRenderChannelMask);
+	{
+		TestAllocator gpu;
+		GPUUploader uploader(gpu.Device, gpu.Allocator);
+
+		const std::vector<std::byte> first = BytePattern(64, 1);
+		const std::vector<std::byte> second = BytePattern(160, 100);
+		GPUBuffer firstDestination = CreateHostBuffer(gpu.Allocator, first.size());
+		GPUBuffer secondDestination = CreateHostBuffer(gpu.Allocator, second.size());
+
+		const std::array<BufferUpload, 2> both = {
+			BufferUpload{ .Data = first, .Destination = firstDestination.GetBuffer() },
+			BufferUpload{ .Data = second, .Destination = secondDestination.GetBuffer() } };
+		Upload(uploader, both);
+		CDL_EXPECT_EQ(uploader.GetStats().TotalUploads, 1u);
+		CDL_EXPECT_EQ(uploader.GetStats().TotalBytes, 224u);
+
+		const std::array<BufferUpload, 1> again = { BufferUpload{ .Data = first, .Destination = firstDestination.GetBuffer() } };
+		Upload(uploader, again);
+		CDL_EXPECT_EQ(uploader.GetStats().TotalUploads, 2u);
+		CDL_EXPECT_EQ(uploader.GetStats().TotalBytes, 288u);
+
+		WaitForGPU(gpu);
+	}
+	ExpectNoVulkanDebugMessages(logs);
+}
+
+CDL_TEST_CASE(GPUUploader, StatsCountImageUploads, Gpu)
+{
+	LoggerFixture logs(LogLevel::Warn, kRenderChannelMask);
+	{
+		TestAllocator gpu;
+		GPUUploader uploader(gpu.Device, gpu.Allocator);
+
+		const vk::Extent2D extent{ 2, 2 };
+		const std::vector<std::byte> texels = BytePattern(16, 1);
+		OwnedImage destination = CreateUploadTarget(gpu.Device, extent);
+		UploadImage(uploader, texels, *destination.Handle, { extent.width, extent.height });
+
+		CDL_EXPECT_EQ(uploader.GetStats().TotalUploads, 1u);
+		CDL_EXPECT_EQ(uploader.GetStats().TotalBytes, 16u);
+
+		WaitForGPU(gpu);
+	}
+	ExpectNoVulkanDebugMessages(logs);
+}
+
+// Skipped uploads submit nothing, so they mustn't read as activity in the panel.
+CDL_TEST_CASE(GPUUploader, StatsIgnoreUploadsWithNothingToCopy, Gpu)
+{
+	LoggerFixture logs(LogLevel::Warn, kRenderChannelMask);
+	{
+		TestAllocator gpu;
+		GPUUploader uploader(gpu.Device, gpu.Allocator);
+		GPUBuffer destination = CreateHostBuffer(gpu.Allocator, 16);
+
+		const std::array<BufferUpload, 1> uploads = { BufferUpload{ .Data = {}, .Destination = destination.GetBuffer() } };
+		Upload(uploader, uploads);
+
+		CDL_EXPECT_EQ(uploader.GetStats().TotalUploads, 0u);
+		CDL_EXPECT_EQ(uploader.GetStats().TotalBytes, 0u);
+	}
+	ExpectNoVulkanDebugMessages(logs);
+}
+
 // With uploads no longer blocking, the destructor is the only wait left: without it, the copy still in flight would
 // have its staging buffer and command pool destroyed under it, which validation reports.
 CDL_TEST_CASE(GPUUploader, DestroyingItWithAnUploadInFlightIsClean, Gpu)

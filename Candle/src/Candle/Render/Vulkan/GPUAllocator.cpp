@@ -30,22 +30,12 @@ namespace Candle {
 
 	GPUBuffer GPUAllocator::CreateBuffer(GPUBufferSpec spec)
 	{
-		GPUBuffer ret{ spec, *this };
-
-		m_UploadStats.Count++;
-		m_UploadStats.Bytes += static_cast<uint64_t>(ret.GetSize());
-
-		return ret;
+		return { spec, *this };
 	}
 
 	GPUImage GPUAllocator::CreateImage(GPUImageSpec spec)
 	{
-		GPUImage ret{ spec, *this };
-
-		m_UploadStats.Count++;
-		m_UploadStats.Bytes += ret.GetSizeBytes();
-
-		return ret;
+		return { spec, *this };
 	}
 
 	GPUAllocatorStats GPUAllocator::CaptureStats() const
@@ -53,46 +43,40 @@ namespace Candle {
 		const VkPhysicalDeviceMemoryProperties* memoryProps{ nullptr };
 		vmaGetMemoryProperties(m_Allocator, &memoryProps);
 
-		VmaTotalStatistics stats;
-		vmaCalculateStatistics(m_Allocator, &stats);
-
-		std::vector<VmaBudget> budgets(memoryProps->memoryHeapCount);
+		// Not vmaCalculateStatistics: it walks every block, and this runs every frame
+		std::array<VmaBudget, VK_MAX_MEMORY_HEAPS> budgets{};
 		vmaGetHeapBudgets(m_Allocator, budgets.data());
 
-		VkDeviceSize totalUsedVRAM = 0;
-		VkDeviceSize totalBudgetVRAM = 0;
-		VkDeviceSize hardwareMaxVRAM = 0;
+		GPUAllocatorStats stats{
+			.Heaps = {},
+			.HeapCount = memoryProps->memoryHeapCount,
+			.HasMemoryBudget = m_Spec.Device->HasMemoryBudget()
+		};
 
-		std::array<GPUHeapStats, VK_MAX_MEMORY_HEAPS> heapStats{};
-		for (uint32_t i = 0; i < memoryProps->memoryHeapCount; ++i)
+		for (uint32_t i = 0; i < stats.HeapCount; ++i)
 		{
-			VmaDetailedStatistics heapStatsVma = stats.memoryHeap[i];
-
-			uint64_t totalBytes = static_cast<uint64_t>(heapStatsVma.statistics.blockBytes);
-			uint64_t usedBytes = static_cast<uint64_t>(heapStatsVma.statistics.blockBytes - heapStatsVma.statistics.allocationBytes);
-			uint64_t unusedBytes = totalBytes - usedBytes;
-			heapStats[i] = GPUHeapStats{
-				.HeapType = memoryProps->memoryHeaps[i].flags,
-				.SizeBytes = totalBytes,
-				.UsedBytes = usedBytes,
-				.UnusedBytes = unusedBytes
+			const VkMemoryHeap& heap = memoryProps->memoryHeaps[i];
+			const VmaBudget& budget = budgets[i];
+			stats.Heaps[i] = GPUHeapStats{
+				.HeapType = heap.flags,
+				.BlockCount = budget.statistics.blockCount,
+				.AllocationCount = budget.statistics.allocationCount,
+				.SizeBytes = heap.size,
+				.AllocationBytes = budget.statistics.allocationBytes,
+				.BlockBytes = budget.statistics.blockBytes,
+				.UsageBytes = budget.usage,
+				.BudgetBytes = budget.budget
 			};
 
-			if (memoryProps->memoryHeaps[i].flags & VK_MEMORY_HEAP_DEVICE_LOCAL_BIT) {
-				totalUsedVRAM += budgets[i].usage;       // VRAM currently used by your app/system
-				totalBudgetVRAM += budgets[i].budget;    // OS-allocated VRAM budget for your app
-				hardwareMaxVRAM += memoryProps->memoryHeaps[i].size; // The absolute physical maximum VRAM
+			if (heap.flags & VK_MEMORY_HEAP_DEVICE_LOCAL_BIT)
+			{
+				stats.CurrentVramUsageBytes += budget.usage;
+				stats.OsVramBudgetBytes += budget.budget;
+				stats.DeviceMaxVramBytes += heap.size;
 			}
 		}
 
-		return GPUAllocatorStats{
-			.Heaps = std::move(heapStats),
-			.TotalUploads = m_UploadStats.Count,
-			.TotalUploadBytes = m_UploadStats.Bytes,
-			.CurrentVramUsageBytes = totalUsedVRAM,
-			.OsVramBudgetBytes = totalBudgetVRAM,
-			.DeviceMaxVramBytes = hardwareMaxVRAM
-		};
+		return stats;
 	}
 
 	void GPUAllocator::UpdateFrameCount(uint32_t frameCount)

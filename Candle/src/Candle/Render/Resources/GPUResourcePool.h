@@ -17,12 +17,13 @@ namespace Candle {
 
 	struct GPUResourcePoolStats
 	{
-		uint64_t SizeBytes{ 0 };	// The sum of the payloads' sizes, for tuning the pool's capacity}
+		uint64_t SizeBytes{ 0 };	// The live slots' GPU memory. A released slot stops counting at once, though its memory lasts until the GPU retires it
+		uint64_t TotalReleases{ 0 };	// Only ever rises, so two captures can be diffed for a rate
 		uint32_t TotalSlots{ 0 };
 		uint32_t LiveSlots{ 0 };
 		uint32_t PendingSlots{ 0 };	// Released but not back on the free list yet: riding a packet, or waiting on the GPU
 		uint32_t FreeSlots{ 0 };	// The free list plus slots never used: what Insert can still take
-		uint32_t MaxUsedSlots{ 0 };	// The most slots ever used at once, for tuning the pool's capacity
+		uint32_t MaxUsedSlots{ 0 };	// The most slots ever live or pending at once. The pool panics if it needs more than TotalSlots
 	};
 
 	// Handle bookkeeping shared by every pool; GPUResourcePool<T, Tag> adds the payloads.
@@ -46,12 +47,10 @@ namespace Candle {
 
 		uint32_t GetCapacity() const { return static_cast<uint32_t>(m_Handles.size()); }
 
-		virtual uint64_t GetSizeBytes() const = 0;
-
 	protected:
 		GPUResourcePoolBase(GPUResourceRegistry& registry, uint32_t capacity);
 
-		GPUSlotRef AllocateSlot();
+		GPUSlotRef AllocateSlot(uint64_t sizeBytes);
 		void ReleaseSlot(uint32_t index, uint32_t generation);
 		bool IsSlotAlive(uint32_t index, uint32_t generation) const;
 		bool SlotHoldsGeneration(uint32_t index, uint32_t generation) const;	// The render thread's view of whether the slot still holds that resource
@@ -75,6 +74,7 @@ namespace Candle {
 		{
 			uint32_t Generation{ 0 };
 			bool Live{ false };
+			uint64_t SizeBytes{ 0 };
 		};
 
 		struct RetiringSlot
@@ -94,6 +94,8 @@ namespace Candle {
 		std::vector<uint32_t> m_FreeIndices;
 		uint32_t m_NextUnused{ 0 };
 		uint32_t m_LiveCount{ 0 };
+		uint64_t m_LiveBytes{ 0 };	// Kept as a total since the main thread can't walk the payloads: the render thread destroys them
+		uint64_t m_TotalReleases{ 0 };
 
 		// Render thread only
 		std::deque<RetiringSlot> m_RetiringSlots;
@@ -117,7 +119,7 @@ namespace Candle {
 
 		inline Handle Insert(T&& payload)
 		{
-			const GPUSlotRef slot = AllocateSlot();
+			const GPUSlotRef slot = AllocateSlot(payload.GetSizeBytes());
 			m_Payloads[slot.Index].emplace(std::move(payload));
 			return { .Index = slot.Index, .Generation = slot.Generation };
 		}
@@ -154,17 +156,6 @@ namespace Candle {
 			}
 
 			return std::move(liveHandles);
-		}
-
-		inline uint64_t GetSizeBytes() const override
-		{
-			uint64_t totalSize = 0;
-			for (const auto& payloadOpt : m_Payloads)
-			{
-				if (payloadOpt)
-					totalSize += payloadOpt->GetSizeBytes();
-			}
-			return totalSize;
 		}
 
 	protected:

@@ -182,6 +182,22 @@ CDL_TEST_CASE(RenderDevice, SubmitReturnsConsecutiveTimelineValues, Gpu)
 	ExpectNoVulkanDebugMessages(logs);
 }
 
+CDL_TEST_CASE(RenderDevice, LastSubmittedTimelineValueIsTheNewestSubmit, Gpu)
+{
+	LoggerFixture logs(LogLevel::Warn, kRenderChannelMask);
+	{
+		TestDevice gpu;
+		CDL_EXPECT_EQ(gpu.Device.GetLastSubmittedTimelineValue(QueueType::Graphics), 0u);
+
+		gpu.Device.Submit(QueueType::Graphics, {});
+		const uint64_t newest = gpu.Device.Submit(QueueType::Graphics, {});
+		CDL_EXPECT_EQ(gpu.Device.GetLastSubmittedTimelineValue(QueueType::Graphics), newest);
+
+		gpu.Device.WaitFor(QueueType::Graphics, newest);
+	}
+	ExpectNoVulkanDebugMessages(logs);
+}
+
 // Roles sharing one VkQueue share its timeline, so their values interleave; separate queues count independently.
 CDL_TEST_CASE(RenderDevice, RolesOnOneQueueShareItsTimeline, Gpu)
 {

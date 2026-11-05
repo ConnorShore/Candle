@@ -15,19 +15,23 @@ namespace Candle {
 	struct GPUHeapStats
 	{
 		uint32_t HeapType{ 0 };	// VK_MEMORY_HEAP_DEVICE_LOCAL_BIT, etc.
-		uint64_t SizeBytes{ 0 };
-		uint64_t UsedBytes{ 0 };
-		uint64_t UnusedBytes{ 0 };
+		uint32_t BlockCount{ 0 };
+		uint32_t AllocationCount{ 0 };
+		uint64_t SizeBytes{ 0 };		// The physical heap
+		uint64_t AllocationBytes{ 0 };	// What resources asked for
+		uint64_t BlockBytes{ 0 };		// What VMA took from Vulkan; above AllocationBytes is unused space in its blocks
+		uint64_t UsageBytes{ 0 };		// What the process uses; above BlockBytes is outside VMA, like the swapchain and pipelines
+		uint64_t BudgetBytes{ 0 };		// What the OS will let the process use before it starts to struggle
 	};
 
 	struct GPUAllocatorStats
 	{
 		std::array<GPUHeapStats, VK_MAX_MEMORY_HEAPS> Heaps;
-		uint32_t TotalUploads{ 0 };
-		uint64_t TotalUploadBytes{ 0 };
-		uint64_t CurrentVramUsageBytes{ 0 };	// The sum of the heaps' used bytes, for tuning the allocator's capacity
-		uint64_t OsVramBudgetBytes{ 0 };	// The sum of the heaps' total bytes, for tuning the allocator's capacity
-		uint64_t DeviceMaxVramBytes{ 0 };	// The sum of the heaps' total bytes, for tuning the allocator's capacity
+		uint32_t HeapCount{ 0 };				// How many entries of Heaps the device has
+		bool HasMemoryBudget{ false };			// Without it, UsageBytes is just BlockBytes and BudgetBytes is 80% of the heap
+		uint64_t CurrentVramUsageBytes{ 0 };	// UsageBytes across the device-local heaps
+		uint64_t OsVramBudgetBytes{ 0 };		// BudgetBytes across the device-local heaps
+		uint64_t DeviceMaxVramBytes{ 0 };		// SizeBytes across the device-local heaps
 	};
 
 	struct GPUAllocatorSpec
@@ -64,21 +68,8 @@ namespace Candle {
 		inline RenderDevice* GetDevice() { return m_Spec.Device; }
 
 	private:
-		// Stat tracking
-		struct UploadStats
-		{
-			// TODO: May need mutex since threading contract is any thread, 
-			//  but the render thread is the only one that submits uploads and waits for them to finish so may not be necessary
-			uint32_t Count{ 0 };
-			uint64_t Bytes{ 0 };
-		};
-
-	private:
 		GPUAllocatorSpec m_Spec;
 		VmaAllocator m_Allocator;
-
-		// Stat tracking
-		UploadStats m_UploadStats;
 	};
 
 }

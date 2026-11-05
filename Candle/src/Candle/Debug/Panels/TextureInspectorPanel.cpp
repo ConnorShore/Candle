@@ -1,5 +1,6 @@
 #include "cdlpch.h"
 #include "TextureInspectorPanel.h"
+#include "Candle/Debug/DebugFormat.h"
 #include "Candle/Render/Resources/TexturePool.h"
 #include "Candle/Render/GUI/GuiTextureID.h"
 
@@ -10,7 +11,6 @@
 #include <cmath>
 #include <compare>
 #include <cstdio>
-#include <format>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -35,15 +35,6 @@ namespace Candle {
 
 		ImVec2 ToImVec2(glm::vec2 v) { return { v.x, v.y }; }
 		glm::vec2 ToVec2(ImVec2 v) { return { v.x, v.y }; }
-
-		std::string FormatBytes(uint64_t bytes)
-		{
-			if (bytes >= 1024 * 1024)
-				return std::format("{:.1f} MB", static_cast<double>(bytes) / (1024.0 * 1024.0));
-			if (bytes >= 1024)
-				return std::format("{:.1f} KB", static_cast<double>(bytes) / 1024.0);
-			return std::format("{} B", bytes);
-		}
 
 		bool ContainsIgnoringCase(std::string_view text, std::string_view pattern)
 		{

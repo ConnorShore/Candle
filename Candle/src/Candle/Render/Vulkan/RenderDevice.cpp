@@ -263,6 +263,13 @@ namespace Candle {
 		return m_Queues[std::to_underlying(queue)]->Timeline.getCounterValue();
 	}
 
+	uint64_t RenderDevice::GetLastSubmittedTimelineValue(QueueType queue) const
+	{
+		QueueState& state = *m_Queues[std::to_underlying(queue)];
+		ScopedLock<AdaptiveSpinLock> lock(state.SubmitLock);
+		return state.LastSubmitted;
+	}
+
 	void RenderDevice::WaitIdle()
 	{
 		CDL_PROFILE_WAIT("RenderDevice::WaitIdle");

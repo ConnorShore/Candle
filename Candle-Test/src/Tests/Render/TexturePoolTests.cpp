@@ -353,6 +353,24 @@ CDL_TEST_CASE(TexturePool, ReleasedTextureLeavesTheStatsAtOnce, Gpu)
 	ExpectNoVulkanDebugMessages(logs);
 }
 
+CDL_TEST_CASE(TexturePool, PoolStatsCountALiveTexturesMemory, Gpu)
+{
+	LoggerFixture logs(LogLevel::Warn, kRenderChannelMask);
+	{
+		TestTextures gpu;
+		const uint64_t before = gpu.Pool.CapturePoolStats().SizeBytes;
+
+		const GPUTextureHandle texture = CreateTexel(gpu.Pool);
+		const uint64_t textureBytes = gpu.Pool.GetTextureInfo(texture).SizeBytes;
+		CDL_EXPECT_GT(textureBytes, 0u);
+		CDL_EXPECT_EQ(gpu.Pool.CapturePoolStats().SizeBytes, before + textureBytes);
+
+		gpu.Pool.ReleaseTexture(texture);
+		CDL_EXPECT_EQ(gpu.Pool.CapturePoolStats().SizeBytes, before);
+	}
+	ExpectNoVulkanDebugMessages(logs);
+}
+
 // Names are kept per slot, so the texture that reuses one must not show its predecessor's.
 CDL_TEST_CASE(TexturePool, ReusedSlotReportsTheNewTexturesName, Gpu)
 {

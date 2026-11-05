@@ -139,10 +139,17 @@ namespace Candle {
 	GPUResourceStats RenderManager::CaptureResourceStats() const
 	{
 		CDL_CORE_ASSERT(Platform::IsMainThread(), "RenderManager::CaptureResourceStats() must be called from the main thread.");
+
+		// Completed first: read second, the GPU could overtake the submitted value and the lag would underflow
+		const uint64_t completedValue = m_RenderDevice.GetCompletedTimelineValue(QueueType::Graphics);
+		const uint64_t submittedValue = m_RenderDevice.GetLastSubmittedTimelineValue(QueueType::Graphics);
+
 		return {
 			.GeometryPoolStats = m_GeometryPool.CapturePoolStats(),
 			.TexturePoolStats = m_TexturePool.CapturePoolStats(),
-			.AllocatorStats = m_GPUAllocator.CaptureStats()
+			.AllocatorStats = m_GPUAllocator.CaptureStats(),
+			.UploaderStats = m_GPUUploader.GetStats(),
+			.GraphicsTimelineLag = submittedValue - completedValue
 		};
 	}
 

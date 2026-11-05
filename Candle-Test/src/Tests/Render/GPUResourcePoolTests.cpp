@@ -26,6 +26,8 @@ namespace {
 		Payload(Payload&& other) noexcept : Value(other.Value) { ++s_Alive; }
 		~Payload() { --s_Alive; }
 
+		uint64_t GetSizeBytes() const { return static_cast<uint64_t>(Value); }
+
 		int Value;
 	};
 
@@ -247,6 +249,58 @@ CDL_TEST_CASE(GPUResourcePool, StatsCountAReleasedSlotAsPendingUntilItIsRecycled
 	CDL_EXPECT_EQ(recycled.LiveSlots, 2u);
 	CDL_EXPECT_EQ(recycled.PendingSlots, 0u);
 	CDL_EXPECT_EQ(recycled.FreeSlots, kCapacity - 2);
+}
+
+// A released payload belongs to the render thread, so its bytes leave the total at the release, not when it is destroyed.
+CDL_TEST_CASE(GPUResourcePool, StatsCountTheBytesOfLiveSlotsOnly, Unit)
+{
+	GPUResourceRegistry registry;
+	TestPool pool(registry, kCapacity);
+	pool.Insert(Payload(100));
+	const TestPool::Handle released = pool.Insert(Payload(20));
+	CDL_EXPECT_EQ(pool.CaptureStats().SizeBytes, 120u);
+
+	pool.Release(released);
+	CDL_EXPECT_EQ(pool.CaptureStats().SizeBytes, 100u);
+
+	RunFrame(registry, 1, 1);
+	CDL_EXPECT_EQ(pool.CaptureStats().SizeBytes, 100u);
+}
+
+// A pool panics when it runs out, which pending slots can cause as easily as live ones, so the peak counts both.
+CDL_TEST_CASE(GPUResourcePool, MaxUsedSlotsCountsPendingSlotsAndNeverFalls, Unit)
+{
+	GPUResourceRegistry registry;
+	TestPool pool(registry, kCapacity);
+	CDL_EXPECT_EQ(pool.CaptureStats().MaxUsedSlots, 0u);
+
+	pool.Release(pool.Insert(Payload(1)));
+	pool.Insert(Payload(2));
+	CDL_EXPECT_EQ(pool.CaptureStats().MaxUsedSlots, 2u);
+
+	RunFrame(registry, 1, 1);
+	CDL_EXPECT_EQ(pool.CaptureStats().MaxUsedSlots, 2u);
+
+	pool.Insert(Payload(3));	// Takes the recycled slot, so nothing new is used
+	CDL_EXPECT_EQ(pool.CaptureStats().MaxUsedSlots, 2u);
+
+	pool.Insert(Payload(4));
+	CDL_EXPECT_EQ(pool.CaptureStats().MaxUsedSlots, 3u);
+}
+
+// The inspector diffs two captures for a rate, so the total must keep counting once the slots are reused.
+CDL_TEST_CASE(GPUResourcePool, TotalReleasesKeepsCountingThroughSlotReuse, Unit)
+{
+	GPUResourceRegistry registry;
+	TestPool pool(registry, kCapacity);
+	CDL_EXPECT_EQ(pool.CaptureStats().TotalReleases, 0u);
+
+	pool.Release(pool.Insert(Payload(1)));
+	CDL_EXPECT_EQ(pool.CaptureStats().TotalReleases, 1u);
+
+	RunFrame(registry, 1, 1);
+	pool.Release(pool.Insert(Payload(2)));
+	CDL_EXPECT_EQ(pool.CaptureStats().TotalReleases, 2u);
 }
 
 // The inspector lists live slots by handle, so a released one must drop out at once and a reused one carry its new generation.

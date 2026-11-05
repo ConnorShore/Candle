@@ -108,7 +108,7 @@ validation wouldn't catch it.
 
 | State | Owner |
 |---|---|
-| Handle state (generation, live flag), free list, registry's pending releases | Main thread only |
+| Handle state (generation, live flag, size), free list, stats counters, registry's pending releases | Main thread only |
 | A slot's payload and generation copy | Main writes it in `Insert`, before the handle is ever in a packet. Render reads it, and destroys it in `FreeRetiredSlots`. The index goes back to main through the packet. One writer at a time. |
 | Each pool's retiring list | Render thread only |
 | `ReleasedSlots` / `RecycledSlots` | Handed between threads by `FramePump` |

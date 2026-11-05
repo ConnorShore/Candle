@@ -15,7 +15,7 @@ namespace Candle {
 		InputSnapshot Input;		// This frame's input, the same capture OnUpdate gets; keys ImGui captured never reach it
 		ThreadFrameTimings Main;	// The main (game) thread's last completed frame
 		RenderStats Render;			// The render thread's last completed frame to reach the main thread; a few frames behind Main
-		GPUResourceStats Resources;	// The render thread's last completed frame's resource stats, which is a few frames behind Render
+		GPUResourceStats Resources;	// Captured on the main thread this frame, so unlike Render it isn't behind Main
 	};
 
 }
