@@ -43,13 +43,6 @@ namespace {
 		return messages;
 	}
 
-	// Records logged while no logger ran wait in its ring and arrive first, and enough of them would fill the sink
-	void DrainEarlierTestsRecords(MainThreadLogSink& sink)
-	{
-		CDL_CHECK(Logger::Flush());
-		sink.Dispatch();
-	}
-
 	// Copies out of each batch, since the span only lives for the call
 	struct Received
 	{
@@ -216,7 +209,6 @@ CDL_TEST_CASE(MainThreadLogSink, ReceivesWhatTheLoggerDrains, Unit)
 	sink.RegisterListener([&](std::span<const LogRecord> records) { delivered.insert(delivered.end(), records.begin(), records.end()); });
 
 	LoggerFixture logger;
-	DrainEarlierTestsRecords(sink);
 
 	CDL_CORE_WARN(LogChannel::Command, "MainThreadLogSinkTests: marker {}", 42);
 	CDL_CHECK(Logger::Flush());
@@ -256,7 +248,6 @@ CDL_TEST_CASE(MainThreadLogSink, DispatchingWhileTheDrainThreadWritesLosesNothin
 	});
 
 	LoggerFixture logger;
-	DrainEarlierTestsRecords(sink);
 
 	for (int i = 0; i < kMessages; ++i)
 	{

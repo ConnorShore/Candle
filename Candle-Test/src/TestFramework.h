@@ -193,6 +193,7 @@ namespace Candle::Test {
 	{
 		std::string TypeFilter; // exact match against TestCase::TestType, empty for all
 		std::string NameFilter; // substring match against "Suite::Name", empty for all
+		void (*BeforeEachTest)() = nullptr; // for engine state that outlives a test, which this header can't reach
 	};
 
 	inline bool Matches(const TestCase& test, const RunOptions& options)
@@ -224,6 +225,9 @@ namespace Candle::Test {
 				++filteredOut;
 				continue;
 			}
+
+			if (options.BeforeEachTest)
+				options.BeforeEachTest();
 
 			Context& context = Context::Get();
 			context.Begin();

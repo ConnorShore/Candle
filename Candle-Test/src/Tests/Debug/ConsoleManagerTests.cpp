@@ -144,6 +144,19 @@ CDL_TEST_CASE(ConsoleManager, TrailingSpaceAddsNoArg, Unit)
 	CDL_EXPECT(record.Args.empty());
 }
 
+CDL_TEST_CASE(ConsoleManager, TabSeparatesTheCommandFromItsArgs, Unit)
+{
+	ConsoleManager console;
+	CommandRecord record;
+	const ScopedCommandHandle command = RegisterRecording(console, { "echo" }, record);
+
+	console.ExecuteCommand("echo\tone");
+
+	CDL_EXPECT_EQ(record.Calls, 1);
+	CDL_CHECK_EQ(record.Args.size(), 1u);
+	CDL_EXPECT(record.Args[0] == "one");
+}
+
 CDL_TEST_CASE(ConsoleManager, NameIsFreeAgainOnceItsCommandIsGone, Unit)
 {
 	ConsoleManager console;
