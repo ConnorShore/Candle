@@ -235,8 +235,7 @@ namespace Candle {
 
 		packet.DrawItems = drawItems;
 		packet.TransformData = transforms;
-		packet.ViewMatrix = m_ActiveWorld.View;
-		packet.ProjectionMatrix = m_ActiveWorld.Projection;
+		packet.RenderView = m_ActiveWorld.RenderView;
 		packet.Time = m_FrameStats.TotalTime;
 		packet.GuiDrawData = m_GuiSystem ? m_GuiSystem->ExtractDrawData() : GuiDrawData{};
 		packet.OutputTarget = m_RenderContext.GetOutputTexture();

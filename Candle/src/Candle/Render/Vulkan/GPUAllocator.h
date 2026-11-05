@@ -62,7 +62,7 @@ namespace Candle {
 
 		GPUAllocatorStats CaptureStats() const;
 
-		void UpdateFrameCount(uint32_t frameCount);
+		void UpdateFrameCount(uint64_t frameCount);
 
 		inline VmaAllocator& GetAllocator() { return m_Allocator; }
 		inline RenderDevice* GetDevice() { return m_Spec.Device; }

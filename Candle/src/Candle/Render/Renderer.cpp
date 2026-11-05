@@ -113,7 +113,7 @@ namespace Candle {
 
 		// Safe to overwrite: RenderManager waited on this slot's RetireValue, and vkQueueSubmit makes host writes visible to the GPU
 		const GPU::FrameData frameData{ 
-			.ViewProjection = packet.ProjectionMatrix * packet.ViewMatrix,
+			.ViewProjection = packet.RenderView.Projection * packet.RenderView.View,
 			.TransformData = frame.TransformData.GetDeviceAddress(),
 			.TransformCount = static_cast<uint32_t>(transforms.size()),
 			.Time = static_cast<float>(std::fmod(packet.Time, kShaderTimeWrapSeconds))

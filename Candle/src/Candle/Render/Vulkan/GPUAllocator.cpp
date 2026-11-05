@@ -79,9 +79,9 @@ namespace Candle {
 		return stats;
 	}
 
-	void GPUAllocator::UpdateFrameCount(uint32_t frameCount)
+	void GPUAllocator::UpdateFrameCount(uint64_t frameCount)
 	{
-		vmaSetCurrentFrameIndex(m_Allocator, frameCount);
+		vmaSetCurrentFrameIndex(m_Allocator, static_cast<uint32_t>(frameCount));
 	}
 
 }

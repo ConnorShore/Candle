@@ -1,6 +1,9 @@
 #pragma once
 
+#include "Candle/Render/Camera.h"
+
 #include <glm/glm.hpp>
+
 #include <vector>
 #include <cstdint>
 
@@ -18,8 +21,7 @@ namespace Candle {
 	struct World
 	{
 		std::vector<Entity> Entities;
-		glm::mat4 View;
-		glm::mat4 Projection;
+		Candle::RenderView RenderView;
 	};
 
 }
