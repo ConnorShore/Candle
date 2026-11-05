@@ -11,7 +11,7 @@
 namespace Candle {
 
 
-	enum class TextureColorSpace
+	enum class TextureColorSpace : uint8_t
 	{
 		Srgb,
 		Linear,
@@ -21,10 +21,10 @@ namespace Candle {
 	// R8 and RG8 hold data such as masks or normal XY, and their sRGB variants are optional, so they are linear only.
 	enum class TextureFormat : uint8_t
 	{
-		Undefined,
 		Rgba8,
 		Rg8,
-		R8
+		R8,
+		Undefined
 	};
 
 	// Engine textures TexturePool creates before any other, in this order, so each one's bindless index is its value

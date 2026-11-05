@@ -59,7 +59,7 @@ namespace Candle {
 			return;
 		}
 
-		size_t spaceIndex = commandLine.find(' ');
+		size_t spaceIndex = commandLine.find_first_of(" \\t");
 		bool hasArgs = spaceIndex != std::string_view::npos;
 		std::string_view command = commandLine.substr(0, spaceIndex);
 		std::string_view argsStr = hasArgs ? commandLine.substr(spaceIndex + 1) : std::string_view{};

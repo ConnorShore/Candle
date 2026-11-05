@@ -151,7 +151,7 @@ namespace Candle {
 			.TexturePoolStats = m_TexturePool.CapturePoolStats(),
 			.AllocatorStats = m_GPUAllocator.CaptureStats(),
 			.UploaderStats = m_GPUUploader.GetStats(),
-			.GraphicsTimelineLag = submittedValue - completedValue
+			.GraphicsTimelineLag = submittedValue >= completedValue ? submittedValue - completedValue : 0
 		};
 	}
 
