@@ -4,6 +4,7 @@
 #include "GuiVertex.h"
 
 CDL_INTEROP_BEGIN
+
 // GuiPipeline's push-constant block; Global must stay the first member (see GlobalPushConstants)
 struct GuiDrawPushConstants
 {

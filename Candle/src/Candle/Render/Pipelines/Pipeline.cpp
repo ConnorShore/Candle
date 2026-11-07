@@ -9,7 +9,7 @@ namespace Candle {
 
 	namespace {
 
-		constexpr std::array<vk::DynamicState, 2> kDynamicStates = { vk::DynamicState::eViewport, vk::DynamicState::eScissor };
+		constexpr std::array<vk::DynamicState, 3> kDynamicStates = { vk::DynamicState::eViewport, vk::DynamicState::eScissor, vk::DynamicState::eDepthTestEnable };
 		constexpr vk::FrontFace kDefaultFrontFace = vk::FrontFace::eCounterClockwise;
 
 		vk::ShaderStageFlagBits ShaderStageToVulkanShaderStage(ShaderStage stage)
@@ -134,7 +134,7 @@ namespace Candle {
 		};
 		vk::PipelineViewportStateCreateInfo viewportState{ 
 			.viewportCount = 1, 
-			.scissorCount = 1 
+			.scissorCount = 1
 		};
 #pragma endregion
 
@@ -161,13 +161,20 @@ namespace Candle {
 #pragma endregion
 
 #pragma region Depth / Stencil State
-		vk::PipelineDepthStencilStateCreateInfo depthStencil{ 
-			.depthTestEnable = containsDepthAttachment ? vk::True : vk::False, 
-			.depthWriteEnable = containsDepthAttachment ? vk::True : vk::False,
-			.depthCompareOp = vk::CompareOp::eLessOrEqual, 
-			.depthBoundsTestEnable = vk::False, 
-			.stencilTestEnable = vk::False 
+		vk::PipelineDepthStencilStateCreateInfo depthStencil{
+			.depthTestEnable = vk::True,	// Overriden with dynamic state
+			.depthWriteEnable = vk::True,	// Overriden with dynamic state
+			.depthCompareOp = vk::CompareOp::eLessOrEqual,
+			.depthBoundsTestEnable = vk::False,
+			.stencilTestEnable = vk::False
 		};
+		//vk::PipelineDepthStencilStateCreateInfo depthStencil{ 
+		//	.depthTestEnable = containsDepthAttachment ? vk::True : vk::False, 
+		//	.depthWriteEnable = containsDepthAttachment ? vk::True : vk::False,
+		//	.depthCompareOp = vk::CompareOp::eLessOrEqual, 
+		//	.depthBoundsTestEnable = vk::False, 
+		//	.stencilTestEnable = vk::False 
+		//};
 #pragma endregion
 
 #pragma region Color Blend State

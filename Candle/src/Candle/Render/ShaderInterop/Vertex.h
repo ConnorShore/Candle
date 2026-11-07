@@ -1,6 +1,6 @@
 #pragma once
 
-#include "Candle/Render/ShaderInterop/ShaderInterop.h"
+#include "ShaderInterop.h"
 
 CDL_INTEROP_BEGIN
 

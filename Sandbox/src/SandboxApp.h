@@ -54,6 +54,9 @@ namespace Candle {
 		spec.RenderSpec.DevicePreference = RenderDevicePreference::DiscreteGPU;
 		spec.RenderSpec.RenderToSwapChain = true;	// false renders the world into the "Scene" window instead
 
+		// Enable shader printf when debugging shaders
+		//spec.RenderSpec.ValidationSpec.EnableShaderPrintf = true;
+
 		return ScopedPtr<SandboxApp>::Create(spec);
 	}
 }

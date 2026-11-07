@@ -1,7 +1,7 @@
 #include "TestFramework.h"
 #include "TestHelpers.h"
 
-#include <Candle/Core/Threading/MPSCRingBuffer.h>
+#include <Candle/Core/Memory/Collections/MPSCRingBuffer.h>
 
 using namespace Candle;
 using namespace Candle::Test;

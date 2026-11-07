@@ -100,3 +100,6 @@ vendor/tracy/bin/
 
 # Internal docs
 docs/internal/*
+
+# NVidia dump files
+*.nv-gpudmp

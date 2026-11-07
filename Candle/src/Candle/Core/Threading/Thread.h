@@ -26,6 +26,9 @@ namespace Candle {
 		std::invocable<std::decay_t<Func>&, std::stop_token, std::decay_t<Args>...> ||
 		std::invocable<std::decay_t<Func>&, std::decay_t<Args>...>;
 
+	// Exception callback type for handling exceptions thrown in the thread function
+	using ExceptionCallback = std::function<void(const std::exception& e, const std::string& threadName)>;
+
 	class Thread
 	{
 	public:
@@ -39,9 +42,9 @@ namespace Candle {
 
 		template<typename Func, typename... Args>
 			requires ThreadFunc<Func, Args...>
-		inline void Start(Func&& func, Args&&... args)
+		inline void Start(Func&& func, Args&&... args, ExceptionCallback exceptionCallback = nullptr)
 		{
-			m_Thread = std::jthread([descriptor = m_Descriptor, func = std::forward<Func>(func)](std::stop_token stoken, std::decay_t<Args>... fargs) mutable {
+			m_Thread = std::jthread([descriptor = m_Descriptor, func = std::forward<Func>(func), exceptionCallback = std::move(exceptionCallback)](std::stop_token stoken, std::decay_t<Args>... fargs) mutable {
 				if (!descriptor.Name.empty())
 					Platform::SetCurrentThreadName(descriptor.Name.c_str());
 				if (descriptor.AffinityMask != 0)
@@ -60,10 +63,16 @@ namespace Candle {
 				}
 				catch (const std::exception& e)
 				{
+					if (exceptionCallback)
+						exceptionCallback(e, descriptor.Name);
+
 					CDL_CORE_PANIC(LogChannel::Thread, "Unhandled exception on thread '{}': {}", descriptor.Name, e.what());
 				}
 				catch (...)
 				{
+					if (exceptionCallback)
+						exceptionCallback(std::runtime_error("Unknown exception"), descriptor.Name);
+
 					CDL_CORE_PANIC(LogChannel::Thread, "Unhandled non-standard exception on thread '{}'", descriptor.Name);
 				}
 				}, std::forward<Args>(args)...);

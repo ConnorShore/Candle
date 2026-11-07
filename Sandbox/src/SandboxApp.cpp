@@ -103,9 +103,12 @@ namespace Candle {
 		cubeEntity.Transform = glm::rotate(cubeEntity.Transform, glm::radians(45.0f) * context.DeltaTime.GetSeconds(), glm::normalize(glm::vec3(1.0f, 1.0f, 0.0f)));
 
 		// Match the camera to the window's shape, or the image stretches
+		// TODO: Fix output size in future, this currently doesn't sync with swapchain extent, so the aspect ratio is wrong for the camera if the window is resized
 		const glm::uvec2 outputSize = context.Render.GetOutputSize();
 		m_CameraPose = UpdateSimpleController(m_CameraController, m_CameraPose, context.Input, context.DeltaTime);
 		context.AppContext.ActiveWorld.RenderView = MakeRenderView(m_CameraPose, m_CameraLens, static_cast<float>(outputSize.x) / outputSize.y);
+
+		DebugDraw::Cube(glm::vec3(0.0f, 5.0f, 0.0f), glm::vec3(1.0f), glm::vec4(1.0f, 0.0f, 1.0f, 1.0f), { .Duration{ 0.0f }, .DepthTest{ true } });
 
 		// Show the world in a window when it renders to a texture
 		if (!context.Render.IsRenderingToSwapChain())

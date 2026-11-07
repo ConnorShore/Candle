@@ -40,20 +40,23 @@ namespace Candle {
 	namespace {
 
 		// Only extensions that aren't core in 1.3 and that Candle can't run without; a device missing one is skipped
-		constexpr std::array<const char*, 1> kRequiredDeviceExtensions = {
-			vk::KHRSwapchainExtensionName
+		constexpr std::array<const char*, 2> kRequiredDeviceExtensions = {
+			vk::KHRSwapchainExtensionName,
+			vk::EXTDeviceFaultExtensionName
 		};
 
 		using FeatureChain = vk::StructureChain<vk::PhysicalDeviceFeatures2,
 			vk::PhysicalDeviceVulkan11Features,
 			vk::PhysicalDeviceVulkan12Features,
-			vk::PhysicalDeviceVulkan13Features>;
+			vk::PhysicalDeviceVulkan13Features,
+			vk::PhysicalDeviceFaultFeaturesEXT>;
 		using FeatureField = vk::Bool32& (*)(FeatureChain&);
 
 		// The one list of required features: device selection checks each, device creation enables each
 #define CDL_REQUIRED_FEATURE(Struct, Member) [](FeatureChain& chain) -> vk::Bool32& { return chain.get<Struct>().Member; }
 		constexpr FeatureField kRequiredFeatures[] = {
 			CDL_REQUIRED_FEATURE(vk::PhysicalDeviceFeatures2, features.samplerAnisotropy),
+			CDL_REQUIRED_FEATURE(vk::PhysicalDeviceFeatures2, features.shaderInt16),
 			CDL_REQUIRED_FEATURE(vk::PhysicalDeviceVulkan11Features, shaderDrawParameters),	// Slang lowers SV_VertexID to VertexIndex - BaseVertex
 			CDL_REQUIRED_FEATURE(vk::PhysicalDeviceVulkan12Features, scalarBlockLayout),	// slangc -fvk-use-c-layout emits offsets and strides std430 rejects
 			CDL_REQUIRED_FEATURE(vk::PhysicalDeviceVulkan12Features, timelineSemaphore),
@@ -65,6 +68,7 @@ namespace Candle {
 			CDL_REQUIRED_FEATURE(vk::PhysicalDeviceVulkan12Features, shaderSampledImageArrayNonUniformIndexing),
 			CDL_REQUIRED_FEATURE(vk::PhysicalDeviceVulkan13Features, dynamicRendering),
 			CDL_REQUIRED_FEATURE(vk::PhysicalDeviceVulkan13Features, synchronization2),
+			CDL_REQUIRED_FEATURE(vk::PhysicalDeviceFaultFeaturesEXT, deviceFault)
 		};
 #undef CDL_REQUIRED_FEATURE
 

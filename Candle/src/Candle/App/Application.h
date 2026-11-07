@@ -17,6 +17,7 @@
 #include "Candle/Input/InputSystem.h"
 
 #include "Candle/Debug/ConsoleManager.h"
+#include "Candle/Debug/DebugDrawManager.h"
 
 #include <atomic>
 
@@ -99,6 +100,7 @@ namespace Candle {
 		ScopedPtr<Window> m_Window;					// Empty when headless
 		InputSystem m_InputSystem;					// The game's input, minus what the GUI captured. Never fed when headless, since nothing is pumped
 		InputSystem m_DebugInputSystem;				// Every event, for the debug UI. Never fed when headless either
+		DebugDrawManager m_DebugDrawManager;		// Always present, even when headless, so the application can submit debug draw commands
 		JobSystem m_JobSystem;
 		ScopedPtr<RenderManager> m_RenderManager;	// Empty when headless
 		ScopedPtr<GuiSystem> m_GuiSystem;			// Empty when headless

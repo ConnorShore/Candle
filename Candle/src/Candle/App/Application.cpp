@@ -241,6 +241,7 @@ namespace Candle {
 		packet.OutputTarget = m_RenderContext.GetOutputTexture();
 		packet.Minimized = m_Window->IsMinimized();
 		packet.SurfaceSize = m_Window->GetSize();
+		m_DebugDrawManager.ExtractDebugDrawData(packet.DebugDraw, m_FrameStats.DeltaTime);
 	}
 
 }

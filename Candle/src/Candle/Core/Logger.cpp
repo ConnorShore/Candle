@@ -2,7 +2,7 @@
 #include "Logger.h"
 #include "LogSink.h"
 
-#include "Candle/Core/Threading/MPSCRingBuffer.h"
+#include "Candle/Core/Memory/Collections/MPSCRingBuffer.h"
 
 #include <algorithm>
 #include <bit>

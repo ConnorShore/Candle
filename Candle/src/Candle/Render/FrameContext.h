@@ -18,6 +18,7 @@ namespace Candle {
 		GPUBuffer TransformData;			// Host-written only once RetireValue is reached; shaders read it by address
 		GPUBuffer GuiVertices;				// Host-written only once RetireValue is reached; shaders read it by address
 		GPUBuffer GuiIndices;				// Host-written only once RetireValue is reached; shaders read it by address
+		GPUBuffer DebugDrawVertices;		// Host-written only once RetireValue is reached; shaders read it by address
 		uint64_t RetireValue{ 0 };			// Used for the timeline semaphore to know when the GPU has finished with this frame context and it can be reused
 	};
 }
