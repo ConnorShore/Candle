@@ -108,7 +108,13 @@ namespace Candle {
 		m_CameraPose = UpdateSimpleController(m_CameraController, m_CameraPose, context.Input, context.DeltaTime);
 		context.AppContext.ActiveWorld.RenderView = MakeRenderView(m_CameraPose, m_CameraLens, static_cast<float>(outputSize.x) / outputSize.y);
 
-		DebugDraw::Cube(glm::vec3(0.0f, 5.0f, 0.0f), glm::vec3(1.0f), glm::vec4(1.0f, 0.0f, 1.0f, 1.0f), { .Duration{ 0.0f }, .DepthTest{ true } });
+		static bool cubeDrawn = false;
+		if (!cubeDrawn)
+		{
+			DebugDraw::Cube(glm::vec3(2.0f, 2.0f, 0.0f), glm::vec3(1.0f), glm::vec4(1.0f, 0.0f, 1.0f, 1.0f), { .Duration{ 3.0f }, .DepthTest{ true } });
+			DebugDraw::Cube(glm::vec3(-2.0f, 2.0f, 0.0f), glm::vec3(1.0f), glm::vec4(1.0f, 0.0f, 1.0f, 1.0f), { .Duration{ 1.5f }, .DepthTest{ true } });
+			cubeDrawn = true;
+		}
 
 		// Show the world in a window when it renders to a texture
 		if (!context.Render.IsRenderingToSwapChain())

@@ -45,6 +45,40 @@ namespace Candle {
 				.Duration{ options.Duration }
 			});
 		}
+
+		std::vector<GPU::DebugDrawVertex> TessellateCube(const DebugDrawCube& cube, uint16_t color)
+		{
+			std::vector<GPU::DebugDrawVertex> vertices;
+			const glm::vec3 h = cube.Scale * 0.5f;
+			const std::array<glm::vec3, 8> corners = {
+				cube.Position + glm::vec3(-h.x, -h.y, -h.z),
+				cube.Position + glm::vec3(h.x, -h.y, -h.z),
+				cube.Position + glm::vec3(h.x, -h.y,  h.z),
+				cube.Position + glm::vec3(-h.x, -h.y,  h.z),
+				cube.Position + glm::vec3(-h.x,  h.y, -h.z),
+				cube.Position + glm::vec3(h.x,  h.y, -h.z),
+				cube.Position + glm::vec3(h.x,  h.y,  h.z),
+				cube.Position + glm::vec3(-h.x,  h.y,  h.z)
+			};
+			for (uint8_t index : kCubeEdgeIndices)
+				vertices.emplace_back(corners[index], color);
+			return vertices;
+		}
+
+		void AddEntryToBucket(DebugDrawManager::DebugDrawEntry& entry, std::vector<GPU::DebugDrawVertex>& bucketData)
+		{
+			// TODO: Add other types, currently only cubes are supported
+			std::visit(Overloaded{
+				[&](const DebugDrawPoint point) {},
+				[&](const DebugDrawLine line) {},
+				[&](const DebugDrawCube cube)
+				{
+					auto vertices = TessellateCube(cube, entry.Color);
+					bucketData.insert(bucketData.end(), vertices.begin(), vertices.end());
+				},
+				[&](const DebugDrawSphere sphere) {}
+				}, entry.Primitive);
+		}
 	}
 
 	// DebugDraw implementations
@@ -139,9 +173,27 @@ namespace Candle {
 		for (auto& bucket : outData.Buckets)
 			bucket.clear();
 
-		// TODO: Handle persistent entities.
-		//	Loop over persistent items and add to buckets if not yet expired (need to decrement their duration by delta time).
+		//	Loop over persistent items and add to buckets if not yet expired
 		//  If expired, then swap-remove, otherwise, add to bucket
+		for (size_t i = 0; i < m_Persistent.size();)
+		{
+			auto& entry = m_Persistent[i];
+			entry.Duration -= delta;
+			if (entry.Duration <= 0.0f)
+			{
+				// Remove expired entry (swap-remove)
+				m_Persistent[i] = m_Persistent.back();
+				m_Persistent.pop_back();
+			}
+			else
+			{
+				// Add to bucket
+				auto& targetBucketVec = outData.Buckets[static_cast<size_t>(entry.Bucket)];
+				AddEntryToBucket(entry, targetBucketVec);
+
+				++i;
+			}
+		}
 
 		// Extract entries from buffer, tessellate and put vertices into proper bucket
 		while (auto entry = m_DrawQueue.Pop())
@@ -150,38 +202,12 @@ namespace Candle {
 			if (!entry.has_value())
 				break;
 
-			entry = entry.value();
-
-			// TEMPORARY: Only tessellate cubes, ignore other types till cube works correctly
-			// TODO: May include indices in the future for better performance as well
 			auto& targetBucketVec = outData.Buckets[static_cast<size_t>(entry->Bucket)];
-			std::visit(Overloaded{
-				[&](const DebugDrawPoint point) {},
-				[&](const DebugDrawLine line) {},
-				[&](const DebugDrawCube cube) 
-				{
-					// Line list, so each of the 12 edges is its own pair of vertices
-					const glm::vec3 h = cube.Scale * 0.5f;
-					const std::array<glm::vec3, 8> corners = {
-						cube.Position + glm::vec3(-h.x, -h.y, -h.z),
-						cube.Position + glm::vec3( h.x, -h.y, -h.z),
-						cube.Position + glm::vec3( h.x, -h.y,  h.z),
-						cube.Position + glm::vec3(-h.x, -h.y,  h.z),
-						cube.Position + glm::vec3(-h.x,  h.y, -h.z),
-						cube.Position + glm::vec3( h.x,  h.y, -h.z),
-						cube.Position + glm::vec3( h.x,  h.y,  h.z),
-						cube.Position + glm::vec3(-h.x,  h.y,  h.z)
-					};
+			AddEntryToBucket(*entry, targetBucketVec);
 
-					for (uint8_t index : kCubeEdgeIndices)
-						targetBucketVec.emplace_back(corners[index], entry->Color);
-				},
-				[&](const DebugDrawSphere sphere) {}
-			}, entry->Primitive);
-
-			// TODO: If the entry has a duration, add it to the persistent list
-			//if (entry->Duration > 0.0f)
-			//	m_Persistent.emplace_back(entry);
+			// If the entry has a duration, add it to the persistent list
+			if (entry->Duration > 0.0f)
+				m_Persistent.emplace_back(*entry);
 		}
 	}
 
