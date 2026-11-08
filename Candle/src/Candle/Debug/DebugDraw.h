@@ -2,6 +2,8 @@
 
 #include <glm/glm.hpp>
 
+#include <limits>
+
 #ifdef CDL_DIST
 #define CDL_DEBUG_DRAW_ENABLED 0
 #else
@@ -9,6 +11,8 @@
 #endif
 
 namespace Candle::DebugDraw {
+
+	constexpr float kUnlimitedDuration = std::numeric_limits<float>::max();
 
 	struct Options
 	{
@@ -21,11 +25,13 @@ namespace Candle::DebugDraw {
 	void Point(glm::vec3 position, glm::vec4 color, const Options& options = {});
 	void Point(glm::vec3 position, float size, glm::vec4 color, const Options& options = {});
 	void Line(glm::vec3 start, glm::vec3 end, glm::vec4 color, const Options& options = {});
+	void Circle(glm::vec3 center, glm::vec3 planeNormal, float radius, glm::vec4 color, const Options& options = {});
 	void Cube(glm::vec3 center, glm::vec3 size, glm::vec4 color, const Options& options = {});
 #else
 	inline void Point(glm::vec3, glm::vec4, const Options & = {}) {}
 	inline void Point(glm::vec3, float, glm::vec4, const Options & = {}) {}
 	inline void Line(glm::vec3, glm::vec3, glm::vec4, const Options & = {}) {}
+	inline void Circle(glm::vec3, glm::vec3, float, glm::vec4, const Options & = {}) {}
 	inline void Cube(glm::vec3, glm::vec3, glm::vec4, const Options & = {}) {}
 #endif
 

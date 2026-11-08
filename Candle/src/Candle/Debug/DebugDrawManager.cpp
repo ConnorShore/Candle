@@ -1,6 +1,8 @@
 #include "cdlpch.h"
 #include "DebugDrawManager.h"
 
+#include <ranges>
+
 namespace Candle {
 
 	namespace {
@@ -44,6 +46,13 @@ namespace Candle {
 			});
 		}
 
+		template<typename T, typename ...Args>
+		void CombineVectors(std::vector<T>& src, Args&&... additional)
+		{
+			for (const auto& vec : { std::forward<Args>(additional)... })
+				src.insert(src.end(), vec.begin(), vec.end());
+		}
+
 		std::vector<GPU::DebugDrawVertex> TessellateLine(const DebugDrawLine& line, uint16_t color)
 		{
 			std::vector<GPU::DebugDrawVertex> vertices;
@@ -57,8 +66,39 @@ namespace Candle {
 			auto upVec = TessellateLine({ point.Position - glm::vec3(0.0f, point.Size / 2.0f, 0.0f), point.Position + glm::vec3(0.0f, point.Size / 2.0f, 0.0f) }, color);
 			auto rightVec = TessellateLine({ point.Position - glm::vec3(point.Size / 2.0f, 0.0f, 0.0f), point.Position + glm::vec3(point.Size / 2.0f, 0.0f, 0.0f) }, color);
 			std::vector<GPU::DebugDrawVertex> vertices;
-			vertices.insert(vertices.end(), upVec.begin(), upVec.end());
-			vertices.insert(vertices.end(), rightVec.begin(), rightVec.end());
+			vertices.reserve(upVec.size() + rightVec.size());
+			CombineVectors(vertices, upVec, rightVec);
+			return vertices;
+		}
+
+		// TODO:  Need to support rotations so can draw 3 circles for a sphere
+		std::vector<GPU::DebugDrawVertex> TessellateCircle(const DebugDrawCircle& circle, uint16_t color)
+		{
+			std::vector<GPU::DebugDrawVertex> vertices;
+			vertices.reserve(kCircleSegmentCount * 2);
+
+			// TODO: Create a rotation matrix to align the circle with the specified plane normal
+
+			// Draw the circle
+			float degreesPerLine = 360.0f / kCircleSegmentCount;
+			auto indexToRadians([degreesPerLine](uint32_t i) { return glm::radians(i * degreesPerLine); });
+			for (uint32_t i = 0; i < kCircleSegmentCount; i++)
+			{
+				float startRad = indexToRadians(i);
+				float endRad = indexToRadians((i + 1) % kCircleSegmentCount);
+				glm::vec3 start = {
+					circle.Center.x + (circle.Radius * glm::cos(startRad)),
+					circle.Center.y,
+					circle.Center.z + (circle.Radius * glm::sin(startRad))
+				};
+				glm::vec3 end = {
+					circle.Center.x + (circle.Radius * glm::cos(endRad)),
+					circle.Center.y,
+					circle.Center.z + (circle.Radius * glm::sin(endRad))
+				};
+				CombineVectors(vertices, TessellateLine({ start, end }, color));
+			}
+
 			return vertices;
 		}
 
@@ -83,14 +123,11 @@ namespace Candle {
 
 		void AddEntryToBucket(DebugDrawManager::DebugDrawEntry& entry, std::vector<GPU::DebugDrawVertex>& bucketData)
 		{
-			auto insertVerts = [&](const std::vector<GPU::DebugDrawVertex>& verts) {
-				bucketData.insert(bucketData.end(), verts.begin(), verts.end());
-			};
-			
 			std::visit(Overloaded{
-				[&](const DebugDrawPoint point) { insertVerts(TessellatePoint(point, entry.Color)); },
-				[&](const DebugDrawLine line) {	insertVerts(TessellateLine(line, entry.Color));	},
-				[&](const DebugDrawCube cube) {	insertVerts(TessellateCube(cube, entry.Color));	},
+				[&](const DebugDrawPoint point) { CombineVectors(bucketData, TessellatePoint(point, entry.Color)); },
+				[&](const DebugDrawLine line) {	CombineVectors(bucketData, TessellateLine(line, entry.Color)); },
+				[&](const DebugDrawCircle circle) { CombineVectors(bucketData, TessellateCircle(circle, entry.Color)); },
+				[&](const DebugDrawCube cube) {	CombineVectors(bucketData, TessellateCube(cube, entry.Color));	},
 				[&](const DebugDrawSphere sphere) {}
 				}, entry.Primitive);
 		}
@@ -125,6 +162,16 @@ namespace Candle {
 				.End{ end }
 			};
 			SubmitEntry(line, color, options);
+		}
+
+		void Circle(glm::vec3 center, glm::vec3 planeNormal, float radius, glm::vec4 color, const Options& options)
+		{
+			DebugDrawCircle circle{
+				.Center{ center },
+				.PlaneNormal{ planeNormal },
+				.Radius{ radius }
+			};
+			SubmitEntry(circle, color, options);
 		}
 
 		void Cube(glm::vec3 center, glm::vec3 size, glm::vec4 color, const Options& options)
@@ -220,20 +267,23 @@ namespace Candle {
 		for (size_t i = 0; i < m_Persistent.size();)
 		{
 			auto& entry = m_Persistent[i];
-			entry.Duration -= delta;
-			if (entry.Duration <= 0.0f)
-			{
-				// Remove expired entry (swap-remove)
-				m_Persistent[i] = m_Persistent.back();
-				m_Persistent.pop_back();
-			}
-			else
+
+			// Decrement duration only if its not unlimited
+			if (entry.Duration != DebugDraw::kUnlimitedDuration)
+				entry.Duration -= delta;
+
+			if (entry.Duration > 0.0f)
 			{
 				// Add to bucket
 				auto& targetBucketVec = outData.Buckets[static_cast<size_t>(entry.Bucket)];
 				AddEntryToBucket(entry, targetBucketVec);
-
 				++i;
+			}
+			else
+			{
+				// Remove expired entry (swap-remove)
+				m_Persistent[i] = m_Persistent.back();
+				m_Persistent.pop_back();
 			}
 		}
 

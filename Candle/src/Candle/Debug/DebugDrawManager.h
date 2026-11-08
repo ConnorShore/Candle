@@ -17,6 +17,7 @@ namespace Candle {
 
 	constexpr size_t kDebugDrawEntryCount = 1024 * 1024;	// ~1M entries
 	constexpr float kDefaultPointSize = 0.1f;
+	constexpr size_t kCircleSegmentCount = 32;
 
 
 	// TODO: Add width to the drawing to make connecting lines thicker
@@ -31,6 +32,13 @@ namespace Candle {
 		glm::vec3 Start{ 0.0f, 0.0f, 0.0f }, End{ 1.0f, 0.0f, 0.0f };
 	};
 
+	struct DebugDrawCircle
+	{
+		glm::vec3 Center{ 0.0f };
+		glm::vec3 PlaneNormal{ 0.0f, 1.0f, 0.0f };
+		float Radius{ 1.0f };
+	};
+
 	struct DebugDrawCube
 	{
 		glm::vec3 Position{ 0.0f };
@@ -43,7 +51,7 @@ namespace Candle {
 		float Radius{ 0.5f };
 	};
 
-	using DebugDrawPrimitive = std::variant<DebugDrawPoint, DebugDrawLine, DebugDrawCube, DebugDrawSphere>;
+	using DebugDrawPrimitive = std::variant<DebugDrawPoint, DebugDrawLine, DebugDrawCircle, DebugDrawCube, DebugDrawSphere>;
 
 	// Manages debug draw primitives and their rendering
 	// Threading: Can submit debug draw commands from any thread
@@ -55,7 +63,7 @@ namespace Candle {
 		{
 			DebugDrawPrimitive Primitive;
 			DebugDrawBucket Bucket;
-			uint16_t Color;
+			uint16_t Color{ 0 };
 			float Duration{ 0.0f };
 		};
 

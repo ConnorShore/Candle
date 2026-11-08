@@ -117,6 +117,8 @@ namespace Candle {
 			DebugDraw::Point(glm::vec3(1.0f, 0.0f, 0.0f), glm::vec4(0.0f, 1.0f, 0.0f, 1.0f), { .Duration{ 5.0f }, .DepthTest{ false } });
 			DebugDraw::Line(glm::vec3(-1.0f, 0.0f, 0.0f), glm::vec3(1.0f, 0.0f, 0.0f), glm::vec4(1.0f, 1.0f, 0.0f, 1.0f), { .Duration{ 5.0f }, .DepthTest{ false } });
 
+			DebugDraw::Circle(glm::vec3(0.0f, -2.0f, 1.0f), glm::vec3(0.0f, 1.0f, 0.0f), 1.5f, glm::vec4(1.0f), { .Duration{ DebugDraw::kUnlimitedDuration }, .DepthTest{ true } });
+
 			cubeDrawn = true;
 		}
 
