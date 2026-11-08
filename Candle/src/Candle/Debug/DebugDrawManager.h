@@ -16,30 +16,31 @@
 namespace Candle {
 
 	constexpr size_t kDebugDrawEntryCount = 1024 * 1024;	// ~1M entries
+	constexpr float kDefaultPointSize = 0.1f;
 
 
 	// TODO: Add width to the drawing to make connecting lines thicker
 	struct DebugDrawPoint
 	{
-		glm::vec3 Position;
-		float Size;
+		glm::vec3 Position{ 0.0f };
+		float Size{ kDefaultPointSize };
 	};
 
 	struct DebugDrawLine
 	{
-		glm::vec3 Start, End;
+		glm::vec3 Start{ 0.0f, 0.0f, 0.0f }, End{ 1.0f, 0.0f, 0.0f };
 	};
 
 	struct DebugDrawCube
 	{
-		glm::vec3 Position;
-		glm::vec3 Scale;
+		glm::vec3 Position{ 0.0f };
+		glm::vec3 Scale{ 1.0f };
 	};
 
 	struct DebugDrawSphere
 	{
-		glm::vec3 Position;
-		float Radius;
+		glm::vec3 Position{ 0.0f };
+		float Radius{ 0.5f };
 	};
 
 	using DebugDrawPrimitive = std::variant<DebugDrawPoint, DebugDrawLine, DebugDrawCube, DebugDrawSphere>;

@@ -113,6 +113,10 @@ namespace Candle {
 		{
 			DebugDraw::Cube(glm::vec3(2.0f, 2.0f, 0.0f), glm::vec3(1.0f), glm::vec4(1.0f, 0.0f, 1.0f, 1.0f), { .Duration{ 3.0f }, .DepthTest{ true } });
 			DebugDraw::Cube(glm::vec3(-2.0f, 2.0f, 0.0f), glm::vec3(1.0f), glm::vec4(1.0f, 0.0f, 1.0f, 1.0f), { .Duration{ 1.5f }, .DepthTest{ true } });
+			DebugDraw::Point(glm::vec3(-1.0f, 0.0f, 0.0f), glm::vec4(0.0f, 1.0f, 0.0f, 1.0f), { .Duration{ 5.0f }, .DepthTest{ false } });
+			DebugDraw::Point(glm::vec3(1.0f, 0.0f, 0.0f), glm::vec4(0.0f, 1.0f, 0.0f, 1.0f), { .Duration{ 5.0f }, .DepthTest{ false } });
+			DebugDraw::Line(glm::vec3(-1.0f, 0.0f, 0.0f), glm::vec3(1.0f, 0.0f, 0.0f), glm::vec4(1.0f, 1.0f, 0.0f, 1.0f), { .Duration{ 5.0f }, .DepthTest{ false } });
+
 			cubeDrawn = true;
 		}
 

@@ -7,8 +7,6 @@ namespace Candle {
 
 		static DebugDrawManager* s_Manager{ nullptr };
 
-		constexpr float kDefaultPointSize = 0.5f;
-
 		// Cube corner pairs for a line list: bottom ring, top ring, then the four verticals
 		constexpr std::array<uint8_t, 24> kCubeEdgeIndices = {
 			0, 1,  1, 2,  2, 3,  3, 0,
@@ -46,6 +44,24 @@ namespace Candle {
 			});
 		}
 
+		std::vector<GPU::DebugDrawVertex> TessellateLine(const DebugDrawLine& line, uint16_t color)
+		{
+			std::vector<GPU::DebugDrawVertex> vertices;
+			vertices.emplace_back(line.Start, color);
+			vertices.emplace_back(line.End, color);
+			return vertices;
+		}
+
+		std::vector<GPU::DebugDrawVertex> TessellatePoint(const DebugDrawPoint& point, uint16_t color)
+		{
+			auto upVec = TessellateLine({ point.Position - glm::vec3(0.0f, point.Size / 2.0f, 0.0f), point.Position + glm::vec3(0.0f, point.Size / 2.0f, 0.0f) }, color);
+			auto rightVec = TessellateLine({ point.Position - glm::vec3(point.Size / 2.0f, 0.0f, 0.0f), point.Position + glm::vec3(point.Size / 2.0f, 0.0f, 0.0f) }, color);
+			std::vector<GPU::DebugDrawVertex> vertices;
+			vertices.insert(vertices.end(), upVec.begin(), upVec.end());
+			vertices.insert(vertices.end(), rightVec.begin(), rightVec.end());
+			return vertices;
+		}
+
 		std::vector<GPU::DebugDrawVertex> TessellateCube(const DebugDrawCube& cube, uint16_t color)
 		{
 			std::vector<GPU::DebugDrawVertex> vertices;
@@ -67,15 +83,14 @@ namespace Candle {
 
 		void AddEntryToBucket(DebugDrawManager::DebugDrawEntry& entry, std::vector<GPU::DebugDrawVertex>& bucketData)
 		{
-			// TODO: Add other types, currently only cubes are supported
+			auto insertVerts = [&](const std::vector<GPU::DebugDrawVertex>& verts) {
+				bucketData.insert(bucketData.end(), verts.begin(), verts.end());
+			};
+			
 			std::visit(Overloaded{
-				[&](const DebugDrawPoint point) {},
-				[&](const DebugDrawLine line) {},
-				[&](const DebugDrawCube cube)
-				{
-					auto vertices = TessellateCube(cube, entry.Color);
-					bucketData.insert(bucketData.end(), vertices.begin(), vertices.end());
-				},
+				[&](const DebugDrawPoint point) { insertVerts(TessellatePoint(point, entry.Color)); },
+				[&](const DebugDrawLine line) {	insertVerts(TessellateLine(line, entry.Color));	},
+				[&](const DebugDrawCube cube) {	insertVerts(TessellateCube(cube, entry.Color));	},
 				[&](const DebugDrawSphere sphere) {}
 				}, entry.Primitive);
 		}
@@ -84,6 +99,33 @@ namespace Candle {
 	// DebugDraw implementations
 #ifdef CDL_DEBUG_DRAW_ENABLED
 	namespace DebugDraw {
+
+		void Point(glm::vec3 position, glm::vec4 color, const Options& options)
+		{
+			DebugDrawPoint point{
+				.Position{ position },
+				.Size{ kDefaultPointSize }
+			};
+			SubmitEntry(point, color, options);
+		}
+
+		void Point(glm::vec3 position, float size, glm::vec4 color, const Options& options)
+		{
+			DebugDrawPoint point{
+				.Position{ position },
+				.Size{ size }
+			};
+			SubmitEntry(point, color, options);
+		}
+
+		void Line(glm::vec3 start, glm::vec3 end, glm::vec4 color, const Options& options)
+		{
+			DebugDrawLine line{
+				.Start{ start },
+				.End{ end }
+			};
+			SubmitEntry(line, color, options);
+		}
 
 		void Cube(glm::vec3 center, glm::vec3 size, glm::vec4 color, const Options& options)
 		{
