@@ -21,7 +21,7 @@ namespace Candle::DebugDraw {
 		bool DepthTest = true;
 	};
 
-#ifdef CDL_DEBUG_DRAW_ENABLED
+#if CDL_DEBUG_DRAW_ENABLED
 	// Threading: any thread. No-ops when there's no manager: headless, before startup, after shutdown
 	void Point(glm::vec3 position, glm::vec4 color, const Options& options = {});
 	void Point(glm::vec3 position, float size, glm::vec4 color, const Options& options = {});

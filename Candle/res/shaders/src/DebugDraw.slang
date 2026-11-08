@@ -11,7 +11,7 @@ struct VertexOutput
 
 float4 UnpackColor(uint16_t packed)
 {
-	return float4(packed & 0x0F, (packed >> 4) & 0x0F, (packed >> 8) & 0x0F, packed >> 12) / 15.0;
+	return float4(packed >> 12 & 0x0F,  (packed >> 8) & 0x0F, (packed >> 4) & 0x0F, packed & 0x0F) / 15.0;
 }
 
 [shader("vertex")]

@@ -49,6 +49,8 @@ namespace Candle {
 
 		while (start < lineView.size())
 		{
+			// TODO: Find better abstracted way to set a start/end character and parse whats between them 
+			//   and then be able to define what happens with the parsed data
 			bool isQuoted = lineView[start] == '"';
 			if (isQuoted)
 			{

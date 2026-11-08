@@ -111,16 +111,16 @@ namespace Candle {
 		static bool drawn = false;
 		if (!drawn)
 		{
-			DebugDraw::Cube(glm::vec3(2.0f, 2.0f, 0.0f), glm::vec3(1.0f), glm::vec4(1.0f, 0.0f, 1.0f, 1.0f), { .Duration{ 3.0f }, .LineWidth{ 3.0f }, .DepthTest{ true } });
-			DebugDraw::Cube(glm::vec3(-2.0f, 2.0f, 0.0f), glm::vec3(1.0f), glm::vec4(1.0f, 0.0f, 1.0f, 1.0f), { .Duration{ 1.5f }, .DepthTest{ true } });
+			//DebugDraw::Cube(glm::vec3(2.0f, 2.0f, 0.0f), glm::vec3(1.0f), glm::vec4(1.0f, 0.0f, 1.0f, 1.0f), { .Duration{ 3.0f }, .LineWidth{ 3.0f }, .DepthTest{ true } });
+			//DebugDraw::Cube(glm::vec3(-2.0f, 2.0f, 0.0f), glm::vec3(1.0f), glm::vec4(1.0f, 0.0f, 1.0f, 1.0f), { .Duration{ 1.5f }, .DepthTest{ true } });
 
-			DebugDraw::Point(glm::vec3(-1.0f, 0.0f, 0.0f), glm::vec4(0.0f, 1.0f, 0.0f, 1.0f), { .Duration{ 5.0f }, .DepthTest{ false } });
-			DebugDraw::Point(glm::vec3(1.0f, 0.0f, 0.0f), glm::vec4(0.0f, 1.0f, 0.0f, 1.0f), { .Duration{ 5.0f }, .DepthTest{ false } });
-			DebugDraw::Line(glm::vec3(-1.0f, 0.0f, 0.0f), glm::vec3(1.0f, 0.0f, 0.0f), glm::vec4(1.0f, 1.0f, 0.0f, 1.0f), { .Duration{ 5.0f }, .DepthTest{ false } });
+			//DebugDraw::Point(glm::vec3(-1.0f, 0.0f, 0.0f), glm::vec4(0.0f, 1.0f, 0.0f, 1.0f), { .Duration{ 5.0f }, .DepthTest{ false } });
+			//DebugDraw::Point(glm::vec3(1.0f, 0.0f, 0.0f), glm::vec4(0.0f, 1.0f, 0.0f, 1.0f), { .Duration{ 5.0f }, .DepthTest{ false } });
+			//DebugDraw::Line(glm::vec3(-1.0f, 0.0f, 0.0f), glm::vec3(1.0f, 0.0f, 0.0f), glm::vec4(1.0f, 1.0f, 0.0f, 1.0f), { .Duration{ 5.0f }, .DepthTest{ false } });
 
-			DebugDraw::Circle(glm::vec3(0.0f, -2.0f, 1.0f), glm::vec3(1.0f, 0.0f, 0.0f), 1.5f, glm::vec4(1.0f), { .Duration{ DebugDraw::kUnlimitedDuration }, .DepthTest{ true } });
+			DebugDraw::Circle(glm::vec3(0.0f, -2.0f, 1.0f), glm::vec3(1.0f, 0.0f, 0.0f), 1.5f, glm::vec4(0.0f, 1.0f, 0.0f, 1.0f), { .Duration{ DebugDraw::kUnlimitedDuration }, .DepthTest{ true } });
 
-			DebugDraw::Sphere(glm::vec3(0.0f), 10.0f, glm::vec4(0.2f, 0.8f, 0.4f, 1.0f), { .Duration{ 80.0f }, .LineWidth{ 10.0f }, .DepthTest{ true } });
+			//DebugDraw::Sphere(glm::vec3(0.0f), 10.0f, glm::vec4(0.2f, 0.8f, 0.4f, 1.0f), { .Duration{ 80.0f }, .LineWidth{ 10.0f }, .DepthTest{ true } });
 
 			drawn = true;
 		}

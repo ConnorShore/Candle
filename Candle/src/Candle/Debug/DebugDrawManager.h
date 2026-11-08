@@ -54,6 +54,8 @@ namespace Candle {
 
 	using DebugDrawPrimitive = std::variant<DebugDrawPoint, DebugDrawLine, DebugDrawCircle, DebugDrawCube, DebugDrawSphere>;
 
+	class ConsoleManager;
+
 	// Manages debug draw primitives and their rendering
 	// Threading: Can submit debug draw commands from any thread
 	//  Extraction happens on main thread, and passes data to the render thread through the FramePacket
@@ -70,7 +72,7 @@ namespace Candle {
 		};
 
 	public:
-		DebugDrawManager();
+		DebugDrawManager(ConsoleManager& consoleManager);
 		~DebugDrawManager();
 
 		void Submit(DebugDrawEntry entry);
@@ -80,5 +82,7 @@ namespace Candle {
 		MPSCRingBuffer<DebugDrawEntry> m_DrawQueue{ kDebugDrawEntryCount };	// 1M entries, ~64MB
 		std::vector<DebugDrawEntry> m_Persistent;
 		std::vector<DebugDrawEntry> m_FrameEntries;
+
+		ConsoleManager& m_ConsoleManager;
 	};
 }

@@ -51,7 +51,13 @@ namespace Candle {
 			.ShaderDirectory = engineAssetDir / "shaders/bin",
 			.RenderToSwapChain = renderSpec.RenderToSwapChain })
 		, m_CommandPoolManager(m_RenderDevice, jobSystem.GetNumWorkers())
-		, m_RenderThread({ .Name = "Candle-RenderThread", .Priority = ThreadPriority::High })
+		, m_RenderThread({
+			.Name = "Candle-RenderThread",
+			.Priority = ThreadPriority::High,
+			.OnException = [this](const std::exception& e, const std::string& threadName) {
+				if (dynamic_cast<const vk::DeviceLostError*>(&e))
+					ErrorHandler::CheckDeviceFault(m_RenderDevice.GetDevice());
+			} })
 	{
 		CreateFrameContexts();
 	}
@@ -83,12 +89,7 @@ namespace Candle {
 			CDL_CORE_INFO(LogChannel::Render, "Render Thread Ending");
 		};
 
-		auto exceptionCallback = [&](const std::exception& e, const std::string& threadName) {
-			if (dynamic_cast<const vk::DeviceLostError*>(&e))
-				ErrorHandler::CheckDeviceFault(m_RenderDevice.GetDevice());
-		};
-
-		m_RenderThread.Start(threadFunc, exceptionCallback);
+		m_RenderThread.Start(threadFunc);
 	}
 
 	void RenderManager::JoinRenderThread()

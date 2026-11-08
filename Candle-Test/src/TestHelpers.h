@@ -7,6 +7,7 @@
 
 #include <Candle.h>
 #include <Candle/Core/LogSink.h>
+#include <Candle/Debug/DebugDraw.h>
 
 #include <imgui.h>
 
@@ -239,6 +240,14 @@ namespace Candle::Test {
 		WindowingBackend(const WindowingBackend&) = delete;
 		WindowingBackend& operator=(const WindowingBackend&) = delete;
 	};
+
+	// Dist compiles the DebugDraw calls out, so a test that draws through them has nothing to check there
+	inline void SkipUnlessDebugDrawEnabled()
+	{
+#if !CDL_DEBUG_DRAW_ENABLED
+		CDL_SKIP("debug draw is compiled out in this configuration");
+#endif
+	}
 
 	// A fresh directory under the system temp path, deleted with its contents on destruction. std::filesystem,
 	// because Platform has no temp-path or directory calls. Test-body thread only.

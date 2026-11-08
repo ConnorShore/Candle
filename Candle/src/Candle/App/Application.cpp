@@ -63,6 +63,7 @@ namespace Candle {
 		, m_GuiSystem(m_Specification.Headless ? ScopedPtr<GuiSystem>() : ScopedPtr<GuiSystem>::Create(*m_Window, m_RenderManager->GetTexturePool()))
 		, m_DebugUIManager(m_Specification.Headless ? ScopedPtr<DebugUIManager>() : ScopedPtr<DebugUIManager>::Create(m_ConsoleManager, *m_LoggerScope.MainThreadSink, m_RenderManager->GetTexturePool()))
 		, m_ConsoleManager()
+		, m_DebugDrawManager(m_ConsoleManager)
 		, m_RenderContext(m_RenderManager.Get(), m_Specification.RenderSpec.RenderToSwapChain, { m_Specification.WindowSpec.Width, m_Specification.WindowSpec.Height })
 	{
 		CDL_CORE_INFO(LogChannel::Application, "Application created: {}", m_Specification.AppInfo.Name);

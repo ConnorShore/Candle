@@ -100,11 +100,11 @@ namespace Candle {
 		ScopedPtr<Window> m_Window;					// Empty when headless
 		InputSystem m_InputSystem;					// The game's input, minus what the GUI captured. Never fed when headless, since nothing is pumped
 		InputSystem m_DebugInputSystem;				// Every event, for the debug UI. Never fed when headless either
-		DebugDrawManager m_DebugDrawManager;		// Always present, even when headless, so the application can submit debug draw commands
 		JobSystem m_JobSystem;
 		ScopedPtr<RenderManager> m_RenderManager;	// Empty when headless
 		ScopedPtr<GuiSystem> m_GuiSystem;			// Empty when headless
 		ConsoleManager m_ConsoleManager;			// Always present, even when headless, so the application can log and execute commands
+		DebugDrawManager m_DebugDrawManager;		// Always present, even when headless, so the application can submit debug draw commands. After the console manager it takes
 		ScopedPtr<DebugUIManager> m_DebugUIManager;	// Empty when headless
 		RenderContext m_RenderContext;				// After the render manager, which it releases its output target through
 		AssetManager m_AssetManager;

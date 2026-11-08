@@ -166,7 +166,13 @@ namespace Candle {
 					kColorAttachmentWrite, kColorRange);
 				frame.CommandBuffer.pipelineBarrier2({ .imageMemoryBarrierCount = 1, .pImageMemoryBarriers = &toAttachment });
 
-				RenderTrianglePipeline(packet, frame, { .ColorView = output.ImageView, .Extent = { output.Extent.x, output.Extent.y } }, global);
+				const SceneTarget sceneTarget{ .ColorView = output.ImageView, .Extent = { output.Extent.x, output.Extent.y } };
+				RenderTrianglePipeline(packet, frame, sceneTarget, global);
+
+				// The debug pass loads what the scene pass wrote, so it has to wait for those writes
+				const vk::ImageMemoryBarrier2 toDebugDraw = MakeImageBarrier(output.Image, kColorAttachmentWrite, kColorAttachmentReadWrite, kColorRange);
+				frame.CommandBuffer.pipelineBarrier2({ .imageMemoryBarrierCount = 1, .pImageMemoryBarriers = &toDebugDraw });
+				RenderDebugDrawPipeline(packet, frame, sceneTarget, vk::AttachmentLoadOp::eLoad, global);
 
 				// The GUI samples it next, through a bindless descriptor that expects ShaderReadOnlyOptimal
 				const vk::ImageMemoryBarrier2 toSampled = MakeImageBarrier(output.Image, kColorAttachmentWrite,

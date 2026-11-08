@@ -8,8 +8,10 @@
 
 #include <Candle/Render/GUI/GuiInterop.h>
 #include <Candle/Render/GUI/GuiVertex.h>
+#include <Candle/Render/Pipelines/DebugDrawInterop.h>
 #include <Candle/Render/Pipelines/TriangleInterop.h>
 #include <Candle/Render/Pipelines/Shader.h>
+#include <Candle/Render/ShaderInterop/DebugDrawVertex.h>
 #include <Candle/Render/ShaderInterop/FrameData.h>
 #include <Candle/Render/ShaderInterop/GlobalPushConstants.h>
 #include <Candle/Render/ShaderInterop/Vertex.h>
@@ -40,10 +42,16 @@ CDL_STATIC_ASSERT(kIsPlainBytes<GPU::MeshDrawPushConstants>);
 CDL_STATIC_ASSERT(kIsPlainBytes<GPU::InteropFixturePushConstants>);
 CDL_STATIC_ASSERT(kIsPlainBytes<GPU::GuiVertex>);
 CDL_STATIC_ASSERT(kIsPlainBytes<GPU::GuiDrawPushConstants>);
+CDL_STATIC_ASSERT(kIsPlainBytes<GPU::DebugDrawVertex>);
+CDL_STATIC_ASSERT(kIsPlainBytes<GPU::DebugDrawPushConstants>);
 
 // Each UV half fills the tail of a float3, so a vertex is two 16-byte rows with no padding, in std430 as in C layout.
 CDL_STATIC_ASSERT(offsetof(GPU::Vertex, UVx) == 12 && offsetof(GPU::Vertex, Normal) == 16 && offsetof(GPU::Vertex, UVy) == 28);
 CDL_STATIC_ASSERT(sizeof(GPU::Vertex) == 32);
+
+// The colour packs into the float3's row, so C layout pads the vertex to 16, which is the stride the shader indexes by.
+CDL_STATIC_ASSERT(offsetof(GPU::DebugDrawVertex, Color) == 12);
+CDL_STATIC_ASSERT(sizeof(GPU::DebugDrawVertex) == 16);
 
 // A shader pointer is a vk::DeviceAddress on the C++ side.
 CDL_STATIC_ASSERT(sizeof(CDL_GPU_PTR(GPU::Vertex)) == sizeof(vk::DeviceAddress));

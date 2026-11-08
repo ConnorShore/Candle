@@ -1,5 +1,7 @@
 #include "cdlpch.h"
 #include "DebugDrawManager.h"
+#include "ConsoleManager.h"
+#include "DebugConstants.h"
 
 #include <ranges>
 
@@ -91,9 +93,10 @@ namespace Candle {
 			vertices.reserve(kCircleSegmentCount * 2);
 
 			// Create a rotation matrix to align the circle with the specified plane normal
-			glm::vec3 reference = glm::abs(circle.PlaneNormal.z) < 0.999f ? glm::vec3(0.0f, 0.0f, 1.0f) : glm::vec3(1.0f, 0.0f, 0.0f);
-			glm::vec3 u = glm::cross(reference, circle.PlaneNormal);
-			glm::vec3 v = glm::cross(circle.PlaneNormal, u);
+			glm::vec3 normalizedNormal = glm::normalize(circle.PlaneNormal);
+			glm::vec3 reference = glm::abs(normalizedNormal.z) < 0.999f ? glm::vec3(0.0f, 0.0f, 1.0f) : glm::vec3(1.0f, 0.0f, 0.0f);
+			glm::vec3 u = glm::normalize(glm::cross(reference, normalizedNormal));	// Only unit length when the normal is perpendicular to the reference
+			glm::vec3 v = glm::cross(normalizedNormal, u);
 
 			// Parametric equation of a circle
 			auto calcRotatedVert([&](float radian) {
@@ -158,7 +161,7 @@ namespace Candle {
 	}
 
 	// DebugDraw implementations
-#ifdef CDL_DEBUG_DRAW_ENABLED
+#if CDL_DEBUG_DRAW_ENABLED
 	namespace DebugDraw {
 
 		void Point(glm::vec3 position, glm::vec4 color, const Options& options)
@@ -219,7 +222,8 @@ namespace Candle {
 	}
 #endif
 
-	DebugDrawManager::DebugDrawManager()
+	DebugDrawManager::DebugDrawManager(ConsoleManager& consoleManager)
+		: m_ConsoleManager(consoleManager)
 	{
 		CDL_CORE_ASSERT(!s_Manager, "DebugDrawManager already exists!");
 		s_Manager = this;
