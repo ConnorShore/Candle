@@ -119,6 +119,19 @@ namespace Candle {
 			return vertices;
 		}
 
+		std::vector<GPU::DebugDrawVertex> TessellateSphere(const DebugDrawSphere& sphere, uint16_t color)
+		{
+			std::vector<GPU::DebugDrawVertex> vertices;
+			vertices.reserve(kCircleSegmentCount * 6);
+
+			// Draw three circles for the sphere
+			CombineVectors(vertices, TessellateCircle({ sphere.Position, glm::vec3(1.0f, 0.0f, 0.0f), sphere.Radius }, color));
+			CombineVectors(vertices, TessellateCircle({ sphere.Position, glm::vec3(0.0f, 1.0f, 0.0f), sphere.Radius }, color));
+			CombineVectors(vertices, TessellateCircle({ sphere.Position, glm::vec3(0.0f, 0.0f, 1.0f), sphere.Radius }, color));
+
+			return vertices;
+		}
+
 		void AddEntryToBucket(DebugDrawManager::DebugDrawEntry& entry, std::vector<GPU::DebugDrawVertex>& bucketData)
 		{
 			std::visit(Overloaded{
@@ -126,7 +139,7 @@ namespace Candle {
 				[&](const DebugDrawLine line) {	CombineVectors(bucketData, TessellateLine(line, entry.Color)); },
 				[&](const DebugDrawCircle circle) { CombineVectors(bucketData, TessellateCircle(circle, entry.Color)); },
 				[&](const DebugDrawCube cube) {	CombineVectors(bucketData, TessellateCube(cube, entry.Color));	},
-				[&](const DebugDrawSphere sphere) {}
+				[&](const DebugDrawSphere sphere) { CombineVectors(bucketData, TessellateSphere(sphere, entry.Color)); }
 				}, entry.Primitive);
 		}
 	}
@@ -179,6 +192,15 @@ namespace Candle {
 				.Scale{ size }
 			};
 			SubmitEntry(cube, color, options);
+		}
+
+		void Sphere(glm::vec3 center, float radius, glm::vec4 color, const Options& options)
+		{
+			DebugDrawSphere sphere{
+				.Position{ center },
+				.Radius{ radius }
+			};
+			SubmitEntry(sphere, color, options);
 		}
 
 	}

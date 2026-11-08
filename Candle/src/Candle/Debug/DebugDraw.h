@@ -27,12 +27,14 @@ namespace Candle::DebugDraw {
 	void Line(glm::vec3 start, glm::vec3 end, glm::vec4 color, const Options& options = {});
 	void Circle(glm::vec3 center, glm::vec3 planeNormal, float radius, glm::vec4 color, const Options& options = {});
 	void Cube(glm::vec3 center, glm::vec3 size, glm::vec4 color, const Options& options = {});
+	void Sphere(glm::vec3 center, float radius, glm::vec4 color, const Options& options = {});
 #else
 	inline void Point(glm::vec3, glm::vec4, const Options & = {}) {}
 	inline void Point(glm::vec3, float, glm::vec4, const Options & = {}) {}
 	inline void Line(glm::vec3, glm::vec3, glm::vec4, const Options & = {}) {}
 	inline void Circle(glm::vec3, glm::vec3, float, glm::vec4, const Options & = {}) {}
 	inline void Cube(glm::vec3, glm::vec3, glm::vec4, const Options & = {}) {}
+	inline void Sphere(glm::vec3, float, glm::vec4, const Options & = {}) {}
 #endif
 
 }
