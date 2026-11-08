@@ -290,20 +290,22 @@ CDL_TEST_CASE(DebugDrawManager, SphereIsThreeCirclesAtItsRadius, Unit)
 	CDL_EXPECT_NEAR(WorstRadiusError(data, center, 2.0f), 0.0f, kEpsilon);
 }
 
-// Which nibble holds which channel is the shader's contract, which the Renderer tests check by drawing; these pin the range
-CDL_TEST_CASE(DebugDrawManager, ColourPacksToFourBitsAChannelAndClamps, Unit)
+// Red goes in the low byte, as DebugDraw.slang unpacks it; the Renderer tests check the two agree by drawing
+CDL_TEST_CASE(DebugDrawManager, ColourPacksToEightBitsAChannelAndClamps, Unit)
 {
 	TestDebugDraw test;
 	DebugDraw::Line(glm::vec3(0.0f), glm::vec3(1.0f), kWhite);
 	DebugDraw::Line(glm::vec3(0.0f), glm::vec3(1.0f), glm::vec4(0.0f));
 	DebugDraw::Line(glm::vec3(0.0f), glm::vec3(1.0f), glm::vec4(2.0f));
 	DebugDraw::Line(glm::vec3(0.0f), glm::vec3(1.0f), glm::vec4(-1.0f));
+	DebugDraw::Line(glm::vec3(0.0f), glm::vec3(1.0f), { 1.0f, 0.6f, 0.2f, 0.8f });
 
 	// The sort isn't stable, so entries sharing a key can come out in any order
 	const DebugDrawData data = ExtractOnce(test.Manager);
-	CDL_CHECK_EQ(data.Vertices.size(), 8u);
-	CDL_EXPECT_EQ(std::ranges::count(data.Vertices, uint16_t{ 0xFFFF }, &GPU::DebugDrawVertex::Color), 4);
-	CDL_EXPECT_EQ(std::ranges::count(data.Vertices, uint16_t{ 0x0000 }, &GPU::DebugDrawVertex::Color), 4);
+	CDL_CHECK_EQ(data.Vertices.size(), 10u);
+	CDL_EXPECT_EQ(std::ranges::count(data.Vertices, 0xFFFFFFFFu, &GPU::DebugDrawVertex::Color), 4);
+	CDL_EXPECT_EQ(std::ranges::count(data.Vertices, 0x00000000u, &GPU::DebugDrawVertex::Color), 4);
+	CDL_EXPECT_EQ(std::ranges::count(data.Vertices, 0xCC3399FFu, &GPU::DebugDrawVertex::Color), 2);
 }
 
 CDL_TEST_CASE(DebugDrawManager, OneFrameEntriesDrawOnce, Unit)

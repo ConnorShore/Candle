@@ -86,7 +86,6 @@ CDL_TEST_CASE(DebugDrawPipeline, CompiledShaderIsNamedExactlyAsItIsLoaded, Unit)
 	CDL_EXPECT_MSG(onDisk == loaded, std::format("DebugDrawPipeline loads {}, but the file is {}; rebuild the shaders from a clean bin", loaded, onDisk));
 }
 
-// The shader reads a 16-bit colour through a buffer pointer, so validation also checks the device enables what that needs
 CDL_TEST_CASE(DebugDrawPipeline, BuildsAPipelineWithoutValidationMessages, Gpu)
 {
 	SkipUnlessCompiled(kDebugDrawShaderPath);

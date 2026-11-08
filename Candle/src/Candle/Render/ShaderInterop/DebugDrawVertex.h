@@ -7,7 +7,7 @@ CDL_INTEROP_BEGIN
 struct DebugDrawVertex
 {
 	float3 Position;
-	uint16_t Color;		// RGBA8 packed into a 16-bit unsigned integer
+	uint Color;		// RGBA8, red in the low byte as glm::packUnorm4x8 packs it
 };
 
 CDL_INTEROP_END

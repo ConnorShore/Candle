@@ -3,13 +3,16 @@
 #include "ConsoleManager.h"
 #include "DebugConstants.h"
 
+#include "Candle/Core/Profiler.h"
+
+#include <atomic>
 #include <ranges>
 
 namespace Candle {
 
 	namespace {
 
-		static DebugDrawManager* s_Manager{ nullptr };
+		static std::atomic<DebugDrawManager*> s_Manager{ nullptr };
 
 		// Cube corner pairs for a line list: bottom ring, top ring, then the four verticals
 		constexpr std::array<uint8_t, 24> kCubeEdgeIndices = {
@@ -17,21 +20,6 @@ namespace Candle {
 			4, 5,  5, 6,  6, 7,  7, 4,
 			0, 4,  1, 5,  2, 6,  3, 7
 		};
-
-		uint16_t ToColorUint16(const glm::vec4& v) 
-		{
-			float r = std::clamp(v.x, 0.0f, 1.0f);
-			float g = std::clamp(v.y, 0.0f, 1.0f);
-			float b = std::clamp(v.z, 0.0f, 1.0f);
-			float a = std::clamp(v.w, 0.0f, 1.0f);
-
-			uint16_t r4 = static_cast<uint16_t>(std::round(r * 15.0f));
-			uint16_t g4 = static_cast<uint16_t>(std::round(g * 15.0f));
-			uint16_t b4 = static_cast<uint16_t>(std::round(b * 15.0f));
-			uint16_t a4 = static_cast<uint16_t>(std::round(a * 15.0f));
-
-			return (r4 << 12) | (g4 << 8) | (b4 << 4) | a4;
-		}
 
 		uint8_t QuantizeLineWidth(float width)
 		{
@@ -47,51 +35,47 @@ namespace Candle {
 
 		void SubmitEntry(DebugDrawPrimitive primitive, glm::vec4 color, const DebugDraw::Options& options)
 		{
-			if (!s_Manager)
+			DebugDrawManager* manager = s_Manager.load(std::memory_order_acquire);
+			if (!manager)
 				return;
 
 			DebugDrawBucket bucket = options.DepthTest ? DebugDrawBucket::WorldDepthTested : DebugDrawBucket::WorldNoDepth;
-			uint16_t uColor = ToColorUint16(color);
-			s_Manager->Submit({
+			manager->Submit({
 				.Primitive{ primitive },
 				.Bucket{ bucket },
 				.LineWidth{ QuantizeLineWidth(options.LineWidth) },
-				.Color{ uColor },
+				.Color{ glm::packUnorm4x8(color) },
 				.Duration{ options.Duration }
 			});
 		}
 
-		template<typename T, typename ...Args>
-		void CombineVectors(std::vector<T>& src, Args&&... additional)
+		// Must match what each Tessellate function appends
+		size_t VertexCount(const DebugDrawPrimitive& primitive)
 		{
-			for (const auto& vec : { std::forward<Args>(additional)... })
-				src.insert(src.end(), vec.begin(), vec.end());
+			return std::visit(Overloaded{
+				[](const DebugDrawPoint&) { return size_t{ 4 }; },
+				[](const DebugDrawLine&) { return size_t{ 2 }; },
+				[](const DebugDrawCircle&) { return kCircleSegmentCount * 2; },
+				[](const DebugDrawCube&) { return kCubeEdgeIndices.size(); },
+				[](const DebugDrawSphere&) { return kCircleSegmentCount * 2 * 3; }
+				}, primitive);
 		}
 
-		std::vector<GPU::DebugDrawVertex> TessellateLine(const DebugDrawLine& line, uint16_t color)
+		void TessellateLine(const DebugDrawLine& line, uint32_t color, std::vector<GPU::DebugDrawVertex>& outVertices)
 		{
-			std::vector<GPU::DebugDrawVertex> vertices;
-			vertices.emplace_back(line.Start, color);
-			vertices.emplace_back(line.End, color);
-			return vertices;
+			outVertices.emplace_back(line.Start, color);
+			outVertices.emplace_back(line.End, color);
 		}
 
-		std::vector<GPU::DebugDrawVertex> TessellatePoint(const DebugDrawPoint& point, uint16_t color)
+		void TessellatePoint(const DebugDrawPoint& point, uint32_t color, std::vector<GPU::DebugDrawVertex>& outVertices)
 		{
-			auto upVec = TessellateLine({ point.Position - glm::vec3(0.0f, point.Size / 2.0f, 0.0f), point.Position + glm::vec3(0.0f, point.Size / 2.0f, 0.0f) }, color);
-			auto rightVec = TessellateLine({ point.Position - glm::vec3(point.Size / 2.0f, 0.0f, 0.0f), point.Position + glm::vec3(point.Size / 2.0f, 0.0f, 0.0f) }, color);
-			std::vector<GPU::DebugDrawVertex> vertices;
-			vertices.reserve(upVec.size() + rightVec.size());
-			CombineVectors(vertices, upVec, rightVec);
-			return vertices;
+			TessellateLine({ point.Position - glm::vec3(0.0f, point.Size / 2.0f, 0.0f), point.Position + glm::vec3(0.0f, point.Size / 2.0f, 0.0f) }, color, outVertices);
+			TessellateLine({ point.Position - glm::vec3(point.Size / 2.0f, 0.0f, 0.0f), point.Position + glm::vec3(point.Size / 2.0f, 0.0f, 0.0f) }, color, outVertices);
 		}
 
 		// TODO:  Need to support rotations so can draw 3 circles for a sphere
-		std::vector<GPU::DebugDrawVertex> TessellateCircle(const DebugDrawCircle& circle, uint16_t color)
+		void TessellateCircle(const DebugDrawCircle& circle, uint32_t color, std::vector<GPU::DebugDrawVertex>& outVertices)
 		{
-			std::vector<GPU::DebugDrawVertex> vertices;
-			vertices.reserve(kCircleSegmentCount * 2);
-
 			// Create a rotation matrix to align the circle with the specified plane normal
 			glm::vec3 normalizedNormal = glm::normalize(circle.PlaneNormal);
 			glm::vec3 reference = glm::abs(normalizedNormal.z) < 0.999f ? glm::vec3(0.0f, 0.0f, 1.0f) : glm::vec3(1.0f, 0.0f, 0.0f);
@@ -110,15 +94,12 @@ namespace Candle {
 			{
 				float startRad = indexToRadians(i);
 				float endRad = indexToRadians((i + 1) % kCircleSegmentCount);
-				CombineVectors(vertices, TessellateLine({ calcRotatedVert(startRad), calcRotatedVert(endRad) }, color));
+				TessellateLine({ calcRotatedVert(startRad), calcRotatedVert(endRad) }, color, outVertices);
 			}
-
-			return vertices;
 		}
 
-		std::vector<GPU::DebugDrawVertex> TessellateCube(const DebugDrawCube& cube, uint16_t color)
+		void TessellateCube(const DebugDrawCube& cube, uint32_t color, std::vector<GPU::DebugDrawVertex>& outVertices)
 		{
-			std::vector<GPU::DebugDrawVertex> vertices;
 			const glm::vec3 h = cube.Scale * 0.5f;
 			const std::array<glm::vec3, 8> corners = {
 				cube.Position + glm::vec3(-h.x, -h.y, -h.z),
@@ -131,31 +112,25 @@ namespace Candle {
 				cube.Position + glm::vec3(-h.x,  h.y,  h.z)
 			};
 			for (uint8_t index : kCubeEdgeIndices)
-				vertices.emplace_back(corners[index], color);
-			return vertices;
+				outVertices.emplace_back(corners[index], color);
 		}
 
-		std::vector<GPU::DebugDrawVertex> TessellateSphere(const DebugDrawSphere& sphere, uint16_t color)
+		void TessellateSphere(const DebugDrawSphere& sphere, uint32_t color, std::vector<GPU::DebugDrawVertex>& outVertices)
 		{
-			std::vector<GPU::DebugDrawVertex> vertices;
-			vertices.reserve(kCircleSegmentCount * 6);
-
 			// Draw three circles for the sphere
-			CombineVectors(vertices, TessellateCircle({ sphere.Position, glm::vec3(1.0f, 0.0f, 0.0f), sphere.Radius }, color));
-			CombineVectors(vertices, TessellateCircle({ sphere.Position, glm::vec3(0.0f, 1.0f, 0.0f), sphere.Radius }, color));
-			CombineVectors(vertices, TessellateCircle({ sphere.Position, glm::vec3(0.0f, 0.0f, 1.0f), sphere.Radius }, color));
-
-			return vertices;
+			TessellateCircle({ sphere.Position, glm::vec3(1.0f, 0.0f, 0.0f), sphere.Radius }, color, outVertices);
+			TessellateCircle({ sphere.Position, glm::vec3(0.0f, 1.0f, 0.0f), sphere.Radius }, color, outVertices);
+			TessellateCircle({ sphere.Position, glm::vec3(0.0f, 0.0f, 1.0f), sphere.Radius }, color, outVertices);
 		}
 
 		void TessellateEntry(const DebugDrawManager::DebugDrawEntry& entry, std::vector<GPU::DebugDrawVertex>& outVertices)
 		{
 			std::visit(Overloaded{
-				[&](const DebugDrawPoint point) { CombineVectors(outVertices, TessellatePoint(point, entry.Color)); },
-				[&](const DebugDrawLine line) {	CombineVectors(outVertices, TessellateLine(line, entry.Color)); },
-				[&](const DebugDrawCircle circle) { CombineVectors(outVertices, TessellateCircle(circle, entry.Color)); },
-				[&](const DebugDrawCube cube) {	CombineVectors(outVertices, TessellateCube(cube, entry.Color));	},
-				[&](const DebugDrawSphere sphere) { CombineVectors(outVertices, TessellateSphere(sphere, entry.Color)); }
+				[&](const DebugDrawPoint& point) { TessellatePoint(point, entry.Color, outVertices); },
+				[&](const DebugDrawLine& line) { TessellateLine(line, entry.Color, outVertices); },
+				[&](const DebugDrawCircle& circle) { TessellateCircle(circle, entry.Color, outVertices); },
+				[&](const DebugDrawCube& cube) { TessellateCube(cube, entry.Color, outVertices); },
+				[&](const DebugDrawSphere& sphere) { TessellateSphere(sphere, entry.Color, outVertices); }
 				}, entry.Primitive);
 		}
 	}
@@ -225,13 +200,13 @@ namespace Candle {
 	DebugDrawManager::DebugDrawManager(ConsoleManager& consoleManager)
 		: m_ConsoleManager(consoleManager)
 	{
-		CDL_CORE_ASSERT(!s_Manager, "DebugDrawManager already exists!");
-		s_Manager = this;
+		CDL_CORE_ASSERT(!s_Manager.load(std::memory_order_relaxed), "DebugDrawManager already exists!");
+		s_Manager.store(this, std::memory_order_release);
 	}
 
 	DebugDrawManager::~DebugDrawManager()
 	{
-		s_Manager = nullptr;
+		s_Manager.store(nullptr, std::memory_order_release);
 	}
 
 	void DebugDrawManager::Submit(DebugDrawEntry entry)
@@ -241,6 +216,8 @@ namespace Candle {
 
 	void DebugDrawManager::ExtractDebugDrawData(DebugDrawData& outData, TimeStep delta)
 	{
+		CDL_PROFILE_FUNCTION();
+
 		outData.Vertices.clear();
 		outData.Batches.clear();
 		m_FrameEntries.clear();
@@ -279,6 +256,11 @@ namespace Candle {
 
 		std::ranges::sort(m_FrameEntries, {}, SortKey);
 
+		size_t vertexCount = 0;
+		for (const DebugDrawEntry& entry : m_FrameEntries)
+			vertexCount += VertexCount(entry.Primitive);
+		outData.Vertices.reserve(vertexCount);
+
 		uint32_t batchKey = std::numeric_limits<uint32_t>::max();
 		for (const auto& entry : m_FrameEntries)
 		{
@@ -299,6 +281,8 @@ namespace Candle {
 			DebugDrawBatch& batch = outData.Batches.back();
 			batch.VertexCount = static_cast<uint32_t>(outData.Vertices.size()) - batch.FirstVertex;
 		}
+
+		CDL_CORE_ASSERT(outData.Vertices.size() == vertexCount, "VertexCount is out of step with the Tessellate functions");
 	}
 
 }

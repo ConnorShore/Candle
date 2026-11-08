@@ -67,7 +67,7 @@ namespace Candle {
 			DebugDrawPrimitive Primitive;
 			DebugDrawBucket Bucket;
 			uint8_t LineWidth{ static_cast<uint8_t>(kLineWidthStepsPerPixel) };	// In 1 / kLineWidthStepsPerPixel steps
-			uint16_t Color{ 0 };
+			uint32_t Color{ 0 };
 			float Duration{ 0.0f };
 		};
 

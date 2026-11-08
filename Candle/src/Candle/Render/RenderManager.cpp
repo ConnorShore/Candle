@@ -55,7 +55,7 @@ namespace Candle {
 			.Name = "Candle-RenderThread",
 			.Priority = ThreadPriority::High,
 			.OnException = [this](const std::exception& e, const std::string& threadName) {
-				if (dynamic_cast<const vk::DeviceLostError*>(&e))
+				if (dynamic_cast<const vk::DeviceLostError*>(&e) && m_RenderDevice.HasDeviceFault())
 					ErrorHandler::CheckDeviceFault(m_RenderDevice.GetDevice());
 			} })
 	{

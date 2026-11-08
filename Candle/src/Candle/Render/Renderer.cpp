@@ -51,8 +51,12 @@ namespace Candle {
 			CDL_CORE_PANIC(LogChannel::Render, "No suitable depth format found");
 		}
 
+		// The device reports its range whether or not wideLines is enabled, but without it only 1 is valid
 		glm::vec2 FindLineWidthRange(RenderDevice& device)
 		{
+			if (!device.HasWideLines())
+				return { 1.0f, 1.0f };
+
 			const auto& range = device.GetPhysicalDevice().getProperties().limits.lineWidthRange;
 			return { range[0], range[1] };
 		}
@@ -255,11 +259,12 @@ namespace Candle {
 			.storeOp = vk::AttachmentStoreOp::eStore,
 			.clearValue = clearColor };
 
+		// The debug pass loads depth to test its lines against the scene, so it's only discarded when there are none
 		vk::RenderingAttachmentInfo depthAttachmentInfo = {
 			.imageView = m_DepthImage.GetImageView(),
 			.imageLayout = vk::ImageLayout::eDepthStencilAttachmentOptimal,
 			.loadOp = vk::AttachmentLoadOp::eClear,
-			.storeOp = vk::AttachmentStoreOp::eDontCare,
+			.storeOp = packet.DebugDraw.Vertices.empty() ? vk::AttachmentStoreOp::eDontCare : vk::AttachmentStoreOp::eStore,
 			.clearValue = clearDepth
 		};
 
@@ -326,21 +331,17 @@ namespace Candle {
 		if (debugDraw.Vertices.empty())
 			return;
 
-		// Transition the depth image to DEPTH_ATTACHMENT_OPTIMAL
-		//vk::ImageMemoryBarrier2 depthBarrier = MakeImageBarrier(
-		//	m_DepthImage.GetImage(),
-		//	// Undefined discards the old contents, which the clear would overwrite anyway. Every frame in flight shares this one image,
-		//	// so wait for the previous frame's depth writes (tests and store op), or this transition and clear race them
-		//	{ .Layout = vk::ImageLayout::eColorAttachmentOptimal,
-		//		.Access = vk::AccessFlagBits2::eDepthStencilAttachmentWrite,
-		//		.Stage = vk::PipelineStageFlagBits2::eEarlyFragmentTests | vk::PipelineStageFlagBits2::eLateFragmentTests },
-		//	// The clear writes in early tests, the depth compare reads and writes in early or late tests
-		//	{ .Layout = vk::ImageLayout::eDepthStencilAttachmentOptimal,
-		//		.Access = vk::AccessFlagBits2::eDepthStencilAttachmentRead | vk::AccessFlagBits2::eDepthStencilAttachmentWrite,
-		//		.Stage = vk::PipelineStageFlagBits2::eEarlyFragmentTests | vk::PipelineStageFlagBits2::eLateFragmentTests },
-		//	{ .aspectMask = vk::ImageAspectFlagBits::eDepth, .baseMipLevel = 0, .levelCount = 1, .baseArrayLayer = 0, .layerCount = 1 }		// The depth image is a single 2D image, so we only have one mip level and one array layer
-		//);
-		//frame.CommandBuffer.pipelineBarrier2({ .imageMemoryBarrierCount = 1, .pImageMemoryBarriers = &depthBarrier });
+		// Rendering instances don't order against each other, so the load and depth tests here wait on the scene pass's depth
+		// writes and its store, which land in early or late tests. The layout doesn't change
+		const vk::ImageMemoryBarrier2 depthBarrier = MakeImageBarrier(m_DepthImage.GetImage(),
+			{ .Layout = vk::ImageLayout::eDepthStencilAttachmentOptimal,
+				.Access = vk::AccessFlagBits2::eDepthStencilAttachmentWrite,
+				.Stage = vk::PipelineStageFlagBits2::eEarlyFragmentTests | vk::PipelineStageFlagBits2::eLateFragmentTests },
+			{ .Layout = vk::ImageLayout::eDepthStencilAttachmentOptimal,
+				.Access = vk::AccessFlagBits2::eDepthStencilAttachmentRead | vk::AccessFlagBits2::eDepthStencilAttachmentWrite,
+				.Stage = vk::PipelineStageFlagBits2::eEarlyFragmentTests | vk::PipelineStageFlagBits2::eLateFragmentTests },
+			{ .aspectMask = vk::ImageAspectFlagBits::eDepth, .levelCount = 1, .layerCount = 1 });
+		frame.CommandBuffer.pipelineBarrier2({ .imageMemoryBarrierCount = 1, .pImageMemoryBarriers = &depthBarrier });
 
 		vk::ClearValue clearColor = vk::ClearColorValue(0.0f, 0.0f, 0.0f, 1.0f);
 		vk::ClearValue clearDepth = vk::ClearDepthStencilValue(1.0f, 0);

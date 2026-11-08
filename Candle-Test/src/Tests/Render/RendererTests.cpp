@@ -840,7 +840,7 @@ namespace {
 }
 
 // Every channel differs, so any mismatch between how DebugDrawManager packs the colour and how the shader unpacks it shows.
-// Each value is a multiple of 1/15, so it survives the four bits a channel exactly.
+// Each value is a multiple of 1/255, so it survives the eight bits a channel exactly.
 CDL_TEST_CASE(Renderer, DebugLineDrawsInTheColourItWasGiven, Gpu)
 {
 	SkipUnlessRendererShadersCompiled();
@@ -909,6 +909,9 @@ CDL_TEST_CASE(Renderer, EachDebugBatchDrawsAtItsOwnLineWidth, Gpu)
 	LoggerFixture logs(LogLevel::Warn, kRenderChannelMask);
 	{
 		TestRenderer test(kWideExtent);
+		if (!test.Device.HasWideLines() || test.Device.GetPhysicalDevice().getProperties().limits.lineWidthRange[1] < 5.0f)
+			CDL_SKIP("the device can't draw 5 pixel wide lines");
+
 		TestTarget target = CreateTarget(test.Device, kWideExtent);
 		ConsoleManager console;
 		DebugDrawManager debugDraw(console);
