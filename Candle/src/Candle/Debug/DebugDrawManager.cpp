@@ -77,26 +77,24 @@ namespace Candle {
 			std::vector<GPU::DebugDrawVertex> vertices;
 			vertices.reserve(kCircleSegmentCount * 2);
 
-			// TODO: Create a rotation matrix to align the circle with the specified plane normal
+			// Create a rotation matrix to align the circle with the specified plane normal
+			glm::vec3 reference = glm::abs(circle.PlaneNormal.z) < 0.999f ? glm::vec3(0.0f, 0.0f, 1.0f) : glm::vec3(1.0f, 0.0f, 0.0f);
+			glm::vec3 u = glm::cross(reference, circle.PlaneNormal);
+			glm::vec3 v = glm::cross(circle.PlaneNormal, u);
+
+			// Parametric equation of a circle
+			auto calcRotatedVert([&](float radian) {
+				return circle.Center + (circle.Radius * glm::cos(radian) * u) + (circle.Radius * glm::sin(radian) * v);
+			});
 
 			// Draw the circle
-			float degreesPerLine = 360.0f / kCircleSegmentCount;
-			auto indexToRadians([degreesPerLine](uint32_t i) { return glm::radians(i * degreesPerLine); });
+			float segments = 360.0f / kCircleSegmentCount;
+			auto indexToRadians([segments](uint32_t i) { return glm::radians(i * segments); });
 			for (uint32_t i = 0; i < kCircleSegmentCount; i++)
 			{
 				float startRad = indexToRadians(i);
 				float endRad = indexToRadians((i + 1) % kCircleSegmentCount);
-				glm::vec3 start = {
-					circle.Center.x + (circle.Radius * glm::cos(startRad)),
-					circle.Center.y,
-					circle.Center.z + (circle.Radius * glm::sin(startRad))
-				};
-				glm::vec3 end = {
-					circle.Center.x + (circle.Radius * glm::cos(endRad)),
-					circle.Center.y,
-					circle.Center.z + (circle.Radius * glm::sin(endRad))
-				};
-				CombineVectors(vertices, TessellateLine({ start, end }, color));
+				CombineVectors(vertices, TessellateLine({ calcRotatedVert(startRad), calcRotatedVert(endRad) }, color));
 			}
 
 			return vertices;

@@ -91,7 +91,7 @@ namespace Candle {
 		// Set up the world with the entities
 		context.ActiveWorld.Entities = entities;
 
-		m_CameraPose.Orientation = glm::quatLookAt(glm::normalize(texturedCubePosition - m_CameraPose.Position), glm::vec3(0.0f, 1.0f, 0.0f));
+		m_CameraPose.Orientation = glm::quatLookAt(glm::vec3(0.0f, 0.0f, -1.0f), glm::vec3(0.0f, 1.0f, 0.0f));
 
 		CDL_INFO(LogChannel::Application, "SandboxApp initialized!");
 	}
@@ -108,18 +108,19 @@ namespace Candle {
 		m_CameraPose = UpdateSimpleController(m_CameraController, m_CameraPose, context.Input, context.DeltaTime);
 		context.AppContext.ActiveWorld.RenderView = MakeRenderView(m_CameraPose, m_CameraLens, static_cast<float>(outputSize.x) / outputSize.y);
 
-		static bool cubeDrawn = false;
-		if (!cubeDrawn)
+		static bool drawn = false;
+		if (!drawn)
 		{
 			DebugDraw::Cube(glm::vec3(2.0f, 2.0f, 0.0f), glm::vec3(1.0f), glm::vec4(1.0f, 0.0f, 1.0f, 1.0f), { .Duration{ 3.0f }, .DepthTest{ true } });
 			DebugDraw::Cube(glm::vec3(-2.0f, 2.0f, 0.0f), glm::vec3(1.0f), glm::vec4(1.0f, 0.0f, 1.0f, 1.0f), { .Duration{ 1.5f }, .DepthTest{ true } });
+
 			DebugDraw::Point(glm::vec3(-1.0f, 0.0f, 0.0f), glm::vec4(0.0f, 1.0f, 0.0f, 1.0f), { .Duration{ 5.0f }, .DepthTest{ false } });
 			DebugDraw::Point(glm::vec3(1.0f, 0.0f, 0.0f), glm::vec4(0.0f, 1.0f, 0.0f, 1.0f), { .Duration{ 5.0f }, .DepthTest{ false } });
 			DebugDraw::Line(glm::vec3(-1.0f, 0.0f, 0.0f), glm::vec3(1.0f, 0.0f, 0.0f), glm::vec4(1.0f, 1.0f, 0.0f, 1.0f), { .Duration{ 5.0f }, .DepthTest{ false } });
 
-			DebugDraw::Circle(glm::vec3(0.0f, -2.0f, 1.0f), glm::vec3(0.0f, 1.0f, 0.0f), 1.5f, glm::vec4(1.0f), { .Duration{ DebugDraw::kUnlimitedDuration }, .DepthTest{ true } });
+			DebugDraw::Circle(glm::vec3(0.0f, -2.0f, 1.0f), glm::vec3(1.0f, 0.0f, 0.0f), 1.5f, glm::vec4(1.0f), { .Duration{ DebugDraw::kUnlimitedDuration }, .DepthTest{ true } });
 
-			cubeDrawn = true;
+			drawn = true;
 		}
 
 		// Show the world in a window when it renders to a texture
