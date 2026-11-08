@@ -85,6 +85,7 @@ namespace Candle {
 		vk::Format m_DepthFormat;	// Chosen once, before m_DepthImage; the depth image and every pipeline's spec both take it
 		GPUImage m_DepthImage;	// Shared by every frame in flight, so each frame's first barrier waits for the last one's depth writes
 		glm::uvec2 m_DepthExtent;
+		glm::vec2 m_LineWidthRange;
 		DeletionQueue m_RetiredImages;	// Depth images replaced by MatchDepthToOutput, held until the frames using them retire
 		std::vector<Pipeline> m_Pipelines;
 	};

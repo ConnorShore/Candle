@@ -9,7 +9,12 @@ namespace Candle {
 
 	namespace {
 
-		constexpr std::array<vk::DynamicState, 3> kDynamicStates = { vk::DynamicState::eViewport, vk::DynamicState::eScissor, vk::DynamicState::eDepthTestEnable };
+		constexpr std::array<vk::DynamicState, 4> kDynamicStates = { 
+			vk::DynamicState::eViewport, 
+			vk::DynamicState::eScissor, 
+			vk::DynamicState::eDepthTestEnable,
+			vk::DynamicState::eLineWidth
+		};
 		constexpr vk::FrontFace kDefaultFrontFace = vk::FrontFace::eCounterClockwise;
 
 		vk::ShaderStageFlagBits ShaderStageToVulkanShaderStage(ShaderStage stage)

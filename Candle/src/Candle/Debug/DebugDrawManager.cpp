@@ -31,6 +31,18 @@ namespace Candle {
 			return (r4 << 12) | (g4 << 8) | (b4 << 4) | a4;
 		}
 
+		uint8_t QuantizeLineWidth(float width)
+		{
+			float steps = std::round(width * kLineWidthStepsPerPixel);
+			return static_cast<uint8_t>(std::clamp(steps, 1.0f, 255.0f));
+		}
+
+		// Bucket is the major key since changing it changes pipeline state, not just the line width
+		uint32_t SortKey(const DebugDrawManager::DebugDrawEntry& entry)
+		{
+			return (static_cast<uint32_t>(entry.Bucket) << 8) | entry.LineWidth;
+		}
+
 		void SubmitEntry(DebugDrawPrimitive primitive, glm::vec4 color, const DebugDraw::Options& options)
 		{
 			if (!s_Manager)
@@ -41,6 +53,7 @@ namespace Candle {
 			s_Manager->Submit({
 				.Primitive{ primitive },
 				.Bucket{ bucket },
+				.LineWidth{ QuantizeLineWidth(options.LineWidth) },
 				.Color{ uColor },
 				.Duration{ options.Duration }
 			});
@@ -132,14 +145,14 @@ namespace Candle {
 			return vertices;
 		}
 
-		void AddEntryToBucket(DebugDrawManager::DebugDrawEntry& entry, std::vector<GPU::DebugDrawVertex>& bucketData)
+		void TessellateEntry(const DebugDrawManager::DebugDrawEntry& entry, std::vector<GPU::DebugDrawVertex>& outVertices)
 		{
 			std::visit(Overloaded{
-				[&](const DebugDrawPoint point) { CombineVectors(bucketData, TessellatePoint(point, entry.Color)); },
-				[&](const DebugDrawLine line) {	CombineVectors(bucketData, TessellateLine(line, entry.Color)); },
-				[&](const DebugDrawCircle circle) { CombineVectors(bucketData, TessellateCircle(circle, entry.Color)); },
-				[&](const DebugDrawCube cube) {	CombineVectors(bucketData, TessellateCube(cube, entry.Color));	},
-				[&](const DebugDrawSphere sphere) { CombineVectors(bucketData, TessellateSphere(sphere, entry.Color)); }
+				[&](const DebugDrawPoint point) { CombineVectors(outVertices, TessellatePoint(point, entry.Color)); },
+				[&](const DebugDrawLine line) {	CombineVectors(outVertices, TessellateLine(line, entry.Color)); },
+				[&](const DebugDrawCircle circle) { CombineVectors(outVertices, TessellateCircle(circle, entry.Color)); },
+				[&](const DebugDrawCube cube) {	CombineVectors(outVertices, TessellateCube(cube, entry.Color));	},
+				[&](const DebugDrawSphere sphere) { CombineVectors(outVertices, TessellateSphere(sphere, entry.Color)); }
 				}, entry.Primitive);
 		}
 	}
@@ -217,60 +230,6 @@ namespace Candle {
 		s_Manager = nullptr;
 	}
 
-	//void DebugDrawManager::DrawPoint(glm::vec3 position, glm::vec4 color, float duration /*= 0.0f*/, bool depthEnabled /*= true*/)
-	//{
-	//	uint16_t uColor = ToColorUint16(color);
-	//	DebugDrawPoint point{
-	//		.Position{ position },
-	//		.Size{ kDefaultPointSize }
-	//	};
-
-	//	DebugDrawBucket bucket = depthEnabled ? DebugDrawBucket::WorldDepthTested : DebugDrawBucket::WorldNoDepth;
-	//	DebugDrawEntry entry{
-	//		.Primitive{ point },
-	//		.Bucket{ bucket },
-	//		.Color{ uColor },
-	//		.Duration{ duration }
-	//	};
-	//	m_DrawQueue.TryPush(entry);
-	//}
-
-	//void DebugDrawManager::DrawCube(glm::vec3 position, glm::vec3 size, glm::vec4 color, float duration /*= 0.0f*/, bool depthEnabled /*= true*/)
-	//{
-	//	uint16_t uColor = ToColorUint16(color);
-	//	DebugDrawCube cube{
-	//		.Position{ position },
-	//		.Scale{ size }
-	//	};
-
-	//	DebugDrawBucket bucket = depthEnabled ? DebugDrawBucket::WorldDepthTested : DebugDrawBucket::WorldNoDepth;
-	//	DebugDrawEntry entry{
-	//		.Primitive{ cube },
-	//		.Bucket{ bucket },
-	//		.Color{ uColor },
-	//		.Duration{ duration }
-	//	};
-	//	m_DrawQueue.TryPush(entry);
-	//}
-
-	//void DebugDrawManager::DrawSphere(glm::vec3 position, float radius, glm::vec4 color, float duration /*= 0.0f*/, bool depthEnabled /*= true*/)
-	//{
-	//	uint16_t uColor = ToColorUint16(color);
-	//	DebugDrawSphere sphere{
-	//		.Position{ position },
-	//		.Radius{ radius }
-	//	};
-
-	//	DebugDrawBucket bucket = depthEnabled ? DebugDrawBucket::WorldDepthTested : DebugDrawBucket::WorldNoDepth;
-	//	DebugDrawEntry entry{
-	//		.Primitive{ sphere },
-	//		.Bucket{ bucket },
-	//		.Color{ uColor },
-	//		.Duration{ duration }
-	//	};
-	//	m_DrawQueue.TryPush(entry);
-	//}
-
 	void DebugDrawManager::Submit(DebugDrawEntry entry)
 	{
 		m_DrawQueue.TryPush(entry);
@@ -278,12 +237,12 @@ namespace Candle {
 
 	void DebugDrawManager::ExtractDebugDrawData(DebugDrawData& outData, TimeStep delta)
 	{
-		// Clear buckets
-		for (auto& bucket : outData.Buckets)
-			bucket.clear();
+		outData.Vertices.clear();
+		outData.Batches.clear();
+		m_FrameEntries.clear();
 
-		//	Loop over persistent items and add to buckets if not yet expired
-		//  If expired, then swap-remove, otherwise, add to bucket
+		//	Loop over persistent items and keep them for this frame if not yet expired
+		//  If expired, then swap-remove
 		for (size_t i = 0; i < m_Persistent.size();)
 		{
 			auto& entry = m_Persistent[i];
@@ -294,9 +253,7 @@ namespace Candle {
 
 			if (entry.Duration > 0.0f)
 			{
-				// Add to bucket
-				auto& targetBucketVec = outData.Buckets[static_cast<size_t>(entry.Bucket)];
-				AddEntryToBucket(entry, targetBucketVec);
+				m_FrameEntries.push_back(entry);
 				++i;
 			}
 			else
@@ -307,19 +264,36 @@ namespace Candle {
 			}
 		}
 
-		// Extract entries from buffer, tessellate and put vertices into proper bucket
 		while (auto entry = m_DrawQueue.Pop())
 		{
-			// If no more entries, break
-			if (!entry.has_value())
-				break;
-
-			auto& targetBucketVec = outData.Buckets[static_cast<size_t>(entry->Bucket)];
-			AddEntryToBucket(*entry, targetBucketVec);
+			m_FrameEntries.push_back(*entry);
 
 			// If the entry has a duration, add it to the persistent list
 			if (entry->Duration > 0.0f)
-				m_Persistent.emplace_back(*entry);
+				m_Persistent.push_back(*entry);
+		}
+
+		std::ranges::sort(m_FrameEntries, {}, SortKey);
+
+		uint32_t batchKey = std::numeric_limits<uint32_t>::max();
+		for (const auto& entry : m_FrameEntries)
+		{
+			uint32_t key = SortKey(entry);
+			if (key != batchKey)
+			{
+				outData.Batches.push_back({
+					.Bucket{ entry.Bucket },
+					.LineWidth{ entry.LineWidth / kLineWidthStepsPerPixel },
+					.FirstVertex{ static_cast<uint32_t>(outData.Vertices.size()) },
+					.VertexCount{ 0 }
+				});
+				batchKey = key;
+			}
+
+			TessellateEntry(entry, outData.Vertices);
+
+			DebugDrawBatch& batch = outData.Batches.back();
+			batch.VertexCount = static_cast<uint32_t>(outData.Vertices.size()) - batch.FirstVertex;
 		}
 	}
 

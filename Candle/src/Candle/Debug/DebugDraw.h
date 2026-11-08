@@ -17,6 +17,7 @@ namespace Candle::DebugDraw {
 	struct Options
 	{
 		float Duration = 0.0f;  // Seconds; 0 draws for one frame
+		float LineWidth = 1.0f; // For lines and wireframe shapes
 		bool DepthTest = true;
 	};
 

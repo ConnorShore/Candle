@@ -56,6 +56,7 @@ namespace Candle {
 #define CDL_REQUIRED_FEATURE(Struct, Member) [](FeatureChain& chain) -> vk::Bool32& { return chain.get<Struct>().Member; }
 		constexpr FeatureField kRequiredFeatures[] = {
 			CDL_REQUIRED_FEATURE(vk::PhysicalDeviceFeatures2, features.samplerAnisotropy),
+			CDL_REQUIRED_FEATURE(vk::PhysicalDeviceFeatures2, features.wideLines),
 			CDL_REQUIRED_FEATURE(vk::PhysicalDeviceFeatures2, features.shaderInt16),
 			CDL_REQUIRED_FEATURE(vk::PhysicalDeviceVulkan11Features, shaderDrawParameters),	// Slang lowers SV_VertexID to VertexIndex - BaseVertex
 			CDL_REQUIRED_FEATURE(vk::PhysicalDeviceVulkan12Features, scalarBlockLayout),	// slangc -fvk-use-c-layout emits offsets and strides std430 rejects

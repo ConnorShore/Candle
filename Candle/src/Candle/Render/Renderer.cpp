@@ -51,6 +51,12 @@ namespace Candle {
 			CDL_CORE_PANIC(LogChannel::Render, "No suitable depth format found");
 		}
 
+		glm::vec2 FindLineWidthRange(RenderDevice& device)
+		{
+			const auto& range = device.GetPhysicalDevice().getProperties().limits.lineWidthRange;
+			return { range[0], range[1] };
+		}
+
 		GPUImageSpec DepthImageSpec(vk::Format format, glm::uvec2 extent)
 		{
 			return { .Extent = extent,
@@ -87,6 +93,7 @@ namespace Candle {
 		, m_DepthFormat(FindDepthFormat(renderDevice))
 		, m_DepthImage(DepthImageSpec(m_DepthFormat, { info.TargetExtent.width, info.TargetExtent.height }), allocator) // Sized to the colour target
 		, m_DepthExtent(info.TargetExtent.width, info.TargetExtent.height)
+		, m_LineWidthRange(FindLineWidthRange(renderDevice))
 	{
 		CreatePipeline(TrianglePipeline{ info.ShaderDirectory });
 		CreatePipeline(GuiPipeline{ info.ShaderDirectory });
@@ -309,8 +316,8 @@ namespace Candle {
 	void Renderer::RenderDebugDrawPipeline(const FramePacket& packet, FrameContext& frame, const SceneTarget& target, vk::AttachmentLoadOp loadOp, const GPU::GlobalPushConstants globalPCs)
 	{
 		// Skip the pass if there's nothing to draw, so the target's loadOp is respected and the depth image isn't transitioned
-		bool hasDraws = std::ranges::any_of(packet.DebugDraw.Buckets, [](const auto& bucket) { return !bucket.empty(); });
-		if (!hasDraws)
+		const DebugDrawData& debugDraw = packet.DebugDraw;
+		if (debugDraw.Vertices.empty())
 			return;
 
 		// Transition the depth image to DEPTH_ATTACHMENT_OPTIMAL
@@ -360,25 +367,8 @@ namespace Candle {
 			.pDepthAttachment = &depthAttachmentInfo
 		};
 
-		// Write all the vertices from all buckets to the GPUBuffer
-		std::vector<vk::DeviceSize> offsets;
-		offsets.reserve(packet.DebugDraw.Buckets.size());
-
-		uint32_t totalVertices = 0;
-		for (auto& bucket : packet.DebugDraw.Buckets) {
-			offsets.push_back(totalVertices * sizeof(GPU::DebugDrawVertex));
-			totalVertices += static_cast<uint32_t>(bucket.size());
-		}
-
-		std::vector<GPU::DebugDrawVertex> combinedVerts;
-		combinedVerts.reserve(totalVertices);
-
-		for (auto& bucket : packet.DebugDraw.Buckets)
-			combinedVerts.insert(combinedVerts.end(), bucket.begin(), bucket.end());
-
-		// Write the combined vertex data to the GPU buffer, ensuring it has enough capacity
-		EnsureCapacity(frame.DebugDrawVertices, totalVertices * sizeof(GPU::DebugDrawVertex), vk::BufferUsageFlagBits::eShaderDeviceAddress, "DebugDrawVertices");
-		frame.DebugDrawVertices.Write(std::as_bytes(std::span(combinedVerts)));
+		EnsureCapacity(frame.DebugDrawVertices, debugDraw.Vertices.size() * sizeof(GPU::DebugDrawVertex), vk::BufferUsageFlagBits::eShaderDeviceAddress, "DebugDrawVertices");
+		frame.DebugDrawVertices.Write(std::as_bytes(std::span(debugDraw.Vertices)));
 
 		{
 			GPUDebugScope mainPass(m_RenderDevice, frame.CommandBuffer, "Debug Draw Pass");
@@ -395,50 +385,46 @@ namespace Candle {
 			
 			const vk::DeviceAddress vertexBase = frame.DebugDrawVertices.GetDeviceAddress();
 
-			// Draw verts for each bucket
-			uint32_t bucketCt = static_cast<uint32_t>(DebugDrawBucket::Count);
-			uint32_t vertexOffset = 0;
-			for (uint32_t i = 0; i < bucketCt; i++)
+			std::optional<DebugDrawBucket> currentBucket;
+			for (const DebugDrawBatch& batch : debugDraw.Batches)
 			{
-				uint32_t vertsInBucket = static_cast<uint32_t>(packet.DebugDraw.Buckets[i].size());
-				if (vertsInBucket == 0)
-					continue;
-
-				DebugDrawBucket currentBucket = static_cast<DebugDrawBucket>(i);
-				bool depthEnabled, worldViewProj;
-				switch (currentBucket)
+				if (batch.Bucket != currentBucket)
 				{
-				case DebugDrawBucket::WorldDepthTested:
-					depthEnabled = true;
-					worldViewProj = true;
-					break;
-				case DebugDrawBucket::WorldNoDepth:
-					depthEnabled = false;
-					worldViewProj = true;
-					break;
-				case DebugDrawBucket::Screen:
-					depthEnabled = false;
-					worldViewProj = false;
-					break;
-				default:
-					CDL_CORE_ASSERT(false, "Unhandled bucket type");
-					continue;
+					bool depthEnabled, worldViewProj;
+					switch (batch.Bucket)
+					{
+					case DebugDrawBucket::WorldDepthTested:
+						depthEnabled = true;
+						worldViewProj = true;
+						break;
+					case DebugDrawBucket::WorldNoDepth:
+						depthEnabled = false;
+						worldViewProj = true;
+						break;
+					case DebugDrawBucket::Screen:
+						depthEnabled = false;
+						worldViewProj = false;
+						break;
+					default:
+						CDL_CORE_ASSERT(false, "Unhandled bucket type");
+						continue;
+					}
+
+					frame.CommandBuffer.setDepthTestEnable(depthEnabled);
+					currentBucket = batch.Bucket;
+
+					// TODO: Some way to use world ViewProj matrix or a screen space matrix
 				}
 
-				frame.CommandBuffer.setDepthTestEnable(depthEnabled);
-
-				// TODO: Some way to use world ViewProj matrix or a screen space matrix
+				frame.CommandBuffer.setLineWidth(std::clamp(batch.LineWidth, m_LineWidthRange.x, m_LineWidthRange.y));
 
 				GPU::DebugDrawPushConstants pushConstants{
 					.Global = globalPCs,
-					.Vertices = vertexBase + (vertexOffset * sizeof(GPU::DebugDrawVertex))
+					.Vertices = vertexBase + (batch.FirstVertex * sizeof(GPU::DebugDrawVertex))
 				};
 
 				m_Pipelines[2].PushConstants(*frame.CommandBuffer, pushConstants);
-				frame.CommandBuffer.draw(vertsInBucket, 1, 0, 0);
-
-				// Update the vertex offset for next bucket
-				vertexOffset += vertsInBucket;
+				frame.CommandBuffer.draw(batch.VertexCount, 1, 0, 0);
 			}
 
 			frame.CommandBuffer.endRendering();

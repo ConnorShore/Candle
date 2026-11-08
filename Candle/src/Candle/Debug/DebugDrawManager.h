@@ -18,6 +18,7 @@ namespace Candle {
 	constexpr size_t kDebugDrawEntryCount = 1024 * 1024;	// ~1M entries
 	constexpr float kDefaultPointSize = 0.1f;
 	constexpr size_t kCircleSegmentCount = 32;
+	constexpr float kLineWidthStepsPerPixel = 4.0f;	// Widths quantize to quarter pixels so near-equal widths share a batch
 
 
 	// TODO: Add width to the drawing to make connecting lines thicker
@@ -63,6 +64,7 @@ namespace Candle {
 		{
 			DebugDrawPrimitive Primitive;
 			DebugDrawBucket Bucket;
+			uint8_t LineWidth{ static_cast<uint8_t>(kLineWidthStepsPerPixel) };	// In 1 / kLineWidthStepsPerPixel steps
 			uint16_t Color{ 0 };
 			float Duration{ 0.0f };
 		};
@@ -77,5 +79,6 @@ namespace Candle {
 	private:
 		MPSCRingBuffer<DebugDrawEntry> m_DrawQueue{ kDebugDrawEntryCount };	// 1M entries, ~64MB
 		std::vector<DebugDrawEntry> m_Persistent;
+		std::vector<DebugDrawEntry> m_FrameEntries;
 	};
 }
