@@ -195,6 +195,26 @@ CDL_TEST_CASE(Thread, AffinityMaskPinsToCore, Unit)
 	CDL_CHECK(alwaysOnCoreZero);
 }
 
+// The throwing path ends in CDL_CORE_PANIC, which aborts the runner, so only the quiet path can be tested here
+CDL_TEST_CASE(Thread, OnExceptionIsNotCalledWhenTheFunctionReturns, Unit)
+{
+	std::atomic<int> callbacks = 0;
+	Thread thread(ThreadDescriptor{
+		.Name = "TestThread",
+		.OnException = [&callbacks](const std::exception&, const std::string&) { ++callbacks; } });
+
+	int received = 0;
+	thread.Start([&received](int val) { received = val; }, 42);
+	thread.Join();
+
+	CDL_CHECK_EQ(received, 42);
+	CDL_CHECK_EQ(callbacks.load(), 0);
+}
+
+// A pack must come last to be deduced, so a parameter after it would swallow the thread's arguments
+CDL_STATIC_ASSERT(requires(Thread& thread, void(*func)(int)) { thread.Start(func, 42); });
+CDL_STATIC_ASSERT(requires(Thread& thread, void(*func)(std::stop_token, int, float)) { thread.Start(func, 42, 1.0f); });
+
 CDL_TEST_CASE(Thread, ManyThreadsStopOnDestruction, Stress)
 {
 	constexpr int kThreads = 64;

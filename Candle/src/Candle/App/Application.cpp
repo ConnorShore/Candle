@@ -59,10 +59,11 @@ namespace Candle {
 		, m_LoggerScope(m_Specification.LoggerSpec)
 		, m_WindowingScope(!m_Specification.Headless)
 		, m_Window(m_Specification.Headless ? ScopedPtr<Window>() : ScopedPtr<Window>::Create(m_Specification.WindowSpec))
+		, m_ConsoleManager()
+		, m_DebugDrawManager(m_ConsoleManager)
 		, m_RenderManager(m_Specification.Headless ? ScopedPtr<RenderManager>() : ScopedPtr<RenderManager>::Create(m_Specification.RenderSpec, m_Specification.AppInfo, m_Specification.EngineAssetDir, *m_Window, m_JobSystem))
 		, m_GuiSystem(m_Specification.Headless ? ScopedPtr<GuiSystem>() : ScopedPtr<GuiSystem>::Create(*m_Window, m_RenderManager->GetTexturePool()))
 		, m_DebugUIManager(m_Specification.Headless ? ScopedPtr<DebugUIManager>() : ScopedPtr<DebugUIManager>::Create(m_ConsoleManager, *m_LoggerScope.MainThreadSink, m_RenderManager->GetTexturePool()))
-		, m_ConsoleManager()
 		, m_RenderContext(m_RenderManager.Get(), m_Specification.RenderSpec.RenderToSwapChain, { m_Specification.WindowSpec.Width, m_Specification.WindowSpec.Height })
 	{
 		CDL_CORE_INFO(LogChannel::Application, "Application created: {}", m_Specification.AppInfo.Name);
@@ -241,6 +242,7 @@ namespace Candle {
 		packet.OutputTarget = m_RenderContext.GetOutputTexture();
 		packet.Minimized = m_Window->IsMinimized();
 		packet.SurfaceSize = m_Window->GetSize();
+		m_DebugDrawManager.ExtractDebugDrawData(packet.DebugDraw, m_FrameStats.DeltaTime);
 	}
 
 }

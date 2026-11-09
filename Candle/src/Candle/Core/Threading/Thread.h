@@ -7,16 +7,22 @@
 #include <thread>
 #include <string>
 #include <concepts>
+#include <functional>
+#include <stdexcept>
 #include <stop_token>
 #include <type_traits>
 
 namespace Candle {
+
+	// Exception callback type for handling exceptions thrown in the thread function
+	using ExceptionCallback = std::function<void(const std::exception& e, const std::string& threadName)>;
 
 	struct ThreadDescriptor
 	{
 		std::string Name;
 		ThreadPriority Priority = ThreadPriority::Normal;
 		uint64_t AffinityMask = 0;	// 0 means no affinity mask is set, allowing the OS to schedule the thread on any available core
+		ExceptionCallback OnException;	// Runs on the thread before the panic
 	};
 
 	// Define a concept to check if a function is invocable with a stop_token and the provided arguments
@@ -60,10 +66,16 @@ namespace Candle {
 				}
 				catch (const std::exception& e)
 				{
+					if (descriptor.OnException)
+						descriptor.OnException(e, descriptor.Name);
+
 					CDL_CORE_PANIC(LogChannel::Thread, "Unhandled exception on thread '{}': {}", descriptor.Name, e.what());
 				}
 				catch (...)
 				{
+					if (descriptor.OnException)
+						descriptor.OnException(std::runtime_error("Unknown exception"), descriptor.Name);
+
 					CDL_CORE_PANIC(LogChannel::Thread, "Unhandled non-standard exception on thread '{}'", descriptor.Name);
 				}
 				}, std::forward<Args>(args)...);

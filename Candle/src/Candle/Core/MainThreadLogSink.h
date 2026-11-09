@@ -1,7 +1,7 @@
 #pragma once
 
 #include "Candle/Core/LogSink.h"
-#include "Candle/Core/Threading/MPSCRingBuffer.h"
+#include "Candle/Core/Memory/Collections/MPSCRingBuffer.h"
 
 #include <functional>
 #include <vector>

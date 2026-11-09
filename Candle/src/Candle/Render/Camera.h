@@ -18,7 +18,7 @@ namespace Candle {
 
 	struct PerspectiveLens 
 	{ 
-		float VerticalFov{ 60.0f };
+		float VerticalFov{ glm::radians(60.0f) };
 		float Near{ 0.1f };
 		float Far{ 100.0f };
 	};

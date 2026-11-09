@@ -7,6 +7,8 @@
 #include "TestHelpers.h"
 #include "RenderTestHelpers.h"
 
+#include <Candle/Debug/ConsoleManager.h>
+#include <Candle/Debug/DebugDrawManager.h>
 #include <Candle/Render/FrameContext.h>
 #include <Candle/Render/FramePacket.h>
 #include <Candle/Render/GUI/GuiDrawData.h>
@@ -807,6 +809,182 @@ CDL_TEST_CASE(Renderer, RecreateTargetsLeavesDepthAloneWhenRenderingToAnOutputTa
 		packet.OutputTarget = output;
 		ExpectEveryTexel(RenderFrame(test, grown, packet), kCleared, "grown target with no GUI");
 		ExpectEveryTexel(SampleRenderTarget(test, output), nearColour, "output target after the swapchain grew");
+	}
+	ExpectNoVulkanDebugMessages(logs);
+}
+
+// Debug draws go through DebugDrawManager as a game's do, so these also check its colour packing against DebugDraw.slang.
+// View and projection stay identity, so debug vertices are in clip space. The viewport flips y but not x, so the lines
+// run down columns, which land in the same place whichever way up the image is.
+namespace {
+
+	constexpr vk::Extent2D kWideExtent{ 16, 16 };
+
+	float ColumnCentre(uint32_t column, uint32_t width) { return -1.0f + (column + 0.5f) * 2.0f / width; }
+
+	// Past both edges, so the line's own ends never land inside the target
+	void DrawColumn(uint32_t column, uint32_t width, float depth, glm::vec4 colour, const DebugDraw::Options& options = {})
+	{
+		const float x = ColumnCentre(column, width);
+		DebugDraw::Line({ x, -2.0f, depth }, { x, 2.0f, depth }, colour, options);
+	}
+
+	uint32_t CountDrawnColumns(std::span<const Texel> texels, vk::Extent2D extent, uint32_t row, uint32_t firstColumn, uint32_t endColumn)
+	{
+		uint32_t drawn = 0;
+		for (uint32_t x = firstColumn; x < endColumn; ++x)
+			drawn += texels[row * extent.width + x] != kCleared;
+		return drawn;
+	}
+
+}
+
+// Every channel differs, so any mismatch between how DebugDrawManager packs the colour and how the shader unpacks it shows.
+// Each value is a multiple of 1/255, so it survives the eight bits a channel exactly.
+CDL_TEST_CASE(Renderer, DebugLineDrawsInTheColourItWasGiven, Gpu)
+{
+	SkipUnlessRendererShadersCompiled();
+	SkipUnlessDebugDrawEnabled();
+
+	LoggerFixture logs(LogLevel::Warn, kRenderChannelMask);
+	{
+		TestRenderer test(kExtent);
+		TestTarget target = CreateTarget(test.Device, kExtent);
+		ConsoleManager console;
+		DebugDrawManager debugDraw(console);
+
+		DrawColumn(1, kExtent.width, 0.5f, { 1.0f, 0.6f, 0.2f, 0.8f });
+		FramePacket packet;
+		debugDraw.ExtractDebugDrawData(packet.DebugDraw, 0.0f);
+		const std::vector<Texel> texels = RenderFrame(test, target, packet);
+
+		const Texel expected{ 255, 153, 51, 204 };
+		for (uint32_t row = 0; row < kExtent.height; ++row)
+		{
+			const Texel drawn = texels[row * kExtent.width + 1];
+			CDL_EXPECT_MSG(drawn == expected, std::format("row {} of the line is {}, expected {}", row, drawn, expected));
+		}
+		CDL_EXPECT_EQ(CountDrawnColumns(texels, kExtent, 1, 0, kExtent.width), 1u);
+	}
+	ExpectNoVulkanDebugMessages(logs);
+}
+
+// The scene's quad is nearer than both lines, so only the one skipping the depth test shows
+CDL_TEST_CASE(Renderer, OnlyDebugLinesSkippingTheDepthTestShowThroughTheScene, Gpu)
+{
+	SkipUnlessRendererShadersCompiled();
+	SkipUnlessDebugDrawEnabled();
+
+	LoggerFixture logs(LogLevel::Warn, kRenderChannelMask);
+	{
+		TestRenderer test(kExtent);
+		TestTarget target = CreateTarget(test.Device, kExtent);
+		const GPUMeshHandle quad = test.CreateQuad();
+		const GPUTextureHandle sceneTexture = test.CreateSolidTexture(kBright);
+		const Texel scene = ShadeAlone(test, target, quad, sceneTexture);
+
+		ConsoleManager console;
+		DebugDrawManager debugDraw(console);
+		const glm::vec4 green{ 0.0f, 1.0f, 0.0f, 1.0f };
+		DrawColumn(0, kExtent.width, 0.75f, green, { .DepthTest = true });
+		DrawColumn(3, kExtent.width, 0.75f, green, { .DepthTest = false });
+
+		FramePacket packet = MakePacket(quad, { { sceneTexture, AtDepth(0.25f) } });
+		debugDraw.ExtractDebugDrawData(packet.DebugDraw, 0.0f);
+		const std::vector<Texel> texels = RenderFrame(test, target, packet);
+
+		const uint32_t row = kExtent.height / 2;
+		CDL_EXPECT_MSG(texels[row * kExtent.width + 0] == scene, "the depth tested line drew over the nearer scene");
+		CDL_EXPECT_MSG(texels[row * kExtent.width + 3] != scene, "the line skipping the depth test was hidden by the scene");
+	}
+	ExpectNoVulkanDebugMessages(logs);
+}
+
+// Both widths are in one frame, so this fails if the width isn't set per batch, as when the last one set wins for all
+CDL_TEST_CASE(Renderer, EachDebugBatchDrawsAtItsOwnLineWidth, Gpu)
+{
+	SkipUnlessRendererShadersCompiled();
+	SkipUnlessDebugDrawEnabled();
+
+	LoggerFixture logs(LogLevel::Warn, kRenderChannelMask);
+	{
+		TestRenderer test(kWideExtent);
+		if (!test.Device.HasWideLines() || test.Device.GetPhysicalDevice().getProperties().limits.lineWidthRange[1] < 5.0f)
+			CDL_SKIP("the device can't draw 5 pixel wide lines");
+
+		TestTarget target = CreateTarget(test.Device, kWideExtent);
+		ConsoleManager console;
+		DebugDrawManager debugDraw(console);
+
+		const glm::vec4 white{ 1.0f };
+		DrawColumn(3, kWideExtent.width, 0.5f, white, { .LineWidth = 1.0f });
+		DrawColumn(11, kWideExtent.width, 0.5f, white, { .LineWidth = 5.0f });
+
+		FramePacket packet;
+		debugDraw.ExtractDebugDrawData(packet.DebugDraw, 0.0f);
+		CDL_CHECK_EQ(packet.DebugDraw.Batches.size(), 2u);
+		const std::vector<Texel> texels = RenderFrame(test, target, packet);
+
+		const uint32_t row = kWideExtent.height / 2;
+		CDL_EXPECT_EQ(CountDrawnColumns(texels, kWideExtent, row, 0, kWideExtent.width / 2), 1u);
+		CDL_EXPECT_EQ(CountDrawnColumns(texels, kWideExtent, row, kWideExtent.width / 2, kWideExtent.width), 5u);
+	}
+	ExpectNoVulkanDebugMessages(logs);
+}
+
+// The GUI pass runs after the debug draw pass and loads what it drew, so the GUI covers the lines under it and no others.
+// White packs to all ones, so these don't depend on the channel order the colour test checks.
+CDL_TEST_CASE(Renderer, GuiDrawsOverDebugLines, Gpu)
+{
+	SkipUnlessRendererShadersCompiled();
+	SkipUnlessDebugDrawEnabled();
+
+	LoggerFixture logs(LogLevel::Warn, kRenderChannelMask);
+	{
+		TestRenderer test(kExtent);
+		TestTarget target = CreateTarget(test.Device, kExtent);
+		const GPUTextureHandle guiTexture = test.CreateSolidTexture(kGreen);
+		ConsoleManager console;
+		DebugDrawManager debugDraw(console);
+
+		DrawColumn(1, kExtent.width, 0.5f, glm::vec4(1.0f));
+		DrawColumn(3, kExtent.width, 0.5f, glm::vec4(1.0f));
+		FramePacket packet = MakeGuiOnlyPacket();
+		AddGuiQuad(packet.GuiDrawData, { 0.0f, 0.0f }, { 2.0f, 4.0f }, guiTexture);
+		debugDraw.ExtractDebugDrawData(packet.DebugDraw, 0.0f);
+
+		std::vector<Texel> expected = Solid(kCleared);
+		Paint(expected, { 3, 0 }, { 4, 4 }, kWhite);
+		Paint(expected, { 0, 0 }, { 2, 4 }, kGreen);
+		ExpectImage(RenderFrame(test, target, packet), expected, "GUI over the left half, debug lines in columns 1 and 3");
+	}
+	ExpectNoVulkanDebugMessages(logs);
+}
+
+// The editor's scene window shows the output target rather than the swapchain, so debug draws have to land there with the scene
+CDL_TEST_CASE(Renderer, DebugLinesDrawIntoTheOutputTarget, Gpu)
+{
+	SkipUnlessRendererShadersCompiled();
+	SkipUnlessDebugDrawEnabled();
+	SkipUnlessCompiled(kBindlessFixturePath);
+
+	LoggerFixture logs(LogLevel::Warn, kRenderChannelMask);
+	{
+		TestRenderer test(kExtent, RenderTo::OutputTarget);
+		TestTarget target = CreateTarget(test.Device, kExtent);
+		const GPUTextureHandle output = test.CreateOutputTarget({ kExtent.width, kExtent.height });
+		ConsoleManager console;
+		DebugDrawManager debugDraw(console);
+
+		DrawColumn(1, kExtent.width, 0.5f, glm::vec4(1.0f));
+		FramePacket packet;
+		packet.OutputTarget = output;
+		debugDraw.ExtractDebugDrawData(packet.DebugDraw, 0.0f);
+		RenderFrame(test, target, packet);
+
+		std::vector<Texel> expected = Solid(kCleared);
+		Paint(expected, { 1, 0 }, { 2, kExtent.height }, kWhite);
+		ExpectImage(SampleRenderTarget(test, output), expected, "output target, debug line in column 1");
 	}
 	ExpectNoVulkanDebugMessages(logs);
 }

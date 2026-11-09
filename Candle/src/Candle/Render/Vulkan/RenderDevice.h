@@ -72,6 +72,9 @@ namespace Candle {
 		// VK_EXT_memory_budget is optional, so a device without it is still used. Set at construction, readable from any thread.
 		inline bool HasMemoryBudget() const { return m_HasMemoryBudget; }
 
+		inline bool HasWideLines() const { return m_HasWideLines; }
+		inline bool HasDeviceFault() const { return m_HasDeviceFault; }
+
 		// Names an object for RenderDoc, Nsight and validation messages; does nothing without debug utils (Dist).
 		// Threading: the object must not be in use on another thread, so name it right after creating it.
 		template<typename T>
@@ -102,6 +105,8 @@ namespace Candle {
 		QueueFamilyIndices m_QueueFamilies{};
 		vk::raii::Device m_LogicalDevice{ nullptr };
 		bool m_HasMemoryBudget{ false };
+		bool m_HasWideLines{ false };
+		bool m_HasDeviceFault{ false };
 		bool m_DebugUtilsEnabled{ false };
 
 		std::array<QueueState, std::to_underlying(QueueType::Count)> m_QueueStates;	// The Transfer entry goes unused while Transfer aliases Graphics

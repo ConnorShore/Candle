@@ -6,6 +6,7 @@
 #include "TestHelpers.h"
 #include "RenderTestHelpers.h"
 
+#include <Candle/Render/Vulkan/RenderDevice.h>
 #include <Candle/Render/Vulkan/RenderInstance.h>
 
 #include <algorithm>
@@ -20,6 +21,7 @@ using Candle::Test::Type::Gpu;
 namespace {
 
 	constexpr const char* kInjectedMessage = "Candle-Test injected message";
+	constexpr std::string_view kForcedFeaturesWarning = "validation is adjusting settings";
 
 	// Sends a message down the instance's debug-utils path, the same route validation output takes.
 	void SubmitDebugMessage(RenderInstance& instance, vk::DebugUtilsMessageSeverityFlagBitsEXT severity)
@@ -78,6 +80,41 @@ CDL_TEST_CASE(RenderInstance, DropsMessagesBelowTheConfiguredSeverity, Gpu)
 		SubmitDebugMessage(instance, vk::DebugUtilsMessageSeverityFlagBitsEXT::eInfo);
 	}
 	CDL_EXPECT_FALSE(AnyContains(VulkanDebugMessages(logs), kInjectedMessage));
+}
+
+// Printf output arrives as info messages, so enabling it lowers the messenger's threshold to Info whatever Severity says
+CDL_TEST_CASE(RenderInstance, ShaderPrintfForwardsInfoMessages, Gpu)
+{
+	LoggerFixture logs(LogLevel::Trace, kRenderChannelMask);
+	{
+		WindowingBackend backend;
+		RenderSpecification spec = StrictRenderSpec();
+		spec.ValidationSpec.EnableShaderPrintf = true;
+		RenderInstance instance(TestInstanceSpec(spec));
+		SubmitDebugMessage(instance, vk::DebugUtilsMessageSeverityFlagBitsEXT::eInfo);
+	}
+	CDL_EXPECT(AnyContains(VulkanDebugMessages(logs), kInjectedMessage));
+}
+
+// The layer turns on the features its printf instrumentation needs and warns that it did. Printf is a debugging opt-in, so
+// that warning is expected, but nothing else is.
+CDL_TEST_CASE(RenderInstance, ShaderPrintfDeviceOnlyWarnsAboutTheFeaturesItForces, Gpu)
+{
+	LoggerFixture logs(LogLevel::Warn, kRenderChannelMask);
+	{
+		WindowingBackend backend;
+		RenderSpecification spec = StrictRenderSpec();
+		spec.ValidationSpec.EnableShaderPrintf = true;
+		RenderInstance instance(TestInstanceSpec(spec));
+		RenderDevice device(instance, spec);
+		CDL_EXPECT(*device.GetDevice());
+	}
+
+	std::vector<std::string> messages = VulkanDebugMessages(logs);
+	std::erase_if(messages, [](const std::string& message) { return message.find(kForcedFeaturesWarning) != std::string::npos; });
+	for (const std::string& message : messages)
+		CDL_NOTE(message);
+	CDL_EXPECT_EQ(messages.size(), 0u);
 }
 
 // A validation error is a bug, so the spec a game gets without touching validation settings must report it.

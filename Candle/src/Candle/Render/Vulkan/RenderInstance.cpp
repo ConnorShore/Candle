@@ -162,7 +162,18 @@ namespace Candle {
 			.valueCount = 1,
 			.pValues = &enableSyncValidation
 		};
-		vk::LayerSettingsCreateInfoEXT layerSettings{ .settingCount = 1, .pSettings = &syncValidationSetting };
+
+		// Enable shader printf if requested. This is a layer setting, not an extension, so it doesn't need to be checked for availability
+		vk::Bool32 enablePrintf = m_Specification.ValidationSpec.EnableShaderPrintf ? vk::True : vk::False;
+		vk::LayerSettingEXT printfSetting{ 
+			.pLayerName = kKhronosValidationLayer, 
+			.pSettingName = "printf_enable",
+			.type = vk::LayerSettingTypeEXT::eBool32, 
+			.valueCount = 1, 
+			.pValues = &enablePrintf };
+
+		vk::LayerSettingEXT settings[] = { syncValidationSetting, printfSetting };
+		vk::LayerSettingsCreateInfoEXT layerSettings{ .settingCount = static_cast<uint32_t>(std::size(settings)), .pSettings = settings };
 
 		bool useLayerSettings = false;
 		if (m_Specification.ValidationSpec.EnableValidation && m_Specification.ValidationSpec.EnableSynchronizationValidation)
@@ -192,8 +203,11 @@ namespace Candle {
 		if (!m_Specification.ValidationSpec.EnableValidation)
 			return;
 
+		// If shader printf is enabled, the validation layer's severity is set to info, so the callback will receive all messages. Otherwise, use the user-specified severity.
+		bool isShaderPrintfEnabled = m_Specification.ValidationSpec.EnableShaderPrintf;
+		vk::DebugUtilsMessageSeverityFlagsEXT severity = isShaderPrintfEnabled ? MapValidationSeverity(ValidationSpecification::ValidationSeverity::Info) : MapValidationSeverity(m_Specification.ValidationSpec.Severity);
 		vk::DebugUtilsMessengerCreateInfoEXT createInfo{
-			.messageSeverity = MapValidationSeverity(m_Specification.ValidationSpec.Severity),
+			.messageSeverity = severity,
 			.messageType = MapValidationType(m_Specification.ValidationSpec.Type),
 			.pfnUserCallback = &VulkanDebugCallback
 		};

@@ -77,7 +77,7 @@ namespace Candle {
 			});
 
 		ScopedCommandHandle handle = m_ConsoleManager.RegisterCommand({
-			.CommandParts = { std::string(kDebugUICommand), command.Name},
+			.CommandParts = { std::string(kDebugCommand), command.Name},
 			.Description{ command.Description },
 			.Usage{ command.Usage },
 			.Callback{ command.Callback != nullptr ? command.Callback : defaultCallbackFunc }

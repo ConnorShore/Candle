@@ -21,6 +21,9 @@
 
 #include "Candle/Render/Pipelines/GUI/GuiPipeline.h"
 
+#include "Candle/Render/Pipelines/DebugDrawPipeline.h"
+#include "Candle/Render/Pipelines/DebugDrawInterop.h"
+
 #include <cmath>
 #include <span>
 
@@ -46,6 +49,16 @@ namespace Candle {
 					return format;
 			}
 			CDL_CORE_PANIC(LogChannel::Render, "No suitable depth format found");
+		}
+
+		// The device reports its range whether or not wideLines is enabled, but without it only 1 is valid
+		glm::vec2 FindLineWidthRange(RenderDevice& device)
+		{
+			if (!device.HasWideLines())
+				return { 1.0f, 1.0f };
+
+			const auto& range = device.GetPhysicalDevice().getProperties().limits.lineWidthRange;
+			return { range[0], range[1] };
 		}
 
 		GPUImageSpec DepthImageSpec(vk::Format format, glm::uvec2 extent)
@@ -84,9 +97,11 @@ namespace Candle {
 		, m_DepthFormat(FindDepthFormat(renderDevice))
 		, m_DepthImage(DepthImageSpec(m_DepthFormat, { info.TargetExtent.width, info.TargetExtent.height }), allocator) // Sized to the colour target
 		, m_DepthExtent(info.TargetExtent.width, info.TargetExtent.height)
+		, m_LineWidthRange(FindLineWidthRange(renderDevice))
 	{
 		CreatePipeline(TrianglePipeline{ info.ShaderDirectory });
 		CreatePipeline(GuiPipeline{ info.ShaderDirectory });
+		CreatePipeline(DebugDrawPipeline{ info.ShaderDirectory });
 	}
 
 	void Renderer::Render(const FramePacket& packet, FrameContext& frame, SwapChainImage& target)
@@ -133,6 +148,10 @@ namespace Candle {
 			target.Transition(kColorAttachmentWrite, frame.CommandBuffer);
 			RenderTrianglePipeline(packet, frame, { .ColorView = target.GetImageView(), .Extent = target.GetDesc().Extent }, global);
 
+			// The debug draw pass draws over the scene; the tracked state makes this transition order it after the scene's writes
+			target.Transition(kColorAttachmentReadWrite, frame.CommandBuffer);
+			RenderDebugDrawPipeline(packet, frame, { .ColorView = target.GetImageView(), .Extent = target.GetDesc().Extent }, vk::AttachmentLoadOp::eLoad, global);
+
 			// The GUI pass draws over the scene; the tracked state makes this transition order it after the scene's writes
 			target.Transition(kColorAttachmentReadWrite, frame.CommandBuffer);
 			RenderGuiPipeline(packet, frame, target, vk::AttachmentLoadOp::eLoad, global);	// Returns early with no GUI
@@ -151,7 +170,13 @@ namespace Candle {
 					kColorAttachmentWrite, kColorRange);
 				frame.CommandBuffer.pipelineBarrier2({ .imageMemoryBarrierCount = 1, .pImageMemoryBarriers = &toAttachment });
 
-				RenderTrianglePipeline(packet, frame, { .ColorView = output.ImageView, .Extent = { output.Extent.x, output.Extent.y } }, global);
+				const SceneTarget sceneTarget{ .ColorView = output.ImageView, .Extent = { output.Extent.x, output.Extent.y } };
+				RenderTrianglePipeline(packet, frame, sceneTarget, global);
+
+				// The debug pass loads what the scene pass wrote, so it has to wait for those writes
+				const vk::ImageMemoryBarrier2 toDebugDraw = MakeImageBarrier(output.Image, kColorAttachmentWrite, kColorAttachmentReadWrite, kColorRange);
+				frame.CommandBuffer.pipelineBarrier2({ .imageMemoryBarrierCount = 1, .pImageMemoryBarriers = &toDebugDraw });
+				RenderDebugDrawPipeline(packet, frame, sceneTarget, vk::AttachmentLoadOp::eLoad, global);
 
 				// The GUI samples it next, through a bindless descriptor that expects ShaderReadOnlyOptimal
 				const vk::ImageMemoryBarrier2 toSampled = MakeImageBarrier(output.Image, kColorAttachmentWrite,
@@ -167,7 +192,7 @@ namespace Candle {
 			RenderGuiPipeline(packet, frame, target, vk::AttachmentLoadOp::eClear, global);
 		}
 
-		// Every pass leaves the target as a colour attachment, and presentation reads it next
+		// Every pass leaves the target as a color attachment, and presentation reads it next
 		target.Transition({
 			.Layout = vk::ImageLayout::ePresentSrcKHR,
 			.Access = vk::AccessFlagBits2::eNone
@@ -234,11 +259,12 @@ namespace Candle {
 			.storeOp = vk::AttachmentStoreOp::eStore,
 			.clearValue = clearColor };
 
+		// The debug pass loads depth to test its lines against the scene, so it's only discarded when there are none
 		vk::RenderingAttachmentInfo depthAttachmentInfo = {
 			.imageView = m_DepthImage.GetImageView(),
 			.imageLayout = vk::ImageLayout::eDepthStencilAttachmentOptimal,
 			.loadOp = vk::AttachmentLoadOp::eClear,
-			.storeOp = vk::AttachmentStoreOp::eDontCare,
+			.storeOp = packet.DebugDraw.Vertices.empty() ? vk::AttachmentStoreOp::eDontCare : vk::AttachmentStoreOp::eStore,
 			.clearValue = clearDepth
 		};
 
@@ -263,6 +289,7 @@ namespace Candle {
 
 			frame.CommandBuffer.setViewport(0, vk::Viewport(0.0f, static_cast<float>(extent.height), static_cast<float>(extent.width), -static_cast<float>(extent.height), 0.0f, 1.0f));
 			frame.CommandBuffer.setScissor(0, vk::Rect2D(vk::Offset2D(0, 0), extent));
+			frame.CommandBuffer.setDepthTestEnable(true);
 
 			// Bind the bindless descriptor set to the pipeline layout
 			vk::PipelineLayout pipelineLayout = m_Pipelines[0].GetLayout();
@@ -291,6 +318,120 @@ namespace Candle {
 				m_Pipelines[0].PushConstants(*frame.CommandBuffer, pushConstants);
 				frame.CommandBuffer.bindIndexBuffer(drawInfo.Indices, 0, vk::IndexType::eUint32);
 				frame.CommandBuffer.drawIndexed(drawInfo.IndexCount, 1, 0, 0, 0);
+			}
+
+			frame.CommandBuffer.endRendering();
+		}
+	}
+
+	void Renderer::RenderDebugDrawPipeline(const FramePacket& packet, FrameContext& frame, const SceneTarget& target, vk::AttachmentLoadOp loadOp, const GPU::GlobalPushConstants globalPCs)
+	{
+		// Skip the pass if there's nothing to draw, so the target's loadOp is respected and the depth image isn't transitioned
+		const DebugDrawData& debugDraw = packet.DebugDraw;
+		if (debugDraw.Vertices.empty())
+			return;
+
+		// Rendering instances don't order against each other, so the load and depth tests here wait on the scene pass's depth
+		// writes and its store, which land in early or late tests. The layout doesn't change
+		const vk::ImageMemoryBarrier2 depthBarrier = MakeImageBarrier(m_DepthImage.GetImage(),
+			{ .Layout = vk::ImageLayout::eDepthStencilAttachmentOptimal,
+				.Access = vk::AccessFlagBits2::eDepthStencilAttachmentWrite,
+				.Stage = vk::PipelineStageFlagBits2::eEarlyFragmentTests | vk::PipelineStageFlagBits2::eLateFragmentTests },
+			{ .Layout = vk::ImageLayout::eDepthStencilAttachmentOptimal,
+				.Access = vk::AccessFlagBits2::eDepthStencilAttachmentRead | vk::AccessFlagBits2::eDepthStencilAttachmentWrite,
+				.Stage = vk::PipelineStageFlagBits2::eEarlyFragmentTests | vk::PipelineStageFlagBits2::eLateFragmentTests },
+			{ .aspectMask = vk::ImageAspectFlagBits::eDepth, .levelCount = 1, .layerCount = 1 });
+		frame.CommandBuffer.pipelineBarrier2({ .imageMemoryBarrierCount = 1, .pImageMemoryBarriers = &depthBarrier });
+
+		vk::ClearValue clearColor = vk::ClearColorValue(0.0f, 0.0f, 0.0f, 1.0f);
+		vk::ClearValue clearDepth = vk::ClearDepthStencilValue(1.0f, 0);
+
+		vk::RenderingAttachmentInfo colorAttachmentInfo = {
+			.imageView = target.ColorView,
+			.imageLayout = vk::ImageLayout::eColorAttachmentOptimal,
+			.loadOp = loadOp,
+			.storeOp = vk::AttachmentStoreOp::eStore,
+			.clearValue = clearColor };
+
+		vk::RenderingAttachmentInfo depthAttachmentInfo = {
+			.imageView = m_DepthImage.GetImageView(),
+			.imageLayout = vk::ImageLayout::eDepthStencilAttachmentOptimal,
+			.loadOp = vk::AttachmentLoadOp::eLoad,
+			.storeOp = vk::AttachmentStoreOp::eDontCare,
+			.clearValue = clearDepth
+		};
+
+		const vk::Extent2D extent = target.Extent;
+
+		// Setup the rendering info for the render pass begin info. This specifies the render area, the number of layers, and the color attachment info.
+		vk::RenderingInfo renderingInfo = {
+			.renderArea = {
+				.offset = { 0, 0 },
+				.extent = extent },
+			.layerCount = 1,
+			.colorAttachmentCount = 1,
+			.pColorAttachments = &colorAttachmentInfo,
+			.pDepthAttachment = &depthAttachmentInfo
+		};
+
+		EnsureCapacity(frame.DebugDrawVertices, debugDraw.Vertices.size() * sizeof(GPU::DebugDrawVertex), vk::BufferUsageFlagBits::eShaderDeviceAddress, "DebugDrawVertices");
+		frame.DebugDrawVertices.Write(std::as_bytes(std::span(debugDraw.Vertices)));
+
+		{
+			GPUDebugScope mainPass(m_RenderDevice, frame.CommandBuffer, "Debug Draw Pass");
+			frame.CommandBuffer.beginRendering(renderingInfo);
+
+			frame.CommandBuffer.bindPipeline(vk::PipelineBindPoint::eGraphics, m_Pipelines[2].GetPipeline());
+
+			frame.CommandBuffer.setViewport(0, vk::Viewport(0.0f, static_cast<float>(extent.height), static_cast<float>(extent.width), -static_cast<float>(extent.height), 0.0f, 1.0f));
+			frame.CommandBuffer.setScissor(0, vk::Rect2D(vk::Offset2D(0, 0), extent));
+
+			// Bind the bindless descriptor set to the pipeline layout
+			vk::PipelineLayout pipelineLayout = m_Pipelines[2].GetLayout();
+			m_BindlessTable.BindSet(*frame.CommandBuffer, vk::PipelineBindPoint::eGraphics, pipelineLayout);
+			
+			const vk::DeviceAddress vertexBase = frame.DebugDrawVertices.GetDeviceAddress();
+
+			std::optional<DebugDrawBucket> currentBucket;
+			for (const DebugDrawBatch& batch : debugDraw.Batches)
+			{
+				if (batch.Bucket != currentBucket)
+				{
+					bool depthEnabled, worldViewProj;
+					switch (batch.Bucket)
+					{
+					case DebugDrawBucket::WorldDepthTested:
+						depthEnabled = true;
+						worldViewProj = true;
+						break;
+					case DebugDrawBucket::WorldNoDepth:
+						depthEnabled = false;
+						worldViewProj = true;
+						break;
+					case DebugDrawBucket::Screen:
+						depthEnabled = false;
+						worldViewProj = false;
+						break;
+					default:
+						CDL_CORE_ASSERT(false, "Unhandled bucket type");
+						continue;
+					}
+
+					frame.CommandBuffer.setDepthTestEnable(depthEnabled);
+					currentBucket = batch.Bucket;
+
+					// TODO: Some way to use world ViewProj matrix or a screen space matrix
+				}
+
+				frame.CommandBuffer.setLineWidth(std::clamp(batch.LineWidth, m_LineWidthRange.x, m_LineWidthRange.y));
+
+				GPU::DebugDrawPushConstants pushConstants{
+					.Global = globalPCs,
+					.Vertices = vertexBase + (batch.FirstVertex * sizeof(GPU::DebugDrawVertex))
+				};
+
+				m_Pipelines[2].PushConstants(*frame.CommandBuffer, pushConstants);
+				frame.CommandBuffer.draw(batch.VertexCount, 1, 0, 0);
 			}
 
 			frame.CommandBuffer.endRendering();
@@ -354,6 +495,7 @@ namespace Candle {
 
 			// Not flipped: Vulkan's NDC already has Y pointing down, as ImGui's coordinates do
 			frame.CommandBuffer.setViewport(0, vk::Viewport(0.0f, 0.0f, static_cast<float>(swapChainExtent.width), static_cast<float>(swapChainExtent.height), 0.0f, 1.0f));
+			frame.CommandBuffer.setDepthTestEnable(false);
 
 			// Maps ImGui's display rect [DisplayPos, DisplayPos + DisplaySize] to NDC [-1, 1]
 			const glm::vec2 scale = 2.0f / gui.DisplaySize;

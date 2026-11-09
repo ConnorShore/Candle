@@ -1,5 +1,6 @@
 #pragma once
 
+#include "DebugConstants.h"
 #include "DebugPanel.h"
 #include "Candle/Core/Memory/ScopedPtr.h"
 #include "Candle/Platform/PlatformEvents.h"
@@ -51,7 +52,6 @@ namespace Candle {
 		inline bool IsVisible() const { return m_IsVisible; }
 
 	private:
-		inline static constexpr std::string_view kDebugUICommand = "Debug";					// All debug ui commands start with this prefix, followed by the panel's command name
 		inline static constexpr std::string_view kDebugUICommandUsage = "Debug.<panel>";	// Usage for the debug command, which is the same for all panels
 
 	private:

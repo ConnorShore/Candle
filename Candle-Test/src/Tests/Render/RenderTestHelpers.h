@@ -433,12 +433,14 @@ namespace Candle::Test {
 	inline const std::filesystem::path kEngineShaderDirectory = kEngineAssetDir / "shaders/bin";
 	inline const std::filesystem::path kTriangleShaderPath = kEngineShaderDirectory / "Triangle.spv";
 	inline const std::filesystem::path kGuiShaderPath = kEngineShaderDirectory / "Gui.spv";	// The name GuiPipeline loads
+	inline const std::filesystem::path kDebugDrawShaderPath = kEngineShaderDirectory / "DebugDraw.spv";	// The name DebugDrawPipeline loads
 
 	// A Renderer builds every engine pipeline up front, so it needs all their shaders compiled, not just the one a test draws with
 	inline void SkipUnlessRendererShadersCompiled()
 	{
 		SkipUnlessCompiled(kTriangleShaderPath);
 		SkipUnlessCompiled(kGuiShaderPath);
+		SkipUnlessCompiled(kDebugDrawShaderPath);
 	}
 
 	// One sample as a shader takes it: the texture's slot of set 0, through one of the bindless samplers, at UV.
@@ -491,6 +493,7 @@ namespace Candle::Test {
 		commands.Buffer.bindPipeline(vk::PipelineBindPoint::eGraphics, *pipeline.GetPipeline());
 		gpu.Bindless.BindSet(*commands.Buffer, vk::PipelineBindPoint::eGraphics, layout);
 		commands.Buffer.setScissor(0, vk::Rect2D({ 0, 0 }, extent));
+		commands.Buffer.setDepthTestEnable(false);	// Dynamic on every Pipeline, so it must be set even with no depth attachment
 
 		for (uint32_t i = 0; i < extent.width; ++i)
 		{

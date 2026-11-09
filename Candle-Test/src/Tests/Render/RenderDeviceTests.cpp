@@ -355,3 +355,37 @@ CDL_TEST_CASE(RenderDevice, ReportsMemoryBudgetExactlyWhenTheDeviceOffersIt, Gpu
 	}
 	ExpectNoVulkanDebugMessages(logs);
 }
+
+// The Renderer keeps every line width at 1 without wideLines, since any other is invalid then
+CDL_TEST_CASE(RenderDevice, ReportsWideLinesExactlyWhenTheDeviceOffersIt, Gpu)
+{
+	LoggerFixture logs(LogLevel::Warn, kRenderChannelMask);
+	{
+		TestDevice gpu;
+		const bool offered = gpu.Device.GetPhysicalDevice().getFeatures().wideLines == vk::True;
+
+		CDL_NOTE(std::format("wideLines {}", offered ? "offered" : "not offered"));
+		CDL_EXPECT_EQ(gpu.Device.HasWideLines(), offered);
+	}
+	ExpectNoVulkanDebugMessages(logs);
+}
+
+// RenderManager only asks for fault info when this is set, since vkGetDeviceFaultInfoEXT isn't loaded otherwise
+CDL_TEST_CASE(RenderDevice, ReportsDeviceFaultExactlyWhenTheDeviceOffersIt, Gpu)
+{
+	LoggerFixture logs(LogLevel::Warn, kRenderChannelMask);
+	{
+		TestDevice gpu;
+		const vk::raii::PhysicalDevice& physicalDevice = gpu.Device.GetPhysicalDevice();
+		const std::vector<vk::ExtensionProperties> extensions = physicalDevice.enumerateDeviceExtensionProperties();
+		const bool hasExtension = std::ranges::any_of(extensions, [](const vk::ExtensionProperties& extension) {
+			return std::string_view(extension.extensionName.data()) == vk::EXTDeviceFaultExtensionName;
+		});
+		const bool offered = hasExtension
+			&& physicalDevice.getFeatures2<vk::PhysicalDeviceFeatures2, vk::PhysicalDeviceFaultFeaturesEXT>().get<vk::PhysicalDeviceFaultFeaturesEXT>().deviceFault == vk::True;
+
+		CDL_NOTE(std::format("VK_EXT_device_fault {}", offered ? "offered" : "not offered"));
+		CDL_EXPECT_EQ(gpu.Device.HasDeviceFault(), offered);
+	}
+	ExpectNoVulkanDebugMessages(logs);
+}

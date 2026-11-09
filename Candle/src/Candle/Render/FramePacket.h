@@ -5,6 +5,7 @@
 #include "Candle/Render/GUI/GuiDrawData.h"
 #include "Candle/Render/RenderStats.h"
 #include "Candle/Render/Camera.h"
+#include "Candle/Debug/DebugDrawData.h"
 
 #include <vector>
 #include <glm/glm.hpp>
@@ -23,17 +24,18 @@ namespace Candle {
 	// Threading: simulation thread fills it, render thread reads it. The simulation thread must not modify the packet after it has been sent to the render thread.
 	struct FramePacket
 	{
-		// Vector not span as data is copied to the render thread, and the simulation thread may modify its own copy of the vector after sending it to the render thread
 		std::vector<DrawItem> DrawItems;
 		std::vector<glm::mat4> TransformData;	// Model matrices for each draw item; the renderer writes them into a GPU buffer and shaders read them by address
 		Candle::RenderView RenderView;
-		double Time{ 0.0 };		// Simulation time in seconds at extraction; the renderer never reads a clock of its own
+		double Time{ 0.0 };						// Simulation time in seconds at extraction; the renderer never reads a clock of its own
 
-		Candle::GuiDrawData GuiDrawData;	// Draw data for the GUI layer; the renderer will render this on top of the 3D scene
-		GPUTextureHandle OutputTarget;		// What the scene renders into when not rendering to the swapchain, for the GUI to show; invalid otherwise
+		Candle::GuiDrawData GuiDrawData;		// Draw data for the GUI layer; the renderer will render this on top of the 3D scene
+		GPUTextureHandle OutputTarget;			// What the scene renders into when not rendering to the swapchain, for the GUI to show; invalid otherwise
 
-		bool Minimized{ false };		// Whether the surface is minimized; the renderer may skip rendering if true
-		glm::uvec2 SurfaceSize{ 0, 0 };	// The  size of the surface for this frame; the renderer may need to recreate the swapchain if changed
+		DebugDrawData DebugDraw;				// Debug draw data for the frame
+
+		bool Minimized{ false };				// Whether the surface is minimized; the renderer may skip rendering if true
+		glm::uvec2 SurfaceSize{ 0, 0 };			// The  size of the surface for this frame; the renderer may need to recreate the swapchain if changed
 
 		std::vector<GPUSlotRef> ReleasedSlots;	// Released by the main thread; no later packet may reference them
 
@@ -41,7 +43,7 @@ namespace Candle {
 		std::vector<GPUSlotRef> RecycledSlots;	// Freed slots
 		Candle::RenderStats RenderStats;		// The render thread's last completed frame; not this packet's, which is released before it presents
 
-		uint64_t FrameIndex{ 0 };	// The index of the frame for this packet; used for debugging and profiling
+		uint64_t FrameIndex{ 0 };				// The index of the frame for this packet; used for debugging and profiling
 	};
 
 }

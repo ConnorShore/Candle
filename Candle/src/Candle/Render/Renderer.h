@@ -69,6 +69,7 @@ namespace Candle {
 
 		// TODO: Eventaully will be part of render graph; for now, the Renderer owns the depth target and does the passes itself
 		void RenderTrianglePipeline(const FramePacket& packet, FrameContext& frame, const SceneTarget& target, const GPU::GlobalPushConstants globalPCs);
+		void RenderDebugDrawPipeline(const FramePacket& packet, FrameContext& frame, const SceneTarget& target, vk::AttachmentLoadOp loadOp, const GPU::GlobalPushConstants globalPCs);
 		void RenderGuiPipeline(const FramePacket& packet, FrameContext& frame, SwapChainImage& target, vk::AttachmentLoadOp loadOp, const GPU::GlobalPushConstants globalPCs);
 
 		// TODO: Will probably move to some helper or something once the render graph is implemented
@@ -84,6 +85,7 @@ namespace Candle {
 		vk::Format m_DepthFormat;	// Chosen once, before m_DepthImage; the depth image and every pipeline's spec both take it
 		GPUImage m_DepthImage;	// Shared by every frame in flight, so each frame's first barrier waits for the last one's depth writes
 		glm::uvec2 m_DepthExtent;
+		glm::vec2 m_LineWidthRange;
 		DeletionQueue m_RetiredImages;	// Depth images replaced by MatchDepthToOutput, held until the frames using them retire
 		std::vector<Pipeline> m_Pipelines;
 	};

@@ -1,9 +1,10 @@
 #include "cdlpch.h"
 #include "RenderManager.h"
-#include "Candle/Render/Pipelines/ShaderLoader.h"
-#include "Candle/Render/Pipelines/Shader.h"
-#include "Candle/Render/FramePacket.h"
-#include "Candle/Render/RenderConstants.h"
+#include "Pipelines/ShaderLoader.h"
+#include "Pipelines/Shader.h"
+#include "FramePacket.h"
+#include "RenderConstants.h"
+#include "ErrorHandler.h"
 
 #include "Candle/Platform/Window.h"
 #include "Candle/Core/Time.h"
@@ -50,7 +51,13 @@ namespace Candle {
 			.ShaderDirectory = engineAssetDir / "shaders/bin",
 			.RenderToSwapChain = renderSpec.RenderToSwapChain })
 		, m_CommandPoolManager(m_RenderDevice, jobSystem.GetNumWorkers())
-		, m_RenderThread({ .Name = "Candle-RenderThread", .Priority = ThreadPriority::High })
+		, m_RenderThread({
+			.Name = "Candle-RenderThread",
+			.Priority = ThreadPriority::High,
+			.OnException = [this](const std::exception& e, const std::string& threadName) {
+				if (dynamic_cast<const vk::DeviceLostError*>(&e) && m_RenderDevice.HasDeviceFault())
+					ErrorHandler::CheckDeviceFault(m_RenderDevice.GetDevice());
+			} })
 	{
 		CreateFrameContexts();
 	}
@@ -65,7 +72,7 @@ namespace Candle {
 
 	void RenderManager::SpawnRenderThread()
 	{
-		m_RenderThread.Start([this](std::stop_token stoken){
+		auto threadFunc = [this](std::stop_token stoken) {
 			while (!stoken.stop_requested()) {
 				// Timed here rather than inside, so every early return in RenderThreadMain still completes the frame's stats
 				Timer frameTimer;
@@ -79,9 +86,10 @@ namespace Candle {
 
 				CDL_PROFILE_FRAME_NAMED("RenderFrame");
 			}
-
 			CDL_CORE_INFO(LogChannel::Render, "Render Thread Ending");
-		});
+		};
+
+		m_RenderThread.Start(threadFunc);
 	}
 
 	void RenderManager::JoinRenderThread()

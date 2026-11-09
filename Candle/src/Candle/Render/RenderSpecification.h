@@ -22,6 +22,8 @@ namespace Candle {
 		bool EnableDebugUtils = true;
 #endif
 
+		bool EnableShaderPrintf = false;	// Slows shaders, need to explicitly enable. Only enable when debugging shaders
+
 		// A minimum, like LogLevel: Warning reports warnings and errors. Ordered, so it compares as a threshold.
 		enum class ValidationSeverity : uint8_t
 		{

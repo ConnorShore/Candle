@@ -80,6 +80,16 @@ namespace Candle {
 			return std::ranges::any_of(available, [name](vk::ExtensionProperties const& extension) { return strcmp(extension.extensionName, name) == 0; });
 		}
 
+		// An extension's feature struct is only valid to query on a device that offers the extension
+		bool SupportsDeviceFault(vk::raii::PhysicalDevice const& physicalDevice, std::span<const vk::ExtensionProperties> available)
+		{
+			if (!HasExtension(available, vk::EXTDeviceFaultExtensionName))
+				return false;
+
+			auto features = physicalDevice.getFeatures2<vk::PhysicalDeviceFeatures2, vk::PhysicalDeviceFaultFeaturesEXT>();
+			return features.get<vk::PhysicalDeviceFaultFeaturesEXT>().deviceFault == vk::True;
+		}
+
 		struct PhysicalDeviceSelection
 		{
 			vk::raii::PhysicalDevice PhysicalDevice;
@@ -289,11 +299,23 @@ namespace Candle {
 		for (FeatureField field : kRequiredFeatures)
 			field(featureChain) = vk::True;
 
+		// Debug draw's line widths; without it every line is drawn 1 pixel wide
+		m_HasWideLines = m_PhysicalDevice.getFeatures().wideLines == vk::True;
+		featureChain.get<vk::PhysicalDeviceFeatures2>().features.wideLines = m_HasWideLines ? vk::True : vk::False;
+
 		// Without memory budget VMA estimates the budget from heap sizes, so it's enabled only when present
+		const std::vector<vk::ExtensionProperties> availableExtensions = m_PhysicalDevice.enumerateDeviceExtensionProperties();
 		std::vector<const char*> enabledExtensions(kRequiredDeviceExtensions.begin(), kRequiredDeviceExtensions.end());
-		m_HasMemoryBudget = HasExtension(m_PhysicalDevice.enumerateDeviceExtensionProperties(), vk::EXTMemoryBudgetExtensionName);
+		m_HasMemoryBudget = HasExtension(availableExtensions, vk::EXTMemoryBudgetExtensionName);
 		if (m_HasMemoryBudget)
 			enabledExtensions.push_back(vk::EXTMemoryBudgetExtensionName);
+
+		// Optional, it only adds detail to a device lost report, so it's kept out of FeatureChain
+		vk::PhysicalDeviceFaultFeaturesEXT faultFeatures{ .pNext = &featureChain.get<vk::PhysicalDeviceFeatures2>(), .deviceFault = vk::True };
+		m_HasDeviceFault = SupportsDeviceFault(m_PhysicalDevice, availableExtensions);
+		if (m_HasDeviceFault)
+			enabledExtensions.push_back(vk::EXTDeviceFaultExtensionName);
+		const void* featuresHead = m_HasDeviceFault ? static_cast<const void*>(&faultFeatures) : &featureChain.get<vk::PhysicalDeviceFeatures2>();
 
 		const float queuePriority = 1.0f;
 
@@ -306,7 +328,7 @@ namespace Candle {
 			queueCreateInfos.emplace_back(vk::DeviceQueueCreateInfo{ .queueFamilyIndex = queueIndex, .queueCount = 1, .pQueuePriorities = &queuePriority });
 		}
 
-		vk::DeviceCreateInfo deviceCreateInfo{ .pNext = &featureChain.get<vk::PhysicalDeviceFeatures2>(),
+		vk::DeviceCreateInfo deviceCreateInfo{ .pNext = featuresHead,
 												   .queueCreateInfoCount = static_cast<uint32_t>(queueCreateInfos.size()),
 												   .pQueueCreateInfos = queueCreateInfos.data(),
 												   .enabledExtensionCount = static_cast<uint32_t>(enabledExtensions.size()),

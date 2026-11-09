@@ -14,6 +14,8 @@
 
 namespace Candle::GPU {
 
+	// smaller uint values match c++ (i.e. uint16_t)
+
 	using uint = std::uint32_t;
 	using float2 = glm::vec2;
 	using float3 = glm::vec3;
