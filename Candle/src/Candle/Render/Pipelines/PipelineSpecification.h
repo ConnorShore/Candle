@@ -32,7 +32,7 @@ namespace Candle {
 
 	struct GraphicsPipelineSpecification
 	{
-		SharedPtr<Shader> Shader{ nullptr };
+		SharedPtr<Shader> Shader{ nullptr };	// TODO: Asset handle in the future rather than pointer
 		std::string VertexEntryPoint{ "VertMain" };
 		std::string FragmentEntryPoint{ "FragMain" };
 		PrimitiveTopology Topology = PrimitiveTopology::TriangleList;

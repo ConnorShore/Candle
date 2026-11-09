@@ -106,7 +106,8 @@ namespace Candle {
 		, m_DepthExtent(info.TargetExtent.width, info.TargetExtent.height)
 		, m_LineWidthRange(FindLineWidthRange(renderDevice))
 	{
-		// Load shaders into the asset manager for now (eventually will be part of the asset manager's initialization)
+		// Load shaders into pipeline for now 
+		// TODO: Eventually will be part of the asset manager's initialization and will use asset handles rather than pointers
 		m_TrianglePipeline = m_PipelineStore.CreatePipeline(GraphicsPipelineSpecification{
 			.Shader = ShaderLoader::LoadShader("TrianglePipeline", info.ShaderDirectory / "Triangle.spv").value(),
 			.VertexEntryPoint = "VertMain",

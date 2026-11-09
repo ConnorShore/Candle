@@ -108,6 +108,14 @@ namespace Candle {
 			}
 		}
 
+		bool ContainsEntryPoint(const std::vector<ShaderEntryPoint>& entryPoints, const std::string& entryPointName)
+		{
+			if (entryPointName.empty())
+				return true;
+			return std::any_of(entryPoints.begin(), entryPoints.end(),
+				[&](const ShaderEntryPoint& entryPoint) { return entryPoint.Name == entryPointName; });
+		}
+
 	}
 
 	PipelineStore::PipelineStore(RenderDevice& renderDevice, BindlessTable& bindlessTable)
@@ -169,6 +177,13 @@ namespace Candle {
 		// Create shader modules and pipeline shader stage create info for each entry point
 		vk::raii::ShaderModule shaderModule = spec.Shader->CreateModule(m_RenderDevice);
 		std::vector<vk::PipelineShaderStageCreateInfo> shaderStages = std::move(CreateShaderStages(shaderModule, spec.Shader->GetEntryPoints()));
+
+		// Validate the entry point names exist in the shader module and that the push-constant blocks are valid
+		// TOOD: Handle cases like this more gracefully, for now we just crash the engine if the entry point doesn't exist
+		if (!ContainsEntryPoint(spec.Shader->GetEntryPoints(), spec.VertexEntryPoint))
+			CDL_CORE_FATAL(LogChannel::Render, "Vertex entry point '" + spec.VertexEntryPoint + "' not found in shader module");
+		if (!ContainsEntryPoint(spec.Shader->GetEntryPoints(), spec.FragmentEntryPoint))
+			CDL_CORE_FATAL(LogChannel::Render, "Fragment entry point '" + spec.FragmentEntryPoint + "' not found in shader module");
 #pragma endregion
 
 #pragma region Input Assembly State
