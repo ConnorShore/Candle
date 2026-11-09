@@ -5,6 +5,8 @@
 
 #include "Candle/Core/Profiler.h"
 
+#include <glm/gtc/packing.hpp>
+
 #include <atomic>
 #include <ranges>
 
