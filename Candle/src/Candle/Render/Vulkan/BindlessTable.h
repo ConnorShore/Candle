@@ -27,7 +27,7 @@ namespace Candle {
 		BindlessTable& operator=(const BindlessTable&) = delete;
 
 		void WriteTexture(uint32_t index, vk::ImageView view);
-		void BindSet(vk::CommandBuffer commandBuffer, vk::PipelineBindPoint bindPoint, vk::PipelineLayout& pipelineLayout);
+		void BindSet(vk::CommandBuffer commandBuffer, vk::PipelineBindPoint bindPoint, vk::PipelineLayout pipelineLayout);
 
 		inline vk::DescriptorSet GetSet() const { return *m_DescriptorSet; }
 		inline vk::DescriptorSetLayout GetLayout() const { return *m_DescriptorSetLayout; }

@@ -14,7 +14,6 @@
 #include <Candle/Render/Resources/GPUResourceRegistry.h>
 #include <Candle/Render/Resources/GPUUploader.h>
 #include <Candle/Render/Vulkan/Image.h>
-#include <Candle/Render/Pipelines/Pipeline.h>
 #include <Candle/Render/Pipelines/PipelineSpecification.h>
 #include <Candle/Render/Vulkan/RenderDevice.h>
 #include <Candle/Render/Vulkan/RenderInstance.h>

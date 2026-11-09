@@ -1,17 +1,19 @@
 #include "cdlpch.h"
-#include "Pipeline.h"
+#include "PipelineStore.h"
+#include "ShaderCreationInfo.h"
+
 #include "Candle/Render/Vulkan/RenderDevice.h"
 #include "Candle/Render/Vulkan/BindlessTable.h"
 
-#include <array>
+#include "Candle/Render/ShaderInterop/GlobalPushConstants.h"
 
 namespace Candle {
 
 	namespace {
 
-		constexpr std::array<vk::DynamicState, 4> kDynamicStates = { 
-			vk::DynamicState::eViewport, 
-			vk::DynamicState::eScissor, 
+		constexpr std::array<vk::DynamicState, 4> kDynamicStates = {
+			vk::DynamicState::eViewport,
+			vk::DynamicState::eScissor,
 			vk::DynamicState::eDepthTestEnable,
 			vk::DynamicState::eLineWidth
 		};
@@ -90,8 +92,6 @@ namespace Candle {
 			return colorBlendAttachment;
 		}
 
-
-
 		// The shader half of the push-constant contract; Pipeline::PushConstants checks the C++ half
 		void ValidatePushConstants(const std::vector<ShaderEntryPoint>& entryPoints)
 		{
@@ -109,20 +109,65 @@ namespace Candle {
 		}
 
 	}
-	
 
-	Pipeline::Pipeline(const PipelineSpecification& spec, RenderDevice& renderDevice, BindlessTable& bindlessTable)
+	PipelineStore::PipelineStore(RenderDevice& renderDevice, BindlessTable& bindlessTable)
+		: m_RenderDevice(renderDevice)
+		, m_BindlessTable(bindlessTable)
+		, m_GlobalLayout(std::move(CreateGlobalLayout()))
 	{
-		CreatePipeline(spec, renderDevice, bindlessTable);
 	}
 
-	void Pipeline::CreatePipeline(const PipelineSpecification& spec, RenderDevice& renderDevice, BindlessTable& bindlessTable)
+	GPUPipelineHandle PipelineStore::CreatePipeline(PipelineSpecification spec)
+	{
+		PipelineEntry entry;
+		std::visit(Overloaded{
+			[&](const GraphicsPipelineSpecification& graphicsSpec) { entry = CreateGraphicsPipelineEntry(graphicsSpec); },
+			[&](const ComputePipelineSpecification& computeSpec) { entry = CreateComputePipelineEntry(computeSpec); }
+			}, std::move(spec));
+
+		m_Pipelines.push_back(std::move(entry));
+		return GPUPipelineHandle{ static_cast<uint32_t>(m_Pipelines.size() - 1), 0 };
+	}
+
+	vk::Pipeline PipelineStore::TryGetPipeline(GPUPipelineHandle handle)
+	{
+		if (handle.Index >= m_Pipelines.size())
+			return nullptr;
+		if (m_Pipelines[handle.Index].Pipeline == nullptr)
+			return nullptr;
+
+		return *m_Pipelines[handle.Index].Pipeline;
+	}
+
+	vk::raii::PipelineLayout PipelineStore::CreateGlobalLayout()
+	{
+		vk::PushConstantRange pushConstantRange{
+			.stageFlags = kPushConstantStages,
+			.offset = 0,
+			.size = kPushConstantsSize
+		};
+
+		vk::DescriptorSetLayout layouts[] = { m_BindlessTable.GetLayout() };
+		vk::PipelineLayoutCreateInfo pipelineLayoutInfo{
+			.setLayoutCount = 1,
+			.pSetLayouts = layouts,
+			.pushConstantRangeCount = 1,
+			.pPushConstantRanges = &pushConstantRange
+		};
+
+		auto layout = vk::raii::PipelineLayout{ m_RenderDevice.GetDevice(), pipelineLayoutInfo };
+		m_RenderDevice.SetDebugName(*layout,  "Global Pipeline Layout");
+
+		return std::move(layout);
+	}
+
+	PipelineStore::PipelineEntry PipelineStore::CreateGraphicsPipelineEntry(const GraphicsPipelineSpecification& spec)
 	{
 		bool containsDepthAttachment = spec.DepthAttachmentFormat != vk::Format::eUndefined;
 
 #pragma region Shader Module
 		// Create shader modules and pipeline shader stage create info for each entry point
-		vk::raii::ShaderModule shaderModule = spec.Shader->CreateModule(renderDevice);
+		vk::raii::ShaderModule shaderModule = spec.Shader->CreateModule(m_RenderDevice);
 		std::vector<vk::PipelineShaderStageCreateInfo> shaderStages = std::move(CreateShaderStages(shaderModule, spec.Shader->GetEntryPoints()));
 #pragma endregion
 
@@ -133,12 +178,12 @@ namespace Candle {
 
 #pragma region Dynamic State
 		// Set dynamic states that can be changed without recreating the pipeline
-		vk::PipelineDynamicStateCreateInfo dynamicState{ 
-			.dynamicStateCount = static_cast<uint32_t>(kDynamicStates.size()), 
-			.pDynamicStates = kDynamicStates.data() 
+		vk::PipelineDynamicStateCreateInfo dynamicState{
+			.dynamicStateCount = static_cast<uint32_t>(kDynamicStates.size()),
+			.pDynamicStates = kDynamicStates.data()
 		};
-		vk::PipelineViewportStateCreateInfo viewportState{ 
-			.viewportCount = 1, 
+		vk::PipelineViewportStateCreateInfo viewportState{
+			.viewportCount = 1,
 			.scissorCount = 1
 		};
 #pragma endregion
@@ -146,7 +191,7 @@ namespace Candle {
 #pragma region Rasterization State
 		// Rasterization state describes how primitives are rasterized into fragments
 		// Using defaults for now but may make some of these configurable in the future
-		vk::PipelineRasterizationStateCreateInfo rasterizer{ 
+		vk::PipelineRasterizationStateCreateInfo rasterizer{
 			.depthClampEnable = vk::False,
 			.rasterizerDiscardEnable = vk::False,
 			.polygonMode = vk::PolygonMode::eFill,
@@ -158,28 +203,21 @@ namespace Candle {
 #pragma endregion
 
 #pragma region Multisample State
-		// Disablign right now, will revisit later once I get to the multisampling chapter
-		vk::PipelineMultisampleStateCreateInfo multisampling{ 
-			.rasterizationSamples = vk::SampleCountFlagBits::e1, 
-			.sampleShadingEnable = vk::False 
+		// Disabling right now, will revisit later once I get to the multisampling chapter
+		vk::PipelineMultisampleStateCreateInfo multisampling{
+			.rasterizationSamples = vk::SampleCountFlagBits::e1,
+			.sampleShadingEnable = vk::False
 		};
 #pragma endregion
 
 #pragma region Depth / Stencil State
 		vk::PipelineDepthStencilStateCreateInfo depthStencil{
-			.depthTestEnable = vk::True,	// Overriden with dynamic state
-			.depthWriteEnable = vk::True,	// Overriden with dynamic state
+			.depthTestEnable = vk::True,	// Overridden with dynamic state
+			.depthWriteEnable = vk::True,	// Overridden with dynamic state
 			.depthCompareOp = vk::CompareOp::eLessOrEqual,
 			.depthBoundsTestEnable = vk::False,
 			.stencilTestEnable = vk::False
 		};
-		//vk::PipelineDepthStencilStateCreateInfo depthStencil{ 
-		//	.depthTestEnable = containsDepthAttachment ? vk::True : vk::False, 
-		//	.depthWriteEnable = containsDepthAttachment ? vk::True : vk::False,
-		//	.depthCompareOp = vk::CompareOp::eLessOrEqual, 
-		//	.depthBoundsTestEnable = vk::False, 
-		//	.stencilTestEnable = vk::False 
-		//};
 #pragma endregion
 
 #pragma region Color Blend State
@@ -194,26 +232,22 @@ namespace Candle {
 		};
 #pragma endregion
 
-#pragma region Pipeline Layout
-		// Create pipeline layout (descriptor set layouts, push constants)
-		// Every layout declares the same range whatever its shader uses, so all are compatible for push constants
-		ValidatePushConstants(spec.Shader->GetEntryPoints());
-		vk::PushConstantRange pushConstantRange{ 
-			.stageFlags = kPushConstantStages, 
-			.offset = 0, 
-			.size = kPushConstantsSize 
-		};
+#pragma region Validate Push Constants
+		std::vector<ShaderEntryPoint> entryPointsToValidate;
+		// Only validate the entry points that are actually used for this pipeline, rather than all the entry points in the shader
+		auto addEntryPointIfExists = [&](const std::string& entryPointName) {
+			if (entryPointName.empty())
+				return;
 
-		vk::DescriptorSetLayout layouts[] = { bindlessTable.GetLayout() };
-		vk::PipelineLayoutCreateInfo pipelineLayoutInfo{
-			.setLayoutCount = 1,
-			.pSetLayouts = layouts,
-			.pushConstantRangeCount = 1,
-			.pPushConstantRanges = &pushConstantRange
+			auto it = std::find_if(spec.Shader->GetEntryPoints().begin(), spec.Shader->GetEntryPoints().end(),
+				[&](const ShaderEntryPoint& entryPoint) { return entryPoint.Name == entryPointName; });
+			if (it != spec.Shader->GetEntryPoints().end())
+				entryPointsToValidate.push_back(*it);
 		};
-		m_Layout = vk::raii::PipelineLayout{ renderDevice.GetDevice(), pipelineLayoutInfo };
-		if (!spec.DebugName.empty())
-			renderDevice.SetDebugName(*m_Layout, spec.DebugName + " Layout");
+		addEntryPointIfExists(spec.VertexEntryPoint);
+		addEntryPointIfExists(spec.FragmentEntryPoint);
+
+		ValidatePushConstants(entryPointsToValidate);
 #pragma endregion
 
 #pragma region Graphics Pipeline Creation
@@ -225,25 +259,38 @@ namespace Candle {
 
 		// Create the graphics pipeline
 		vk::PipelineVertexInputStateCreateInfo vertexInputInfo{};	// Empty by design: shaders pull vertices through a device address in the push constants
-		vk::StructureChain<vk::GraphicsPipelineCreateInfo, vk::PipelineRenderingCreateInfo> pipelineCreateInfoChain = {
-													{
-													 .stageCount = static_cast<uint32_t>(shaderStages.size()),
-													 .pStages = shaderStages.data(),
-													 .pVertexInputState = &vertexInputInfo,
-													 .pInputAssemblyState = &inputAssembly,
-													 .pViewportState = &viewportState,
-													 .pRasterizationState = &rasterizer,
-													 .pMultisampleState = &multisampling,
-													 .pDepthStencilState = &depthStencil,
-													 .pColorBlendState = &colorBlending,
-													 .pDynamicState = &dynamicState,
-													 .layout = *m_Layout,
-													 .renderPass = nullptr, // Nullptr because we are using dynamic rendering
-													 .subpass = 0 
-													}, pipelineRenderingCreateInfo };
-		m_Pipeline = vk::raii::Pipeline(renderDevice.GetDevice(), nullptr, pipelineCreateInfoChain.get<vk::GraphicsPipelineCreateInfo>());
+		vk::StructureChain<vk::GraphicsPipelineCreateInfo, vk::PipelineRenderingCreateInfo> pipelineCreateInfoChain{
+			{
+				.stageCount = static_cast<uint32_t>(shaderStages.size()),
+				.pStages = shaderStages.data(),
+				.pVertexInputState = &vertexInputInfo,
+				.pInputAssemblyState = &inputAssembly,
+				.pViewportState = &viewportState,
+				.pRasterizationState = &rasterizer,
+				.pMultisampleState = &multisampling,
+				.pDepthStencilState = &depthStencil,
+				.pColorBlendState = &colorBlending,
+				.pDynamicState = &dynamicState,
+				.layout = *m_GlobalLayout,
+				.renderPass = nullptr, // Nullptr because we are using dynamic rendering
+				.subpass = 0
+			}, pipelineRenderingCreateInfo
+		};
+		auto pipeline = vk::raii::Pipeline(m_RenderDevice.GetDevice(), nullptr, pipelineCreateInfoChain.get<vk::GraphicsPipelineCreateInfo>());
 		if (!spec.DebugName.empty())
-			renderDevice.SetDebugName(*m_Pipeline, spec.DebugName);
+			m_RenderDevice.SetDebugName(*pipeline, spec.DebugName);
+#pragma endregion
+
+		return PipelineEntry{
+			.Pipeline{ std::move(pipeline) },
+			.Spec{ spec }
+		};
+	}
+
+	PipelineStore::PipelineEntry PipelineStore::CreateComputePipelineEntry(const ComputePipelineSpecification& spec)
+	{
+		throw std::runtime_error("Compute pipeline creation not implemented yet");
+		return {};
 	}
 
 }
