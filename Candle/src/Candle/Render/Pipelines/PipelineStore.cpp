@@ -201,8 +201,11 @@ namespace Candle {
 		if (auto valid = ValidateHandle(handle); !valid.has_value())
 			return std::unexpected(valid.error());
 
-		size_t stageIndex = (stage == ShaderStage::Vertex || stage == ShaderStage::Compute) ? 0 : 1;	// Vertex or Compute is index 0, Fragment is index 1
-		return m_Pipelines[handle.Index].EntryPoints[stageIndex];
+		size_t stageIndex = static_cast<size_t>(stage);
+		return std::visit(Overloaded{
+			[&](const GraphicsPipelineSpecification& spec) -> ShaderEntryPoint { return spec.Shader->GetEntryPoints()[stageIndex]; },
+			[&](const ComputePipelineSpecification& spec) -> ShaderEntryPoint { return spec.Shader->GetEntryPoints()[stageIndex]; }
+			}, m_Pipelines[handle.Index].Spec);
 	}
 
 	vk::raii::PipelineLayout PipelineStore::CreateGlobalLayout()
@@ -352,13 +355,12 @@ namespace Candle {
 
 		return PipelineEntry{
 			.Pipeline{ std::move(pipeline) },
-			.Spec{ spec }
+			.Spec{ spec },
 		};
 	}
 
 	std::expected<PipelineStore::PipelineEntry, std::string> PipelineStore::CreateComputePipelineEntry(const ComputePipelineSpecification& spec)
 	{
-		// TODO NOW: Consolidate shader/module, validation and initial checks to helper function to be shared by graphics and compute pipelines
 		if (!spec.Shader)
 			return std::unexpected("Shader is null");
 		if (spec.EntryPoint.empty())

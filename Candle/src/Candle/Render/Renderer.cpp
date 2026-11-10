@@ -427,14 +427,14 @@ namespace Candle {
 		vk::ClearValue clearColor = vk::ClearColorValue(0.0f, 0.0f, 0.0f, 1.0f);
 		vk::ClearValue clearDepth = vk::ClearDepthStencilValue(1.0f, 0);
 
-		vk::RenderingAttachmentInfo colorAttachmentInfo = {
+		vk::RenderingAttachmentInfo colorAttachmentInfo{
 			.imageView = target.ColorView,
 			.imageLayout = vk::ImageLayout::eColorAttachmentOptimal,
 			.loadOp = loadOp,
 			.storeOp = vk::AttachmentStoreOp::eStore,
 			.clearValue = clearColor };
 
-		vk::RenderingAttachmentInfo depthAttachmentInfo = {
+		vk::RenderingAttachmentInfo depthAttachmentInfo{
 			.imageView = m_DepthImage.GetImageView(),
 			.imageLayout = vk::ImageLayout::eDepthStencilAttachmentOptimal,
 			.loadOp = vk::AttachmentLoadOp::eLoad,
@@ -445,7 +445,7 @@ namespace Candle {
 		const vk::Extent2D extent = target.Extent;
 
 		// Setup the rendering info for the render pass begin info. This specifies the render area, the number of layers, and the color attachment info.
-		vk::RenderingInfo renderingInfo = {
+		vk::RenderingInfo renderingInfo{
 			.renderArea = {
 				.offset = { 0, 0 },
 				.extent = extent },
@@ -604,12 +604,12 @@ namespace Candle {
 					vk::Extent2D(static_cast<uint32_t>(clipMax.x - clipMin.x), static_cast<uint32_t>(clipMax.y - clipMin.y))));
 
 				GPU::GuiDrawPushConstants pushConstants{
-						.Global = globalPCs,
-						.Vertices = vertexBase + cmd.VertexOffset * sizeof(Candle::GPU::GuiVertex),  // Offset here rather than as drawIndexed's vertexOffset, so the shader indexes from 0
-						.Scale = scale,
-						.Translate = translate,
-						.TextureIndex = m_TexturePool.GetTextureInfo(cmd.Texture).Index,
-						.SamplerIndex = samplerIndex
+					.Global = globalPCs,
+					.Vertices = vertexBase + cmd.VertexOffset * sizeof(Candle::GPU::GuiVertex),  // Offset here rather than as drawIndexed's vertexOffset, so the shader indexes from 0
+					.Scale = scale,
+					.Translate = translate,
+					.TextureIndex = m_TexturePool.GetTextureInfo(cmd.Texture).Index,
+					.SamplerIndex = samplerIndex
 				};
 
 				ApplyPushConstants(*frame.CommandBuffer, m_PipelineStore.GetGlobalLayout(), pushConstants);
@@ -672,9 +672,10 @@ namespace Candle {
 			return;
 
 		buffer = m_GPUAllocator.CreateBuffer({
-				.Size = std::max<size_t>(size, buffer.GetSize() * 2),   // Doubling, so a growing UI doesn't reallocate every frame
-				.Usage = usage,
-				.Flags = VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT | VMA_ALLOCATION_CREATE_MAPPED_BIT,
-				.DebugName = std::string(name) });
+			.Size = std::max<size_t>(size, buffer.GetSize() * 2),   // Doubling, so a growing UI doesn't reallocate every frame
+			.Usage = usage,
+			.Flags = VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT | VMA_ALLOCATION_CREATE_MAPPED_BIT,
+			.DebugName = std::string(name) 
+		});
 	}
 }

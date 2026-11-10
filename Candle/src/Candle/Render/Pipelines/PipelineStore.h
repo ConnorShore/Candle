@@ -40,7 +40,7 @@ namespace Candle {
 		{
 			vk::raii::Pipeline Pipeline{ nullptr };
 			PipelineSpecification Spec;
-			std::array<ShaderEntryPoint, 2> EntryPoints;	// Max of 2: (vert, frag) but can be 1 (vert, {}) or (compute, {})
+			//std::array<ShaderEntryPoint, 2> EntryPoints;	// Max of 2: (vert, frag) but can be 1 (vert, {}) or (compute, {})
 			// TODO: May need to keep entry points here too but will see
 		};
 
