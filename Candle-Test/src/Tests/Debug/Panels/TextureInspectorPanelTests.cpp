@@ -60,6 +60,22 @@ CDL_TEST_CASE(TextureInspectorPanel, ListsEveryLiveTextureWithItsKind, Gpu)
 	ExpectNoVulkanDebugMessages(logs);
 }
 
+// The Renderer can draw the scene into anything with eColorAttachment, so that wins over eStorage when an image has both
+CDL_TEST_CASE(TextureInspectorPanel, ListsATargetThatIsAlsoStorageAsARenderTarget, Gpu)
+{
+	LoggerFixture logs(LogLevel::Warn, kRenderChannelMask);
+	{
+		TestInspector test;
+		test.Textures.Pool.CreateRenderTarget({ .Extent = { 4, 4 }, .Format = vk::Format::eR8G8B8A8Unorm,
+			.Usage = vk::ImageUsageFlagBits::eColorAttachment | vk::ImageUsageFlagBits::eStorage | vk::ImageUsageFlagBits::eSampled,
+			.DebugName = "Both" });
+
+		const std::string text = test.Drawn();
+		CDL_EXPECT_MSG(text.contains("Both | Render target"), text);
+	}
+	ExpectNoVulkanDebugMessages(logs);
+}
+
 CDL_TEST_CASE(TextureInspectorPanel, ReleasedTextureLeavesTheListAndCountsAsPending, Gpu)
 {
 	LoggerFixture logs(LogLevel::Warn, kRenderChannelMask);

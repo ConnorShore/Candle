@@ -209,6 +209,19 @@ CDL_TEST_CASE(TexturePool, StorageTargetReportsOnlyTheUsageItWasCreatedWith, Gpu
 	ExpectNoVulkanDebugMessages(logs);
 }
 
+// Validation rejects a view without sampled usage as it's written into binding 0, so this fails unless a target without
+// eSampled is published at its slot of binding 2 alone.
+CDL_TEST_CASE(TexturePool, StorageOnlyTargetIsNotPublishedForSampling, Gpu)
+{
+	LoggerFixture logs(LogLevel::Warn, kRenderChannelMask);
+	{
+		TestTextures gpu;
+		const GPUTextureHandle target = gpu.Pool.CreateRenderTarget({ .Extent = { 1, 1 }, .Format = kRenderTargetFormat, .Usage = vk::ImageUsageFlagBits::eStorage });
+		CDL_EXPECT(gpu.Pool.IsAlive(target));
+	}
+	ExpectNoVulkanDebugMessages(logs);
+}
+
 // Render targets share the textures' slots, generations and bindless elements, so one never aliases the other.
 CDL_TEST_CASE(TexturePool, RenderTargetsAndTexturesGetDistinctSlots, Gpu)
 {

@@ -247,6 +247,13 @@ namespace Candle::Test {
 		}
 	}
 
+	// Names every axis, so a swapped or dropped one shows in the message
+	inline void ExpectGroupSize(const LocalGroupSize& reflected, const LocalGroupSize& expected, std::string_view label)
+	{
+		CDL_EXPECT_MSG(reflected.X == expected.X && reflected.Y == expected.Y && reflected.Z == expected.Z,
+			std::format("{} has group size ({}, {}, {}), expected ({}, {}, {})", label, reflected.X, reflected.Y, reflected.Z, expected.X, expected.Y, expected.Z));
+	}
+
 	// One pool and primary buffer on the graphics family, for tests that record their own commands.
 	// Reset the pool only once the GPU has finished with the buffer.
 	struct TestCommands
