@@ -23,8 +23,8 @@ namespace Candle {
 	class PipelineStore
 	{
 	public:
-		PipelineStore(RenderDevice& renderDevice, BindlessTable& bindlessTable);
-		~PipelineStore() = default;
+		PipelineStore(RenderDevice& renderDevice, BindlessTable& bindlessTable, const std::filesystem::path& pipelineCacheDirectory);
+		~PipelineStore();
 
 		GPUPipelineHandle CreatePipeline(PipelineSpecification spec);
 
@@ -36,6 +36,7 @@ namespace Candle {
 		inline vk::PipelineLayout GetGlobalLayout() const { return m_GlobalLayout; }
 
 	private:
+		inline static constexpr std::string_view kPipelineCacheFileName = "PipelineCache.bin";
 		struct PipelineEntry
 		{
 			vk::raii::Pipeline Pipeline{ nullptr };
@@ -50,6 +51,8 @@ namespace Candle {
 
 		std::expected<void, std::string> ValidateHandle(GPUPipelineHandle handle) const;
 
+		void InitializePipelineCache();
+
 	private:
 		RenderDevice& m_RenderDevice;
 		BindlessTable& m_BindlessTable;
@@ -61,6 +64,10 @@ namespace Candle {
 		// but for now we just block until the pipeline is ready
 		std::vector<PipelineEntry> m_Pipelines;
 
+		// Pipeline cache
+		vk::raii::PipelineCache m_PipelineCache{ nullptr };
+
+		std::filesystem::path m_PipelineCacheFile;
 	};
 
 }

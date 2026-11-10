@@ -121,7 +121,7 @@ namespace Candle {
 		, m_TexturePool(texturePool)
 		, m_BindlessTable(bindlessTable)
 		, m_GPUAllocator(allocator)
-		, m_PipelineStore(renderDevice, bindlessTable)
+		, m_PipelineStore(renderDevice, bindlessTable, info.PipelineCacheDirectory)
 		, m_RenderToSwapChain(info.RenderToSwapChain)
 		, m_TargetFormat(info.TargetFormat)
 		, m_DepthFormat(FindDepthFormat(renderDevice))

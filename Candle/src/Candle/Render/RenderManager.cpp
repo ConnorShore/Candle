@@ -49,6 +49,7 @@ namespace Candle {
 			.TargetFormat = m_SwapChain.GetSurfaceFormat().format,
 			.TargetExtent = m_SwapChain.GetExtent(),
 			.ShaderDirectory = engineAssetDir / "shaders/bin",
+			.PipelineCacheDirectory = engineAssetDir / "pipelines/bin",
 			.RenderToSwapChain = renderSpec.RenderToSwapChain })
 		, m_CommandPoolManager(m_RenderDevice, jobSystem.GetNumWorkers())
 		, m_RenderThread({

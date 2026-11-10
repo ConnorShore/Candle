@@ -162,11 +162,37 @@ namespace Candle {
 		}
 	}
 
-	PipelineStore::PipelineStore(RenderDevice& renderDevice, BindlessTable& bindlessTable)
+	PipelineStore::PipelineStore(RenderDevice& renderDevice, BindlessTable& bindlessTable, const std::filesystem::path& pipelineCacheDirectory)
 		: m_RenderDevice(renderDevice)
 		, m_BindlessTable(bindlessTable)
 		, m_GlobalLayout(std::move(CreateGlobalLayout()))
+		, m_PipelineCacheFile(pipelineCacheDirectory / kPipelineCacheFileName)
 	{
+		InitializePipelineCache();
+	}
+
+	PipelineStore::~PipelineStore()
+	{
+		// Write out the pipeline cache to disk if it has been populated
+		if (m_PipelineCache != nullptr)
+		{
+			auto data = m_PipelineCache.getData();
+			if (!data.empty())
+			{
+				// Convert uint8_t vector to std::byte vector for writing
+				std::vector<std::byte> dataBytes(data.size());
+				dataBytes.assign(reinterpret_cast<const std::byte*>(data.data()), reinterpret_cast<const std::byte*>(data.data()) + data.size());
+
+				auto result = Platform::WriteFile(m_PipelineCacheFile, dataBytes);
+				if (!result)
+				{
+					CDL_CORE_ERROR(LogChannel::Render, "Failed to write pipeline cache to '{}': {} (OS error {})",
+						m_PipelineCacheFile.string(), ToString(result.error().Code), result.error().OSError);
+				}
+
+				CDL_CORE_INFO(LogChannel::Render, "Pipeline cache successfully written to '{}', size {} bytes", m_PipelineCacheFile.string(), data.size());
+			}
+		}
 	}
 
 	GPUPipelineHandle PipelineStore::CreatePipeline(PipelineSpecification spec)
@@ -348,7 +374,7 @@ namespace Candle {
 				.subpass = 0
 			}, pipelineRenderingCreateInfo
 		};
-		auto pipeline = vk::raii::Pipeline(m_RenderDevice.GetDevice(), nullptr, pipelineCreateInfoChain.get<vk::GraphicsPipelineCreateInfo>());
+		auto pipeline = vk::raii::Pipeline(m_RenderDevice.GetDevice(), m_PipelineCache, pipelineCreateInfoChain.get<vk::GraphicsPipelineCreateInfo>());
 		if (!spec.DebugName.empty())
 			m_RenderDevice.SetDebugName(*pipeline, spec.DebugName);
 #pragma endregion
@@ -390,7 +416,7 @@ namespace Candle {
 			.stage = shaderStages[0],
 			.layout = *m_GlobalLayout
 		};
-		auto pipeline = vk::raii::Pipeline(m_RenderDevice.GetDevice(), nullptr, pipelineCreateInfo);
+		auto pipeline = vk::raii::Pipeline(m_RenderDevice.GetDevice(), m_PipelineCache, pipelineCreateInfo);
 		if (!spec.DebugName.empty())
 			m_RenderDevice.SetDebugName(*pipeline, spec.DebugName);
 #pragma endregion
@@ -411,6 +437,25 @@ namespace Candle {
 			return std::unexpected("Pipeline is not ready yet!");
 
 		return {};
+	}
+
+	void PipelineStore::InitializePipelineCache()
+	{
+		std::vector<std::byte> data;
+
+		auto result = Platform::ReadFile(m_PipelineCacheFile);
+		if (!result)
+			CDL_CORE_WARN(LogChannel::Render, "Failed to read pipeline cache file '{}': {} (OS error {})",
+				kPipelineCacheFileName, ToString(result.error().Code), result.error().OSError);
+		else
+			data = std::move(*result);
+
+		vk::PipelineCacheCreateInfo pipelineCacheInfo{
+			.initialDataSize = data.size(),
+			.pInitialData = data.data()
+		};
+		m_PipelineCache = vk::raii::PipelineCache{ m_RenderDevice.GetDevice(), pipelineCacheInfo };
+		CDL_CORE_INFO(LogChannel::Render, "Pipeline cache initialized from file '{}', size {} bytes", kPipelineCacheFileName, data.size());
 	}
 
 }
