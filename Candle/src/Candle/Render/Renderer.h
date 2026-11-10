@@ -1,9 +1,10 @@
 #pragma once
 
-#include "Candle/Render/Pipelines/Pipeline.h"
+#include "Candle/Render/Pipelines/PipelineStore.h"
 #include "Candle/Render/Vulkan/BindlessTable.h"
 #include "Candle/Render/Vulkan/GPUImage.h"
 #include "Candle/Render/Resources/DeletionQueue.h"
+#include "Candle/Render/ShaderInterop/GlobalPushConstants.h"
 
 #include <glm/glm.hpp>
 
@@ -80,6 +81,8 @@ namespace Candle {
 		TexturePool& m_TexturePool;
 		BindlessTable& m_BindlessTable;
 		GPUAllocator& m_GPUAllocator;
+		PipelineStore m_PipelineStore;
+
 		bool m_RenderToSwapChain;
 		vk::Format m_TargetFormat;
 		vk::Format m_DepthFormat;	// Chosen once, before m_DepthImage; the depth image and every pipeline's spec both take it
@@ -87,7 +90,10 @@ namespace Candle {
 		glm::uvec2 m_DepthExtent;
 		glm::vec2 m_LineWidthRange;
 		DeletionQueue m_RetiredImages;	// Depth images replaced by MatchDepthToOutput, held until the frames using them retire
-		std::vector<Pipeline> m_Pipelines;
+		//std::vector<Pipeline> m_Pipelines;
+
+		// Temporary till render graph is implemented
+		GPUPipelineHandle m_TrianglePipeline, m_DebugDrawPipeline, m_GuiPipeline;
 	};
 
 }

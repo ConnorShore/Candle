@@ -8,7 +8,7 @@
 CDL_INTEROP_BEGIN
 
 	// One probe per draw: the fragment shader returns textures[TextureIndex] sampled through samplers[SamplerIndex] at UV.
-	// Starts with Global, so Pipeline accepts it as a push-constant block; the shader never reads it.
+	// Starts with Global, so PipelineStore accepts it as a push-constant block; the shader never reads it.
 	struct BindlessFixturePushConstants
 	{
 		GlobalPushConstants Global;

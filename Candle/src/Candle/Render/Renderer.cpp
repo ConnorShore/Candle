@@ -1,6 +1,6 @@
 #include "cdlpch.h"
-
 #include "Renderer.h"
+
 #include "Candle/Render/Vulkan/RenderDevice.h"
 #include "Candle/Render/Pipelines/PipelineSpecification.h"
 #include "Candle/Render/FramePacket.h"
@@ -15,14 +15,10 @@
 
 // TODO: Probably should live in pipeline but see once render graph is made
 #include "Candle/Render/GUI/GuiInterop.h"
-
-#include "Candle/Render/Pipelines/TrianglePipeline.h"
 #include "Candle/Render/Pipelines/TriangleInterop.h"
-
-#include "Candle/Render/Pipelines/GUI/GuiPipeline.h"
-
-#include "Candle/Render/Pipelines/DebugDrawPipeline.h"
 #include "Candle/Render/Pipelines/DebugDrawInterop.h"
+
+#include "Candle/Render/Pipelines/ShaderLoader.h"
 
 #include <cmath>
 #include <span>
@@ -32,6 +28,20 @@ namespace Candle {
 	namespace {
 		// A float time steps ~0.24 ms at an hour; wrapping keeps shader animation smooth for one jump per period
 		constexpr double kShaderTimeWrapSeconds = 3600.0;
+
+		constexpr vk::ImageSubresourceRange kColorRange{ .aspectMask = vk::ImageAspectFlagBits::eColor, .levelCount = 1, .layerCount = 1 };
+
+		// A color attachment the next pass only writes, since its clear replaces whatever was there
+		constexpr ImageState kColorAttachmentWrite{
+			.Layout = vk::ImageLayout::eColorAttachmentOptimal,
+			.Access = vk::AccessFlagBits2::eColorAttachmentWrite,
+			.Stage = vk::PipelineStageFlagBits2::eColorAttachmentOutput };
+
+		// A color attachment the next pass also reads: its load and blending read what the pass before it wrote
+		constexpr ImageState kColorAttachmentReadWrite{
+			.Layout = vk::ImageLayout::eColorAttachmentOptimal,
+			.Access = vk::AccessFlagBits2::eColorAttachmentRead | vk::AccessFlagBits2::eColorAttachmentWrite,
+			.Stage = vk::PipelineStageFlagBits2::eColorAttachmentOutput };
 
 		vk::Format FindDepthFormat(RenderDevice& device)
 		{
@@ -70,19 +80,26 @@ namespace Candle {
 				.DebugName = "Depth Target" };
 		}
 
-		constexpr vk::ImageSubresourceRange kColorRange{ .aspectMask = vk::ImageAspectFlagBits::eColor, .levelCount = 1, .layerCount = 1 };
+		// The renderer can't draw anything without its own shaders, so a missing or bad .spv is fatal
+		// TODO: Temporary until the asset manager loads shaders
+		SharedPtr<Shader> LoadEngineShader(const std::string& name, const std::filesystem::path& filePath)
+		{
+			auto shader = ShaderLoader::LoadShader(name, filePath);
+			if (!shader)
+				CDL_CORE_PANIC(LogChannel::Render, "{}", shader.error());
 
-		// A colour attachment the next pass only writes, since its clear replaces whatever was there
-		constexpr ImageState kColorAttachmentWrite{
-			.Layout = vk::ImageLayout::eColorAttachmentOptimal,
-			.Access = vk::AccessFlagBits2::eColorAttachmentWrite,
-			.Stage = vk::PipelineStageFlagBits2::eColorAttachmentOutput };
+			return std::move(*shader);
+		}
 
-		// A colour attachment the next pass also reads: its load and blending read what the pass before it wrote
-		constexpr ImageState kColorAttachmentReadWrite{
-			.Layout = vk::ImageLayout::eColorAttachmentOptimal,
-			.Access = vk::AccessFlagBits2::eColorAttachmentRead | vk::AccessFlagBits2::eColorAttachmentWrite,
-			.Stage = vk::PipelineStageFlagBits2::eColorAttachmentOutput };
+		// TODO: Eventually move out of here once render grpah is implemented
+		template<typename T>
+		void ApplyPushConstants(vk::CommandBuffer commandBuffer, vk::PipelineLayout layout, const T& data)
+		{
+			CDL_STATIC_ASSERT(std::is_same_v<decltype(T::Global), GPU::GlobalPushConstants> && offsetof(T, Global) == 0,
+				"A push-constant struct must start with 'GlobalPushConstants Global'");
+			CDL_STATIC_ASSERT(sizeof(T) <= kPushConstantsSize, "Push-constant struct exceeds the engine-wide range");
+			commandBuffer.pushConstants(layout, kPushConstantStages, 0, sizeof(T), &data);
+		}
 	}
 
 	Renderer::Renderer(RenderDevice& renderDevice, GeometryPool& geometryPool, TexturePool& texturePool, BindlessTable& bindlessTable,
@@ -92,6 +109,7 @@ namespace Candle {
 		, m_TexturePool(texturePool)
 		, m_BindlessTable(bindlessTable)
 		, m_GPUAllocator(allocator)
+		, m_PipelineStore(renderDevice, bindlessTable)
 		, m_RenderToSwapChain(info.RenderToSwapChain)
 		, m_TargetFormat(info.TargetFormat)
 		, m_DepthFormat(FindDepthFormat(renderDevice))
@@ -99,9 +117,34 @@ namespace Candle {
 		, m_DepthExtent(info.TargetExtent.width, info.TargetExtent.height)
 		, m_LineWidthRange(FindLineWidthRange(renderDevice))
 	{
-		CreatePipeline(TrianglePipeline{ info.ShaderDirectory });
-		CreatePipeline(GuiPipeline{ info.ShaderDirectory });
-		CreatePipeline(DebugDrawPipeline{ info.ShaderDirectory });
+		// Load shaders into pipeline for now 
+		// TODO: Eventually will be part of the asset manager's initialization and will use asset handles rather than pointers
+		m_TrianglePipeline = m_PipelineStore.CreatePipeline(GraphicsPipelineSpecification{
+			.Shader = LoadEngineShader("TrianglePipeline", info.ShaderDirectory / "Triangle.spv"),
+			.VertexEntryPoint = "VertMain",
+			.FragmentEntryPoint = "FragMain",
+			.ColorAttachmentFormats = { info.TargetFormat },
+			.DepthAttachmentFormat = m_DepthFormat,
+			.DebugName = "Triangle Pipeline"
+		});
+		m_DebugDrawPipeline = m_PipelineStore.CreatePipeline(GraphicsPipelineSpecification{
+			.Shader = LoadEngineShader("DebugDrawPipeline", info.ShaderDirectory / "DebugDraw.spv"),
+			.VertexEntryPoint = "VertMain",
+			.FragmentEntryPoint = "FragMain",
+			.Topology = PrimitiveTopology::LineList,
+			.ColorAttachmentFormats = { info.TargetFormat },
+			.DepthAttachmentFormat = m_DepthFormat,
+			.DebugName = "Debug Draw Pipeline"
+		});
+		m_GuiPipeline = m_PipelineStore.CreatePipeline(GraphicsPipelineSpecification{
+			.Shader = LoadEngineShader("GuiPipeline", info.ShaderDirectory / "Gui.spv"),
+			.VertexEntryPoint = "VertMain",
+			.FragmentEntryPoint = "FragMain",
+			.Blend = BlendMode::AlphaBlend,
+			.ColorAttachmentFormats = { info.TargetFormat },
+			.CullBackFaces = false,
+			.DebugName = "GUI Pipeline"
+		});
 	}
 
 	void Renderer::Render(const FramePacket& packet, FrameContext& frame, SwapChainImage& target)
@@ -141,6 +184,9 @@ namespace Candle {
 
 		// Begin recording commands into the command buffer
 		frame.CommandBuffer.begin({ .flags = vk::CommandBufferUsageFlagBits::eOneTimeSubmit });
+
+		// Bind the global descriptor set once, which contains the bindless table and the frame data buffer
+		m_BindlessTable.BindSet(*frame.CommandBuffer, vk::PipelineBindPoint::eGraphics, m_PipelineStore.GetGlobalLayout());
 
 		if (m_RenderToSwapChain)
 		{
@@ -224,15 +270,15 @@ namespace Candle {
 		m_DepthImage = GPUImage(DepthImageSpec(m_DepthFormat, m_DepthExtent), m_GPUAllocator);
 	}
 
-	void Renderer::CreatePipeline(const RenderPipeline& pipeline)
-	{
-		PipelineSpecification spec = pipeline.CreateSpecification(m_RenderDevice, m_TargetFormat, m_DepthFormat);
-		spec.DebugName = pipeline.GetName();
-		m_Pipelines.emplace_back(spec, m_RenderDevice, m_BindlessTable);
-	}
-
 	void Renderer::RenderTrianglePipeline(const FramePacket& packet, FrameContext& frame, const SceneTarget& target, const GPU::GlobalPushConstants globalPCs)
 	{
+		auto trianglePipeline = m_PipelineStore.TryGetPipeline(m_TrianglePipeline);
+		if (!trianglePipeline)
+		{
+			CDL_CORE_ASSERT(false, "Triangle pipeline is not ready");
+			return;
+		}
+
 		// Transition the depth image to DEPTH_ATTACHMENT_OPTIMAL
 		vk::ImageMemoryBarrier2 depthBarrier = MakeImageBarrier(
 			m_DepthImage.GetImage(),
@@ -285,15 +331,11 @@ namespace Candle {
 			GPUDebugScope mainPass(m_RenderDevice, frame.CommandBuffer, "Main Triangle Pass");
 			frame.CommandBuffer.beginRendering(renderingInfo);
 
-			frame.CommandBuffer.bindPipeline(vk::PipelineBindPoint::eGraphics, m_Pipelines[0].GetPipeline());
+			frame.CommandBuffer.bindPipeline(vk::PipelineBindPoint::eGraphics, trianglePipeline);
 
 			frame.CommandBuffer.setViewport(0, vk::Viewport(0.0f, static_cast<float>(extent.height), static_cast<float>(extent.width), -static_cast<float>(extent.height), 0.0f, 1.0f));
 			frame.CommandBuffer.setScissor(0, vk::Rect2D(vk::Offset2D(0, 0), extent));
 			frame.CommandBuffer.setDepthTestEnable(true);
-
-			// Bind the bindless descriptor set to the pipeline layout
-			vk::PipelineLayout pipelineLayout = m_Pipelines[0].GetLayout();
-			m_BindlessTable.BindSet(*frame.CommandBuffer, vk::PipelineBindPoint::eGraphics, pipelineLayout);
 
 			// Draw each item
 			for (const DrawItem& item : packet.DrawItems)
@@ -315,7 +357,8 @@ namespace Candle {
 					.SamplerIndex = static_cast<uint32_t>(item.Sampler),
 					.TransformIndex = item.TransformIndex,
 				};
-				m_Pipelines[0].PushConstants(*frame.CommandBuffer, pushConstants);
+
+				ApplyPushConstants(*frame.CommandBuffer, m_PipelineStore.GetGlobalLayout(), pushConstants);
 				frame.CommandBuffer.bindIndexBuffer(drawInfo.Indices, 0, vk::IndexType::eUint32);
 				frame.CommandBuffer.drawIndexed(drawInfo.IndexCount, 1, 0, 0, 0);
 			}
@@ -330,6 +373,13 @@ namespace Candle {
 		const DebugDrawData& debugDraw = packet.DebugDraw;
 		if (debugDraw.Vertices.empty())
 			return;
+
+		auto debugDrawPipeline = m_PipelineStore.TryGetPipeline(m_DebugDrawPipeline);
+		if (!debugDrawPipeline)
+		{
+			CDL_CORE_ASSERT(false, "Debug draw pipeline is not ready");
+			return;
+		}
 
 		// Rendering instances don't order against each other, so the load and depth tests here wait on the scene pass's depth
 		// writes and its store, which land in early or late tests. The layout doesn't change
@@ -381,14 +431,10 @@ namespace Candle {
 			GPUDebugScope mainPass(m_RenderDevice, frame.CommandBuffer, "Debug Draw Pass");
 			frame.CommandBuffer.beginRendering(renderingInfo);
 
-			frame.CommandBuffer.bindPipeline(vk::PipelineBindPoint::eGraphics, m_Pipelines[2].GetPipeline());
+			frame.CommandBuffer.bindPipeline(vk::PipelineBindPoint::eGraphics, debugDrawPipeline);
 
 			frame.CommandBuffer.setViewport(0, vk::Viewport(0.0f, static_cast<float>(extent.height), static_cast<float>(extent.width), -static_cast<float>(extent.height), 0.0f, 1.0f));
 			frame.CommandBuffer.setScissor(0, vk::Rect2D(vk::Offset2D(0, 0), extent));
-
-			// Bind the bindless descriptor set to the pipeline layout
-			vk::PipelineLayout pipelineLayout = m_Pipelines[2].GetLayout();
-			m_BindlessTable.BindSet(*frame.CommandBuffer, vk::PipelineBindPoint::eGraphics, pipelineLayout);
 			
 			const vk::DeviceAddress vertexBase = frame.DebugDrawVertices.GetDeviceAddress();
 
@@ -430,7 +476,7 @@ namespace Candle {
 					.Vertices = vertexBase + (batch.FirstVertex * sizeof(GPU::DebugDrawVertex))
 				};
 
-				m_Pipelines[2].PushConstants(*frame.CommandBuffer, pushConstants);
+				ApplyPushConstants(*frame.CommandBuffer, m_PipelineStore.GetGlobalLayout(), pushConstants);
 				frame.CommandBuffer.draw(batch.VertexCount, 1, 0, 0);
 			}
 
@@ -446,6 +492,13 @@ namespace Candle {
 		// With nothing to draw, the pass only matters for its clear
 		if (!hasDraws && loadOp != vk::AttachmentLoadOp::eClear)
 			return;
+
+		auto guiPipeline = m_PipelineStore.TryGetPipeline(m_GuiPipeline);
+		if (!guiPipeline)
+		{
+			CDL_CORE_ASSERT(false, "GUI pipeline is not ready");
+			return;
+		}
 
 		vk::ClearValue clearColor = vk::ClearColorValue(0.0f, 0.0f, 0.0f, 1.0f);
 
@@ -491,7 +544,7 @@ namespace Candle {
 
 			frame.CommandBuffer.beginRendering(renderingInfo);
 
-			frame.CommandBuffer.bindPipeline(vk::PipelineBindPoint::eGraphics, m_Pipelines[1].GetPipeline());
+			frame.CommandBuffer.bindPipeline(vk::PipelineBindPoint::eGraphics, guiPipeline);
 
 			// Not flipped: Vulkan's NDC already has Y pointing down, as ImGui's coordinates do
 			frame.CommandBuffer.setViewport(0, vk::Viewport(0.0f, 0.0f, static_cast<float>(swapChainExtent.width), static_cast<float>(swapChainExtent.height), 0.0f, 1.0f));
@@ -500,10 +553,6 @@ namespace Candle {
 			// Maps ImGui's display rect [DisplayPos, DisplayPos + DisplaySize] to NDC [-1, 1]
 			const glm::vec2 scale = 2.0f / gui.DisplaySize;
 			const glm::vec2 translate = -1.0f - gui.DisplayPos * scale;
-
-			// Bind the bindless descriptor set to the pipeline layout
-			vk::PipelineLayout pipelineLayout = m_Pipelines[1].GetLayout();
-			m_BindlessTable.BindSet(*frame.CommandBuffer, vk::PipelineBindPoint::eGraphics, pipelineLayout);
 
 			// Bind the GUI vertex and index buffers
 			frame.CommandBuffer.bindIndexBuffer(frame.GuiIndices.GetBuffer(), 0, vk::IndexType::eUint16);
@@ -531,7 +580,8 @@ namespace Candle {
 						.TextureIndex = m_TexturePool.GetTextureInfo(cmd.Texture).Index,
 						.SamplerIndex = samplerIndex
 				};
-				m_Pipelines[1].PushConstants(*frame.CommandBuffer, pushConstants);
+
+				ApplyPushConstants(*frame.CommandBuffer, m_PipelineStore.GetGlobalLayout(), pushConstants);
 				frame.CommandBuffer.drawIndexed(cmd.IndexCount, 1, cmd.IndexOffset, 0, 0);
 			}
 

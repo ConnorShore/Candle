@@ -6,15 +6,12 @@
 #include "RenderTestHelpers.h"
 
 #include <Candle/Render/Vulkan/BindlessTable.h>
-#include <Candle/Render/Pipelines/Pipeline.h>
-#include <Candle/Render/Pipelines/PipelineSpecification.h>
+#include <Candle/Render/Pipelines/PipelineStore.h>
 #include <Candle/Render/RenderConstants.h>
 #include <Candle/Render/Vulkan/SamplerType.h>
-#include <Candle/Render/Pipelines/ShaderLoader.h>
 #include <Candle/Render/Resources/TexturePool.h>
 
 #include <array>
-#include <filesystem>
 #include <format>
 #include <iterator>
 #include <type_traits>
@@ -29,18 +26,6 @@ CDL_STATIC_ASSERT(!std::is_copy_constructible_v<BindlessTable>);
 CDL_STATIC_ASSERT(!std::is_copy_assignable_v<BindlessTable>);
 
 namespace {
-
-	// Samples nothing, so it shows the bindless set is part of every layout, not just those whose shaders use it.
-	const std::filesystem::path kPipelineFixturePath = "Candle-Test/res/shaders/bin/PipelineFixture.spv";
-
-	constexpr vk::Format kColorFormat = vk::Format::eR8G8B8A8Unorm;
-
-	Pipeline CreatePipeline(TestTextures& gpu, const std::filesystem::path& shaderPath)
-	{
-		return Pipeline(PipelineSpecification{
-			.Shader = LoadTestShader(shaderPath.stem().string(), shaderPath),
-			.ColorAttachmentFormats = { kColorFormat } }, gpu.Device, gpu.Bindless);
-	}
 
 	// Each SamplerType's address mode and filter, told apart on a red | blue texture. Half a texel left of the edge is
 	// the centre of the texel wrapping reaches, blue, while clamping stays on red; a quarter texel past red's centre,
@@ -95,20 +80,18 @@ CDL_TEST_CASE(BindlessTable, WritesTheFirstAndLastTextureElements, Gpu)
 	ExpectNoVulkanDebugMessages(logs);
 }
 
-// Validation checks the bound set's layout against set 0 of the pipeline layout, which must be the table's own.
-CDL_TEST_CASE(BindlessTable, BindsAgainstThePipelineLayoutsItIsBuiltInto, Gpu)
+// Validation checks the bound set's layout against set 0 of the global layout every pipeline is built on, which must be the
+// table's own. No pipeline is needed, as the Renderer binds the set before binding any.
+CDL_TEST_CASE(BindlessTable, BindsAgainstTheGlobalPipelineLayout, Gpu)
 {
-	SkipUnlessCompiled(kPipelineFixturePath);
-
 	LoggerFixture logs(LogLevel::Warn, kRenderChannelMask);
 	{
 		TestTextures gpu;
-		Pipeline pipeline = CreatePipeline(gpu, kPipelineFixturePath);
-		vk::PipelineLayout layout = *pipeline.GetLayout();
+		const PipelineStore store(gpu.Device, gpu.Bindless);
 		TestCommands commands(gpu.Device);
 
 		commands.Buffer.begin({ .flags = vk::CommandBufferUsageFlagBits::eOneTimeSubmit });
-		gpu.Bindless.BindSet(*commands.Buffer, vk::PipelineBindPoint::eGraphics, layout);
+		gpu.Bindless.BindSet(*commands.Buffer, vk::PipelineBindPoint::eGraphics, store.GetGlobalLayout());
 		commands.Buffer.end();
 		SubmitAndWait(gpu.Device, commands.Buffer);
 	}
@@ -119,17 +102,14 @@ CDL_TEST_CASE(BindlessTable, BindsAgainstThePipelineLayoutsItIsBuiltInto, Gpu)
 // a set bound in a recorded command buffer invalidates that buffer, so submitting it would be an error.
 CDL_TEST_CASE(BindlessTable, WritingWhileBoundLeavesTheCommandBufferSubmittable, Gpu)
 {
-	SkipUnlessCompiled(kPipelineFixturePath);
-
 	LoggerFixture logs(LogLevel::Warn, kRenderChannelMask);
 	{
 		TestTextures gpu;
-		Pipeline pipeline = CreatePipeline(gpu, kPipelineFixturePath);
-		vk::PipelineLayout layout = *pipeline.GetLayout();
+		const PipelineStore store(gpu.Device, gpu.Bindless);
 		TestCommands commands(gpu.Device);
 
 		commands.Buffer.begin({ .flags = vk::CommandBufferUsageFlagBits::eOneTimeSubmit });
-		gpu.Bindless.BindSet(*commands.Buffer, vk::PipelineBindPoint::eGraphics, layout);
+		gpu.Bindless.BindSet(*commands.Buffer, vk::PipelineBindPoint::eGraphics, store.GetGlobalLayout());
 		CreateBoundTexture(gpu, { 1, 1 }, std::array<Texel, 1>{ kWhite });
 		commands.Buffer.end();
 		SubmitAndWait(gpu.Device, commands.Buffer);

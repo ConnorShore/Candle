@@ -186,7 +186,7 @@ namespace Candle {
 		m_RenderDevice.GetDevice().updateDescriptorSets({ textureWrite }, {});
 	}
 
-	void BindlessTable::BindSet(vk::CommandBuffer commandBuffer, vk::PipelineBindPoint bindPoint, vk::PipelineLayout& pipelineLayout)
+	void BindlessTable::BindSet(vk::CommandBuffer commandBuffer, vk::PipelineBindPoint bindPoint, vk::PipelineLayout pipelineLayout)
 	{
 		commandBuffer.bindDescriptorSets(bindPoint, pipelineLayout, 0, { *m_DescriptorSet }, {});
 	}

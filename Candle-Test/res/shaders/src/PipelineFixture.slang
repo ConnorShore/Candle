@@ -1,5 +1,4 @@
-// Fixture for PipelineTests: a vertex and fragment pair with no vertex input, as the engine's pipelines have for now.
-// No compute entry point, because Pipeline turns every entry point in the module into a stage of one graphics pipeline.
+// Fixture for PipelineStoreTests: a vertex and fragment pair with no vertex input, as the engine's pipelines have for now.
 
 struct VSOutput
 {
