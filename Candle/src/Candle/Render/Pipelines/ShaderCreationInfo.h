@@ -42,7 +42,7 @@ namespace Candle {
 		std::string Name;
 		ShaderStage Stage;
 		PushConstantBlock PushConstants;
-		LocalGroupSize LocalGroupSize;	// Only valid for compute entry points
+		LocalGroupSize LocalSize;	// Only valid for compute entry points
 	};
 
 	struct ShaderCreationInfo

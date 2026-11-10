@@ -115,7 +115,7 @@ namespace Candle {
 
 				// Extract local group sizes for compute shaders
 				if (stage == ShaderStage::Compute)
-					entryPoints.back().LocalGroupSize = ExtractLocalGroupSizes(shaderModule, entryPointName);
+					entryPoints.back().LocalSize = ExtractLocalGroupSizes(shaderModule, entryPointName);
 			}
 
 			return entryPoints;

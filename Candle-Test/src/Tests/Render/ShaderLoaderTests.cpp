@@ -97,7 +97,7 @@ CDL_TEST_CASE(ShaderLoader, ReflectsEachComputeEntryPointsOwnGroupSize, Unit)
 	{
 		const ShaderEntryPoint* entryPoint = FindEntryPoint(*shader, name);
 		CDL_CHECK_MSG(entryPoint != nullptr, std::format("no entry point named {}", name));
-		ExpectGroupSize(entryPoint->LocalGroupSize, groupSize, name);
+		ExpectGroupSize(entryPoint->LocalSize, groupSize, name);
 	}
 }
 

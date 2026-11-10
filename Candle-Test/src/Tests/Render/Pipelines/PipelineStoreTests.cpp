@@ -289,7 +289,7 @@ CDL_TEST_CASE(PipelineStore, GetEntryPointReturnsTheComputeEntryPointWithItsGrou
 		CDL_CHECK_MSG(entryPoint.has_value(), entryPoint.error());
 		CDL_EXPECT_EQ(entryPoint->Name, std::string("pipelineCompute"));
 		CDL_EXPECT_EQ(entryPoint->Stage, ShaderStage::Compute);
-		ExpectGroupSize(entryPoint->LocalGroupSize, kFixtureComputeGroupSize, "pipelineCompute");
+		ExpectGroupSize(entryPoint->LocalSize, kFixtureComputeGroupSize, "pipelineCompute");
 	}
 	ExpectNoVulkanDebugMessages(logs);
 }

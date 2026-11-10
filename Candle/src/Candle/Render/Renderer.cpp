@@ -657,7 +657,7 @@ namespace Candle {
 			ApplyPushConstants(*frame.CommandBuffer, m_PipelineStore.GetGlobalLayout(), pushConstants);
 
 			// dispatch takes a group count, rounded up so the groups cover the whole target
-			const LocalGroupSize& groupSize = compEntryPoint->LocalGroupSize;
+			const LocalGroupSize& groupSize = compEntryPoint->LocalSize;
 			frame.CommandBuffer.dispatch((target.Extent.x + groupSize.X - 1) / groupSize.X, (target.Extent.y + groupSize.Y - 1) / groupSize.Y, 1);
 		}
 
