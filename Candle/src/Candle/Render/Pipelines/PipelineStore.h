@@ -33,6 +33,8 @@ namespace Candle {
 		vk::Pipeline TryGetPipeline(GPUPipelineHandle handle);
 		std::expected<ShaderEntryPoint, std::string> GetEntryPoint(GPUPipelineHandle handle, ShaderStage stage) const;
 
+		inline void RecreatePipelineCache() { InitializePipelineCache(); }
+
 		inline vk::PipelineLayout GetGlobalLayout() const { return m_GlobalLayout; }
 
 	private:

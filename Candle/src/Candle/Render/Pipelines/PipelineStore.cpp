@@ -183,11 +183,20 @@ namespace Candle {
 				std::vector<std::byte> dataBytes(data.size());
 				dataBytes.assign(reinterpret_cast<const std::byte*>(data.data()), reinterpret_cast<const std::byte*>(data.data()) + data.size());
 
-				auto result = Platform::WriteFile(m_PipelineCacheFile, dataBytes);
+				auto result = Platform::CreateDirectories(m_PipelineCacheFile.parent_path());
+				if (!result)
+				{
+					CDL_CORE_ERROR(LogChannel::Render, "Failed to create directories for pipeline cache file '{}': {} (OS error {})",
+						m_PipelineCacheFile.string(), ToString(result.error().Code), result.error().OSError);
+					return;
+				}
+
+				result = Platform::WriteFile(m_PipelineCacheFile, dataBytes);
 				if (!result)
 				{
 					CDL_CORE_ERROR(LogChannel::Render, "Failed to write pipeline cache to '{}': {} (OS error {})",
 						m_PipelineCacheFile.string(), ToString(result.error().Code), result.error().OSError);
+					return;
 				}
 
 				CDL_CORE_INFO(LogChannel::Render, "Pipeline cache successfully written to '{}', size {} bytes", m_PipelineCacheFile.string(), data.size());

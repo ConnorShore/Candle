@@ -80,7 +80,7 @@ namespace {
 	// shader to sample through its bindless slot.
 	void StoreIntoTarget(TestTextures& gpu, GPUTextureHandle target, const Texel& colour)
 	{
-		PipelineStore store(gpu.Device, gpu.Bindless);
+		TestPipelineStore store(gpu.Device, gpu.Bindless);
 		const vk::Pipeline pipeline = store.TryGetPipeline(store.CreatePipeline(ComputePipelineSpecification{
 			.Shader = LoadTestShader("BindlessFixture", kBindlessFixturePath),
 			.EntryPoint = "bindlessStore" }));
