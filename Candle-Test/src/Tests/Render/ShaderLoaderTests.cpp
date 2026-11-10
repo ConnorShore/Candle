@@ -112,7 +112,7 @@ CDL_TEST_CASE(ShaderLoader, RejectsTruncatedSpirvBeforeTheDriverSeesIt, Unit)
 	ExpectRejectedNaming(dir / "truncated.spv");
 }
 
-// Pipeline's contract check skips an empty block, so an entry point with no push constants must reflect as one.
+// PipelineStore's contract check skips an empty block, so an entry point with no push constants must reflect as one.
 CDL_TEST_CASE(ShaderLoader, ReflectsAnEmptyPushBlockForEntryPointsWithout, Unit)
 {
 	ReadFixture();

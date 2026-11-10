@@ -1,4 +1,4 @@
-// Fixture for ShaderInteropTests, ShaderLoaderTests and PipelineTests: a vertex and fragment pair sharing one push block
+// Fixture for ShaderInteropTests, ShaderLoaderTests and PipelineStoreTests: a vertex and fragment pair sharing one push block
 // defined in a C++/Slang interop header, which the tests compare against this module's reflection.
 // Reads its data as a production mesh shader does: per-draw values from the push block, frame data through Global.Frame.
 

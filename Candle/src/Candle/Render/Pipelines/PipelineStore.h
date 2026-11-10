@@ -41,8 +41,8 @@ namespace Candle {
 		};
 
 		vk::raii::PipelineLayout CreateGlobalLayout();
-		PipelineEntry CreateGraphicsPipelineEntry(const GraphicsPipelineSpecification& spec);
-		PipelineEntry CreateComputePipelineEntry(const ComputePipelineSpecification& spec);
+		std::expected<PipelineEntry, std::string> CreateGraphicsPipelineEntry(const GraphicsPipelineSpecification& spec);
+		std::expected<PipelineEntry, std::string> CreateComputePipelineEntry(const ComputePipelineSpecification& spec);
 
 	private:
 		RenderDevice& m_RenderDevice;

@@ -15,6 +15,7 @@
 #include <Candle/Render/Resources/GPUUploader.h>
 #include <Candle/Render/Vulkan/Image.h>
 #include <Candle/Render/Pipelines/PipelineSpecification.h>
+#include <Candle/Render/Pipelines/PipelineStore.h>
 #include <Candle/Render/Vulkan/RenderDevice.h>
 #include <Candle/Render/Vulkan/RenderInstance.h>
 #include <Candle/Render/RenderSpecification.h>
@@ -431,8 +432,8 @@ namespace Candle::Test {
 	inline const std::filesystem::path kEngineAssetDir = CDL_ENGINE_ASSET_DIR;
 	inline const std::filesystem::path kEngineShaderDirectory = kEngineAssetDir / "shaders/bin";
 	inline const std::filesystem::path kTriangleShaderPath = kEngineShaderDirectory / "Triangle.spv";
-	inline const std::filesystem::path kGuiShaderPath = kEngineShaderDirectory / "Gui.spv";	// The name GuiPipeline loads
-	inline const std::filesystem::path kDebugDrawShaderPath = kEngineShaderDirectory / "DebugDraw.spv";	// The name DebugDrawPipeline loads
+	inline const std::filesystem::path kGuiShaderPath = kEngineShaderDirectory / "Gui.spv";	// The name Renderer loads
+	inline const std::filesystem::path kDebugDrawShaderPath = kEngineShaderDirectory / "DebugDraw.spv";	// The name Renderer loads
 
 	// A Renderer builds every engine pipeline up front, so it needs all their shaders compiled, not just the one a test draws with
 	inline void SkipUnlessRendererShadersCompiled()
@@ -462,16 +463,25 @@ namespace Candle::Test {
 
 	// Draws each probe into its own pixel of a probes.size() x 1 target with BindlessFixture and reads the colours back,
 	// so a test sees what a shader really samples. The probed textures must already be written into gpu.Bindless.
-	inline std::vector<Texel> SampleTextures(TestTextures& gpu, std::span<const TextureProbe> probes)
+	// Set 0 is bound once before any pipeline, as the Renderer binds it, and probe i draws with pipeline i % pipelineCount.
+	inline std::vector<Texel> SampleTextures(TestTextures& gpu, std::span<const TextureProbe> probes, uint32_t pipelineCount = 1)
 	{
 		constexpr vk::Format kTargetFormat = vk::Format::eR8G8B8A8Unorm;	// UNORM, so the shader's result is stored unconverted
 		const vk::Extent2D extent{ static_cast<uint32_t>(probes.size()), 1 };
 
-		Pipeline pipeline(PipelineSpecification{
-			.Shader = LoadTestShader("BindlessFixture", kBindlessFixturePath),
-			.ColorAttachmentFormats = { kTargetFormat },
-			.CullBackFaces = false }, gpu.Device, gpu.Bindless);
-		vk::PipelineLayout layout = *pipeline.GetLayout();
+		PipelineStore store(gpu.Device, gpu.Bindless);
+		const SharedPtr<Shader> shader = LoadTestShader("BindlessFixture", kBindlessFixturePath);
+		std::vector<vk::Pipeline> pipelines;
+		for (uint32_t i = 0; i < pipelineCount; ++i)
+		{
+			pipelines.push_back(store.TryGetPipeline(store.CreatePipeline(GraphicsPipelineSpecification{
+				.Shader = shader,
+				.VertexEntryPoint = "bindlessVertex",
+				.FragmentEntryPoint = "bindlessFragment",
+				.ColorAttachmentFormats = { kTargetFormat },
+				.CullBackFaces = false })));
+			CDL_CHECK(pipelines.back());
+		}
 
 		OwnedImage target = CreateOwnedImage(gpu.Device, kTargetFormat, extent, 1,
 			vk::ImageUsageFlagBits::eColorAttachment | vk::ImageUsageFlagBits::eTransferSrc);
@@ -488,19 +498,21 @@ namespace Candle::Test {
 			.imageView = *view, .imageLayout = vk::ImageLayout::eColorAttachmentOptimal,
 			.loadOp = vk::AttachmentLoadOp::eClear, .storeOp = vk::AttachmentStoreOp::eStore,
 			.clearValue = vk::ClearColorValue(0.0f, 0.0f, 0.0f, 0.0f) };
+		gpu.Bindless.BindSet(*commands.Buffer, vk::PipelineBindPoint::eGraphics, store.GetGlobalLayout());
 		commands.Buffer.beginRendering({ .renderArea = { { 0, 0 }, extent }, .layerCount = 1, .colorAttachmentCount = 1, .pColorAttachments = &attachment });
-		commands.Buffer.bindPipeline(vk::PipelineBindPoint::eGraphics, *pipeline.GetPipeline());
-		gpu.Bindless.BindSet(*commands.Buffer, vk::PipelineBindPoint::eGraphics, layout);
-		commands.Buffer.setScissor(0, vk::Rect2D({ 0, 0 }, extent));
-		commands.Buffer.setDepthTestEnable(false);	// Dynamic on every Pipeline, so it must be set even with no depth attachment
 
 		for (uint32_t i = 0; i < extent.width; ++i)
 		{
+			commands.Buffer.bindPipeline(vk::PipelineBindPoint::eGraphics, pipelines[i % pipelines.size()]);
 			commands.Buffer.setViewport(0, vk::Viewport(static_cast<float>(i), 0.0f, 1.0f, 1.0f, 0.0f, 1.0f));
-			pipeline.PushConstants(*commands.Buffer, GPU::BindlessFixturePushConstants{
+			commands.Buffer.setScissor(0, vk::Rect2D({ 0, 0 }, extent));
+			commands.Buffer.setDepthTestEnable(false);	// Dynamic on every pipeline, so it must be set even with no depth attachment
+
+			const GPU::BindlessFixturePushConstants pushConstants{
 				.UV = probes[i].UV,
 				.TextureIndex = gpu.Pool.GetTextureInfo(probes[i].Texture).Index,
-				.SamplerIndex = static_cast<uint32_t>(probes[i].Sampler) });
+				.SamplerIndex = static_cast<uint32_t>(probes[i].Sampler) };
+			commands.Buffer.pushConstants(store.GetGlobalLayout(), kPushConstantStages, 0, sizeof(pushConstants), &pushConstants);
 			commands.Buffer.draw(3, 1, 0, 0);
 		}
 

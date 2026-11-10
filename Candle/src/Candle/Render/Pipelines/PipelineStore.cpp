@@ -32,22 +32,18 @@ namespace Candle {
 			}
 		}
 
-		std::vector<vk::PipelineShaderStageCreateInfo> CreateShaderStages(vk::raii::ShaderModule& shaderModule, const std::vector<ShaderEntryPoint>& entryPoints)
+		vk::PipelineShaderStageCreateInfo CreateShaderStage(vk::raii::ShaderModule& shaderModule, const std::vector<ShaderEntryPoint>& entryPoints, const std::string& targetEntryPoint)
 		{
-			std::vector<vk::PipelineShaderStageCreateInfo> shaderStages;
-			shaderStages.reserve(entryPoints.size());
+			auto entryPoint = std::find_if(entryPoints.begin(), entryPoints.end(),
+				[&](const ShaderEntryPoint& ep) { return ep.Name == targetEntryPoint; });
 
-			for (const auto& entryPoint : entryPoints)
-			{
-				vk::PipelineShaderStageCreateInfo shaderStageInfo{
-					.stage = ShaderStageToVulkanShaderStage(entryPoint.Stage),
-					.module = shaderModule,
-					.pName = entryPoint.Name.c_str()
-				};
-				shaderStages.push_back(shaderStageInfo);
-			}
+			CDL_CORE_ASSERT(entryPoint != entryPoints.end(), "Entry point '{}' not found in shader module", targetEntryPoint);
 
-			return shaderStages;
+			return vk::PipelineShaderStageCreateInfo{
+				.stage = ShaderStageToVulkanShaderStage(entryPoint->Stage),
+				.module = *shaderModule,
+				.pName = entryPoint->Name.c_str()
+			};
 		}
 
 		vk::PipelineColorBlendAttachmentState CreateColorBlendAttachmentState(BlendMode blendMode)
@@ -116,6 +112,54 @@ namespace Candle {
 				[&](const ShaderEntryPoint& entryPoint) { return entryPoint.Name == entryPointName; });
 		}
 
+		std::expected<void, std::string> ValidateGraphicsEntryPoints(const std::vector<ShaderEntryPoint>& entryPoints, const GraphicsPipelineSpecification& spec)
+		{
+			if (spec.VertexEntryPoint.empty())
+				return std::unexpected("At least one VertexEntryPoint must be specified for a graphics pipeline");
+			if (!ContainsEntryPoint(entryPoints, spec.VertexEntryPoint))
+				return std::unexpected("Vertex entry point '" + spec.VertexEntryPoint + "' not found in shader module");
+			if (!ContainsEntryPoint(entryPoints, spec.FragmentEntryPoint))
+				return std::unexpected("Fragment entry point '" + spec.FragmentEntryPoint + "' not found in shader module");
+
+			// Verify vertex entry point is for a vertex entry and fragment entry point is for fragment entry
+			auto validateEntryPoint = [&](const std::string& entryPointName, ShaderStage expectedStage) -> std::expected<void, std::string> {
+				if (entryPointName.empty())
+					return {};
+
+				auto entryPointIt = std::find_if(entryPoints.begin(), entryPoints.end(),
+					[&](const ShaderEntryPoint& ep) { return ep.Name == entryPointName; });
+				if (entryPointIt == entryPoints.end())
+					return std::unexpected("Entry point '" + entryPointName + "' not found in shader module");
+				if (entryPointIt->Stage != expectedStage)
+					return std::unexpected("Entry point '" + entryPointName + "' is not a " + std::string(expectedStage == ShaderStage::Vertex ? "vertex" : "fragment") + " shader entry point");
+				return {};
+				};
+
+			if (auto result = validateEntryPoint(spec.VertexEntryPoint, ShaderStage::Vertex); !result)
+				return std::unexpected(result.error());
+			if (auto result = validateEntryPoint(spec.FragmentEntryPoint, ShaderStage::Fragment); !result)
+				return std::unexpected(result.error());
+
+			return {};
+		}
+
+		std::expected<void, std::string> ValidateComputeEntryPoints(const std::vector<ShaderEntryPoint>& entryPoints, const ComputePipelineSpecification& spec)
+		{
+			if (spec.EntryPoint.empty())
+				return std::unexpected("A ComputeEntryPoint must be specified for a compute pipeline");
+			if (!ContainsEntryPoint(entryPoints, spec.EntryPoint))
+				return std::unexpected("Compute entry point '" + spec.EntryPoint + "' not found in shader module");
+
+			// Verify compute entry point is for a compute entry
+			auto entryPointIt = std::find_if(entryPoints.begin(), entryPoints.end(),
+				[&](const ShaderEntryPoint& ep) { return ep.Name == spec.EntryPoint; });
+			if (entryPointIt == entryPoints.end())
+				return std::unexpected("Compute entry point '" + spec.EntryPoint + "' not found in shader module");
+			if (entryPointIt->Stage != ShaderStage::Compute)
+				return std::unexpected("Entry point '" + spec.EntryPoint + "' is not a compute shader entry point");
+
+			return {};
+		}
 	}
 
 	PipelineStore::PipelineStore(RenderDevice& renderDevice, BindlessTable& bindlessTable)
@@ -127,18 +171,26 @@ namespace Candle {
 
 	GPUPipelineHandle PipelineStore::CreatePipeline(PipelineSpecification spec)
 	{
-		PipelineEntry entry;
+		std::expected<PipelineEntry, std::string> entry;
 		std::visit(Overloaded{
 			[&](const GraphicsPipelineSpecification& graphicsSpec) { entry = CreateGraphicsPipelineEntry(graphicsSpec); },
 			[&](const ComputePipelineSpecification& computeSpec) { entry = CreateComputePipelineEntry(computeSpec); }
 			}, std::move(spec));
 
-		m_Pipelines.push_back(std::move(entry));
+		if (!entry)
+		{
+			CDL_CORE_ERROR(LogChannel::Render, "Failed to create pipeline: {}", entry.error());
+			return {};	// Return invalid handle
+		}
+
+		m_Pipelines.push_back(std::move(entry.value()));
 		return GPUPipelineHandle{ static_cast<uint32_t>(m_Pipelines.size() - 1), 0 };
 	}
 
 	vk::Pipeline PipelineStore::TryGetPipeline(GPUPipelineHandle handle)
 	{
+		if (!handle.IsValid())
+			return nullptr;
 		if (handle.Index >= m_Pipelines.size())
 			return nullptr;
 		if (m_Pipelines[handle.Index].Pipeline == nullptr)
@@ -166,24 +218,33 @@ namespace Candle {
 		auto layout = vk::raii::PipelineLayout{ m_RenderDevice.GetDevice(), pipelineLayoutInfo };
 		m_RenderDevice.SetDebugName(*layout,  "Global Pipeline Layout");
 
-		return std::move(layout);
+		return layout;
 	}
 
-	PipelineStore::PipelineEntry PipelineStore::CreateGraphicsPipelineEntry(const GraphicsPipelineSpecification& spec)
+	std::expected<PipelineStore::PipelineEntry, std::string> PipelineStore::CreateGraphicsPipelineEntry(const GraphicsPipelineSpecification& spec)
 	{
 		bool containsDepthAttachment = spec.DepthAttachmentFormat != vk::Format::eUndefined;
+		auto entryPoints = spec.Shader->GetEntryPoints();
+
+#pragma region Validate Push Constants
+		ValidatePushConstants(entryPoints);
+#pragma endregion
 
 #pragma region Shader Module
+		// Validate that the specified entry points exist in the shader module
+		std::expected<void, std::string> validationResult = ValidateGraphicsEntryPoints(entryPoints, spec);
+		if (!validationResult)
+			return std::unexpected(validationResult.error());
+
 		// Create shader modules and pipeline shader stage create info for each entry point
 		vk::raii::ShaderModule shaderModule = spec.Shader->CreateModule(m_RenderDevice);
-		std::vector<vk::PipelineShaderStageCreateInfo> shaderStages = std::move(CreateShaderStages(shaderModule, spec.Shader->GetEntryPoints()));
 
-		// Validate the entry point names exist in the shader module and that the push-constant blocks are valid
-		// TOOD: Handle cases like this more gracefully, for now we just crash the engine if the entry point doesn't exist
-		if (!ContainsEntryPoint(spec.Shader->GetEntryPoints(), spec.VertexEntryPoint))
-			CDL_CORE_FATAL(LogChannel::Render, "Vertex entry point '" + spec.VertexEntryPoint + "' not found in shader module");
-		if (!ContainsEntryPoint(spec.Shader->GetEntryPoints(), spec.FragmentEntryPoint))
-			CDL_CORE_FATAL(LogChannel::Render, "Fragment entry point '" + spec.FragmentEntryPoint + "' not found in shader module");
+		std::vector<vk::PipelineShaderStageCreateInfo> shaderStages;
+		shaderStages.reserve(2);
+		if (!spec.VertexEntryPoint.empty())
+			shaderStages.push_back(CreateShaderStage(shaderModule, entryPoints, spec.VertexEntryPoint));
+		if (!spec.FragmentEntryPoint.empty())
+			shaderStages.push_back(CreateShaderStage(shaderModule, entryPoints, spec.FragmentEntryPoint));
 #pragma endregion
 
 #pragma region Input Assembly State
@@ -247,24 +308,6 @@ namespace Candle {
 		};
 #pragma endregion
 
-#pragma region Validate Push Constants
-		std::vector<ShaderEntryPoint> entryPointsToValidate;
-		// Only validate the entry points that are actually used for this pipeline, rather than all the entry points in the shader
-		auto addEntryPointIfExists = [&](const std::string& entryPointName) {
-			if (entryPointName.empty())
-				return;
-
-			auto it = std::find_if(spec.Shader->GetEntryPoints().begin(), spec.Shader->GetEntryPoints().end(),
-				[&](const ShaderEntryPoint& entryPoint) { return entryPoint.Name == entryPointName; });
-			if (it != spec.Shader->GetEntryPoints().end())
-				entryPointsToValidate.push_back(*it);
-		};
-		addEntryPointIfExists(spec.VertexEntryPoint);
-		addEntryPointIfExists(spec.FragmentEntryPoint);
-
-		ValidatePushConstants(entryPointsToValidate);
-#pragma endregion
-
 #pragma region Graphics Pipeline Creation
 		vk::PipelineRenderingCreateInfo pipelineRenderingCreateInfo{
 			.colorAttachmentCount = static_cast<uint32_t>(spec.ColorAttachmentFormats.size()),
@@ -302,10 +345,9 @@ namespace Candle {
 		};
 	}
 
-	PipelineStore::PipelineEntry PipelineStore::CreateComputePipelineEntry(const ComputePipelineSpecification& spec)
+	std::expected<PipelineStore::PipelineEntry, std::string> PipelineStore::CreateComputePipelineEntry(const ComputePipelineSpecification& spec)
 	{
-		throw std::runtime_error("Compute pipeline creation not implemented yet");
-		return {};
+		return std::unexpected("Compute pipeline creation not implemented yet");
 	}
 
 }
