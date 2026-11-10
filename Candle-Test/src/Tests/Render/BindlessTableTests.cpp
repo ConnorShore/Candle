@@ -80,6 +80,22 @@ CDL_TEST_CASE(BindlessTable, WritesTheFirstAndLastTextureElements, Gpu)
 	ExpectNoVulkanDebugMessages(logs);
 }
 
+// Storage images share the textures' slots, so binding 2 must be kMaxTextures long too.
+CDL_TEST_CASE(BindlessTable, WritesTheFirstAndLastStorageImageElements, Gpu)
+{
+	LoggerFixture logs(LogLevel::Warn, kRenderChannelMask);
+	{
+		TestTextures gpu;
+		const GPUTextureHandle target = gpu.Pool.CreateRenderTarget({
+			.Extent = { 1, 1 }, .Format = vk::Format::eR8G8B8A8Unorm, .Usage = vk::ImageUsageFlagBits::eStorage });
+		const vk::ImageView view = gpu.Pool.GetTextureInfo(target).ImageView;
+
+		gpu.Bindless.WriteStorageImage(0, view);
+		gpu.Bindless.WriteStorageImage(kMaxTextures - 1, view);
+	}
+	ExpectNoVulkanDebugMessages(logs);
+}
+
 // Validation checks the bound set's layout against set 0 of the global layout every pipeline is built on, which must be the
 // table's own. No pipeline is needed, as the Renderer binds the set before binding any.
 CDL_TEST_CASE(BindlessTable, BindsAgainstTheGlobalPipelineLayout, Gpu)

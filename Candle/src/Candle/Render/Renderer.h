@@ -73,6 +73,8 @@ namespace Candle {
 		void RenderDebugDrawPipeline(const FramePacket& packet, FrameContext& frame, const SceneTarget& target, vk::AttachmentLoadOp loadOp, const GPU::GlobalPushConstants globalPCs);
 		void RenderGuiPipeline(const FramePacket& packet, FrameContext& frame, SwapChainImage& target, vk::AttachmentLoadOp loadOp, const GPU::GlobalPushConstants globalPCs);
 
+		void RecordComputePipeline(const FramePacket& packet, FrameContext& frame, const GPU::GlobalPushConstants globalPCs);
+
 		// TODO: Will probably move to some helper or something once the render graph is implemented
 		void EnsureCapacity(GPUBuffer& buffer, size_t size, vk::BufferUsageFlags usage, std::string_view name);
 	private:
@@ -94,6 +96,8 @@ namespace Candle {
 
 		// Temporary till render graph is implemented
 		GPUPipelineHandle m_TrianglePipeline, m_DebugDrawPipeline, m_GuiPipeline;
+		GPUPipelineHandle m_ComputePipeline;
+		GPUTextureHandle m_ComputeTex;
 	};
 
 }

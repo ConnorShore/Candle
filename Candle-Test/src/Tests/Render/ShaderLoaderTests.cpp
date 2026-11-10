@@ -81,6 +81,26 @@ CDL_TEST_CASE(ShaderLoader, ReflectsEveryEntryPointWithItsStage, Unit)
 	}
 }
 
+// The Renderer sizes its dispatches by these, so each compute entry point must report its own. The fixture's two differ on
+// every axis, so a size read from the wrong entry point shows.
+CDL_TEST_CASE(ShaderLoader, ReflectsEachComputeEntryPointsOwnGroupSize, Unit)
+{
+	ReadFixture();
+
+	SharedPtr<Shader> shader = LoadTestShader("Fixture", kFixturePath);
+
+	constexpr std::pair<std::string_view, LocalGroupSize> kExpected[] = {
+		{ "fixtureClear"sv, { 64, 1, 1 } },
+		{ "fixtureIncrement"sv, { 8, 4, 2 } },
+	};
+	for (const auto& [name, groupSize] : kExpected)
+	{
+		const ShaderEntryPoint* entryPoint = FindEntryPoint(*shader, name);
+		CDL_CHECK_MSG(entryPoint != nullptr, std::format("no entry point named {}", name));
+		ExpectGroupSize(entryPoint->LocalSize, groupSize, name);
+	}
+}
+
 // Each is caught before the bytes reach the driver: by the open, the size check or the magic number.
 CDL_TEST_CASE(ShaderLoader, RejectsFilesThatAreNotSpirv, Unit)
 {

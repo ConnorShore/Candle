@@ -33,6 +33,7 @@ namespace Candle {
 		// From the argument, not the constructor: a default-constructed or moved-from image has none until Recreate gives it one
 		m_Allocator = allocator.GetAllocator();
 		m_Format = spec.Format;
+		m_Usage = spec.Usage;
 
 		vk::ImageCreateInfo imageInfo{
 			.imageType = vk::ImageType::e2D,

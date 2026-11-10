@@ -32,7 +32,8 @@ namespace Candle {
 		glm::uvec2 Extent{ 0, 0 };
 		uint32_t SizeBytes{ 0 };
 		uint8_t MipLevels{ 1 };
-		bool IsRenderTarget{ false };	// Made by CreateRenderTarget, so it can be drawn into as well as sampled
+		vk::ImageLayout SampledLayout{ vk::ImageLayout::eShaderReadOnlyOptimal };	// What its bindless descriptor expects, so it must be in this whenever it's sampled
+		vk::ImageUsageFlags Usage{};	// eColorAttachment is what lets the scene draw into it
 	};
 
 	struct TextureCreateSpec
@@ -48,6 +49,7 @@ namespace Candle {
 	{
 		glm::uvec2 Extent;
 		vk::Format Format;	// Raw rather than TextureFormat, since it must match what the pipelines drawing into it target
+		vk::ImageUsageFlags Usage{ vk::ImageUsageFlagBits::eColorAttachment | vk::ImageUsageFlagBits::eSampled };	// eStorage keeps it in General for good
 		std::string DebugName;
 	};
 
@@ -59,7 +61,7 @@ namespace Candle {
 		glm::uvec2 Extent{ 0, 0 };
 		uint8_t MipLevels{ 1 };
 		vk::Format Format{ vk::Format::eUndefined };	// Raw, since render targets have formats TextureFormat can't name
-		bool IsRenderTarget{ false };
+		vk::ImageUsageFlags Usage{};
 	};
 
 	struct TexturePoolStats
@@ -86,8 +88,9 @@ namespace Candle {
 		// Also writes the texture into the bindless table at its handle's index.
 		GPUTextureHandle CreateTexture(TextureCreateSpec spec);
 
-		// A texture the renderer draws into and shaders then sample. Nothing is uploaded, so it must not be sampled before a
-		// frame renders into it. Released like any other texture.
+		// A texture the renderer draws or dispatches into and shaders then sample. Nothing is uploaded, so it must not be
+		// sampled before a frame renders into it. Published at its handle's slot of each binding its usage allows.
+		// Released like any other texture.
 		GPUTextureHandle CreateRenderTarget(RenderTargetCreateSpec spec);
 		void ReleaseTexture(GPUTextureHandle handle);
 
@@ -109,7 +112,7 @@ namespace Candle {
 		{
 			GPUImage Image;
 			glm::uvec2 Extent;
-			bool IsRenderTarget{ false };
+			vk::ImageLayout SampledLayout{ vk::ImageLayout::eShaderReadOnlyOptimal };
 
 			uint64_t GetSizeBytes() const { return Image.GetSizeBytes(); }
 		};

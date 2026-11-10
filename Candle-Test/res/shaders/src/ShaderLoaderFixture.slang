@@ -1,5 +1,5 @@
 // Fixture for ShaderLoaderTests: one entry point per reflected stage, plus a second compute one, because a
-// single .spv may hold several of a stage. The tests assert these names and stages; change them together.
+// single .spv may hold several of a stage. The tests assert these names, stages and group sizes; change them together.
 
 struct VSOutput
 {
@@ -29,8 +29,9 @@ void fixtureClear(uint3 id : SV_DispatchThreadID)
     values[id.x] = 0;
 }
 
+// Differs from fixtureClear on every axis, so each entry point has to report its own
 [shader("compute")]
-[numthreads(64, 1, 1)]
+[numthreads(8, 4, 2)]
 void fixtureIncrement(uint3 id : SV_DispatchThreadID)
 {
     values[id.x] += 1;

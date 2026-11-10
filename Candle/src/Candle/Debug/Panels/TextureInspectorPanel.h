@@ -37,7 +37,7 @@ namespace Candle {
 		}
 
 	private:
-		enum class TextureKind { Default, Texture, RenderTarget };	// In the order the Kind column sorts them
+		enum class TextureKind { Default, Texture, RenderTarget, Storage };	// In the order the Kind column sorts them
 
 		void DrawSummaryRegion(const TexturePoolStats& stats);
 		void DrawTextureList(const TexturePoolStats& stats);

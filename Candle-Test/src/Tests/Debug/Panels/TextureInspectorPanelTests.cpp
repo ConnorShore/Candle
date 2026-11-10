@@ -47,12 +47,31 @@ CDL_TEST_CASE(TextureInspectorPanel, ListsEveryLiveTextureWithItsKind, Gpu)
 		TestInspector test;
 		test.CreateNamedTexture("Brick");
 		test.Textures.Pool.CreateRenderTarget({ .Extent = { 4, 4 }, .Format = vk::Format::eR8G8B8A8Unorm, .DebugName = "Scene" });
+		test.Textures.Pool.CreateRenderTarget({ .Extent = { 4, 4 }, .Format = vk::Format::eR8G8B8A8Unorm,
+			.Usage = vk::ImageUsageFlagBits::eStorage | vk::ImageUsageFlagBits::eSampled, .DebugName = "Compute" });
 
 		const std::string text = test.Drawn();
-		CDL_EXPECT_MSG(text.contains("3 textures"), text);
+		CDL_EXPECT_MSG(text.contains("4 textures"), text);
 		CDL_EXPECT_MSG(text.contains("Default Texture 0 | Default"), text);
 		CDL_EXPECT_MSG(text.contains("Brick | Texture"), text);
 		CDL_EXPECT_MSG(text.contains("Scene | Render target"), text);
+		CDL_EXPECT_MSG(text.contains("Compute | Storage"), text);
+	}
+	ExpectNoVulkanDebugMessages(logs);
+}
+
+// The Renderer can draw the scene into anything with eColorAttachment, so that wins over eStorage when an image has both
+CDL_TEST_CASE(TextureInspectorPanel, ListsATargetThatIsAlsoStorageAsARenderTarget, Gpu)
+{
+	LoggerFixture logs(LogLevel::Warn, kRenderChannelMask);
+	{
+		TestInspector test;
+		test.Textures.Pool.CreateRenderTarget({ .Extent = { 4, 4 }, .Format = vk::Format::eR8G8B8A8Unorm,
+			.Usage = vk::ImageUsageFlagBits::eColorAttachment | vk::ImageUsageFlagBits::eStorage | vk::ImageUsageFlagBits::eSampled,
+			.DebugName = "Both" });
+
+		const std::string text = test.Drawn();
+		CDL_EXPECT_MSG(text.contains("Both | Render target"), text);
 	}
 	ExpectNoVulkanDebugMessages(logs);
 }

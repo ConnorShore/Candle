@@ -43,6 +43,18 @@ namespace Candle {
 			.Access = vk::AccessFlagBits2::eColorAttachmentRead | vk::AccessFlagBits2::eColorAttachmentWrite,
 			.Stage = vk::PipelineStageFlagBits2::eColorAttachmentOutput };
 
+		// Storage images are only ever written in General
+		constexpr ImageState kComputeStorageWrite{
+			.Layout = vk::ImageLayout::eGeneral,
+			.Access = vk::AccessFlagBits2::eShaderStorageWrite,
+			.Stage = vk::PipelineStageFlagBits2::eComputeShader };
+
+		// A texture the next pass samples in its fragment shader, in the layout its bindless descriptor was written with
+		ImageState FragmentSampled(const TextureInfo& texture)
+		{
+			return { .Layout = texture.SampledLayout, .Access = vk::AccessFlagBits2::eShaderSampledRead, .Stage = vk::PipelineStageFlagBits2::eFragmentShader };
+		}
+
 		vk::Format FindDepthFormat(RenderDevice& device)
 		{
 			// Depth-only, so the depth-aspect view and barrier stay valid without separateDepthStencilLayouts. The spec requires
@@ -145,6 +157,20 @@ namespace Candle {
 			.CullBackFaces = false,
 			.DebugName = "GUI Pipeline"
 		});
+
+		m_ComputeTex = m_TexturePool.CreateRenderTarget({
+			.Extent{ glm::uvec2(64, 64) },
+			.Format{ vk::Format::eR8G8B8A8Unorm },
+			.Usage{ vk::ImageUsageFlagBits::eStorage | vk::ImageUsageFlagBits::eSampled },
+			.DebugName{ "Test Compute Target" }
+			});
+
+		// Test Compute shader that will perform operations to be used by the triangle pipeline. This is just a test for now, will be removed later
+		m_ComputePipeline = m_PipelineStore.CreatePipeline(ComputePipelineSpecification{
+			.Shader = LoadEngineShader("ComputePipeline", info.ShaderDirectory / "Triangle.spv"),
+			.EntryPoint = "CompMain",
+			.DebugName = "Test Compute Pipeline"
+			});
 	}
 
 	void Renderer::Render(const FramePacket& packet, FrameContext& frame, SwapChainImage& target)
@@ -187,6 +213,10 @@ namespace Candle {
 
 		// Bind the global descriptor set once, which contains the bindless table and the frame data buffer
 		m_BindlessTable.BindSet(*frame.CommandBuffer, vk::PipelineBindPoint::eGraphics, m_PipelineStore.GetGlobalLayout());
+		m_BindlessTable.BindSet(*frame.CommandBuffer, vk::PipelineBindPoint::eCompute, m_PipelineStore.GetGlobalLayout());
+
+		// Record the compute pipeline
+		RecordComputePipeline(packet, frame, global);
 
 		if (m_RenderToSwapChain)
 		{
@@ -205,7 +235,7 @@ namespace Candle {
 		else
 		{
 			const TextureInfo output = m_TexturePool.GetTextureInfo(packet.OutputTarget);
-			if (output.IsRenderTarget)
+			if (output.Usage & vk::ImageUsageFlagBits::eColorAttachment)
 			{
 				CDL_CORE_ASSERT(output.Extent == m_DepthExtent, "Depth must match the output target; RenderManager calls MatchDepthToOutput first");
 
@@ -224,10 +254,8 @@ namespace Candle {
 				frame.CommandBuffer.pipelineBarrier2({ .imageMemoryBarrierCount = 1, .pImageMemoryBarriers = &toDebugDraw });
 				RenderDebugDrawPipeline(packet, frame, sceneTarget, vk::AttachmentLoadOp::eLoad, global);
 
-				// The GUI samples it next, through a bindless descriptor that expects ShaderReadOnlyOptimal
-				const vk::ImageMemoryBarrier2 toSampled = MakeImageBarrier(output.Image, kColorAttachmentWrite,
-					{ .Layout = vk::ImageLayout::eShaderReadOnlyOptimal, .Access = vk::AccessFlagBits2::eShaderSampledRead, .Stage = vk::PipelineStageFlagBits2::eFragmentShader },
-					kColorRange);
+				// The GUI samples it next
+				const vk::ImageMemoryBarrier2 toSampled = MakeImageBarrier(output.Image, kColorAttachmentWrite, FragmentSampled(output), kColorRange);
 				frame.CommandBuffer.pipelineBarrier2({ .imageMemoryBarrierCount = 1, .pImageMemoryBarriers = &toSampled });
 			}
 			else
@@ -337,6 +365,8 @@ namespace Candle {
 			frame.CommandBuffer.setScissor(0, vk::Rect2D(vk::Offset2D(0, 0), extent));
 			frame.CommandBuffer.setDepthTestEnable(true);
 
+			const uint32_t computeTextureIndex = m_TexturePool.GetTextureInfo(m_ComputeTex).Index;
+
 			// Draw each item
 			for (const DrawItem& item : packet.DrawItems)
 			{
@@ -356,6 +386,7 @@ namespace Candle {
 					.TextureIndex = textureInfo.Index,
 					.SamplerIndex = static_cast<uint32_t>(item.Sampler),
 					.TransformIndex = item.TransformIndex,
+					.ComputeTextureIndex = computeTextureIndex
 				};
 
 				ApplyPushConstants(*frame.CommandBuffer, m_PipelineStore.GetGlobalLayout(), pushConstants);
@@ -396,14 +427,14 @@ namespace Candle {
 		vk::ClearValue clearColor = vk::ClearColorValue(0.0f, 0.0f, 0.0f, 1.0f);
 		vk::ClearValue clearDepth = vk::ClearDepthStencilValue(1.0f, 0);
 
-		vk::RenderingAttachmentInfo colorAttachmentInfo = {
+		vk::RenderingAttachmentInfo colorAttachmentInfo{
 			.imageView = target.ColorView,
 			.imageLayout = vk::ImageLayout::eColorAttachmentOptimal,
 			.loadOp = loadOp,
 			.storeOp = vk::AttachmentStoreOp::eStore,
 			.clearValue = clearColor };
 
-		vk::RenderingAttachmentInfo depthAttachmentInfo = {
+		vk::RenderingAttachmentInfo depthAttachmentInfo{
 			.imageView = m_DepthImage.GetImageView(),
 			.imageLayout = vk::ImageLayout::eDepthStencilAttachmentOptimal,
 			.loadOp = vk::AttachmentLoadOp::eLoad,
@@ -414,7 +445,7 @@ namespace Candle {
 		const vk::Extent2D extent = target.Extent;
 
 		// Setup the rendering info for the render pass begin info. This specifies the render area, the number of layers, and the color attachment info.
-		vk::RenderingInfo renderingInfo = {
+		vk::RenderingInfo renderingInfo{
 			.renderArea = {
 				.offset = { 0, 0 },
 				.extent = extent },
@@ -573,12 +604,12 @@ namespace Candle {
 					vk::Extent2D(static_cast<uint32_t>(clipMax.x - clipMin.x), static_cast<uint32_t>(clipMax.y - clipMin.y))));
 
 				GPU::GuiDrawPushConstants pushConstants{
-						.Global = globalPCs,
-						.Vertices = vertexBase + cmd.VertexOffset * sizeof(Candle::GPU::GuiVertex),  // Offset here rather than as drawIndexed's vertexOffset, so the shader indexes from 0
-						.Scale = scale,
-						.Translate = translate,
-						.TextureIndex = m_TexturePool.GetTextureInfo(cmd.Texture).Index,
-						.SamplerIndex = samplerIndex
+					.Global = globalPCs,
+					.Vertices = vertexBase + cmd.VertexOffset * sizeof(Candle::GPU::GuiVertex),  // Offset here rather than as drawIndexed's vertexOffset, so the shader indexes from 0
+					.Scale = scale,
+					.Translate = translate,
+					.TextureIndex = m_TexturePool.GetTextureInfo(cmd.Texture).Index,
+					.SamplerIndex = samplerIndex
 				};
 
 				ApplyPushConstants(*frame.CommandBuffer, m_PipelineStore.GetGlobalLayout(), pushConstants);
@@ -589,15 +620,62 @@ namespace Candle {
 		}
 	}
 
+	void Renderer::RecordComputePipeline(const FramePacket& packet, FrameContext& frame, const GPU::GlobalPushConstants globalPCs)
+	{
+		auto computePipeline = m_PipelineStore.TryGetPipeline(m_ComputePipeline);
+		if (!computePipeline)
+		{
+			CDL_CORE_ASSERT(false, "Compute pipeline is not ready");
+			return;
+		}
+
+		auto compEntryPoint = m_PipelineStore.GetEntryPoint(m_ComputePipeline, ShaderStage::Compute);
+		if (!compEntryPoint)
+		{
+			CDL_CORE_ASSERT(false, "Failed to get compute pipeline entry point: {}", compEntryPoint.error());
+			return;
+		}
+
+		const TextureInfo target = m_TexturePool.GetTextureInfo(m_ComputeTex);
+
+		// Undefined discards last frame's contents, which the dispatch replaces. Last frame's scene pass sampled it, and a write
+		// after a read needs only an execution dependency, so the source has a stage but no access
+		const vk::ImageMemoryBarrier2 toStorage = MakeImageBarrier(target.Image,
+			{ .Layout = vk::ImageLayout::eUndefined, .Access = vk::AccessFlagBits2::eNone, .Stage = vk::PipelineStageFlagBits2::eFragmentShader },
+			kComputeStorageWrite, kColorRange);
+		frame.CommandBuffer.pipelineBarrier2({ .imageMemoryBarrierCount = 1, .pImageMemoryBarriers = &toStorage });
+
+		{
+			GPUDebugScope computePass(m_RenderDevice, frame.CommandBuffer, "Test Compute Pass");
+			frame.CommandBuffer.bindPipeline(vk::PipelineBindPoint::eCompute, computePipeline);
+
+			GPU::ComputePushConstants pushConstants{
+				.Global = globalPCs,
+				.TextureIndex = target.Index,
+				.SamplerIndex = static_cast<uint32_t>(SamplerType::LinearClamp)
+			};
+			ApplyPushConstants(*frame.CommandBuffer, m_PipelineStore.GetGlobalLayout(), pushConstants);
+
+			// dispatch takes a group count, rounded up so the groups cover the whole target
+			const LocalGroupSize& groupSize = compEntryPoint->LocalSize;
+			frame.CommandBuffer.dispatch((target.Extent.x + groupSize.X - 1) / groupSize.X, (target.Extent.y + groupSize.Y - 1) / groupSize.Y, 1);
+		}
+
+		// The scene pass samples it next
+		const vk::ImageMemoryBarrier2 toSampled = MakeImageBarrier(target.Image, kComputeStorageWrite, FragmentSampled(target), kColorRange);
+		frame.CommandBuffer.pipelineBarrier2({ .imageMemoryBarrierCount = 1, .pImageMemoryBarriers = &toSampled });
+	}
+
 	void Renderer::EnsureCapacity(GPUBuffer& buffer, size_t size, vk::BufferUsageFlags usage, std::string_view name)
 	{
 		if (buffer.GetSize() >= size)
 			return;
 
 		buffer = m_GPUAllocator.CreateBuffer({
-				.Size = std::max<size_t>(size, buffer.GetSize() * 2),   // Doubling, so a growing UI doesn't reallocate every frame
-				.Usage = usage,
-				.Flags = VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT | VMA_ALLOCATION_CREATE_MAPPED_BIT,
-				.DebugName = std::string(name) });
+			.Size = std::max<size_t>(size, buffer.GetSize() * 2),   // Doubling, so a growing UI doesn't reallocate every frame
+			.Usage = usage,
+			.Flags = VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT | VMA_ALLOCATION_CREATE_MAPPED_BIT,
+			.DebugName = std::string(name) 
+		});
 	}
 }

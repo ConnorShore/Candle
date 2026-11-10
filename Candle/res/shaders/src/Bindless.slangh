@@ -5,3 +5,8 @@ Texture2D<float4> textures[];
 
 [[vk::binding(1,0)]]
 SamplerState samplers[];
+
+// The same slots as textures, for images with storage usage. Fragment shaders sample those through textures instead:
+// a storage image in the fragment stage needs fragmentStoresAndAtomics.
+[[vk::binding(2,0)]]
+RWTexture2D<float4> storageTextures[];

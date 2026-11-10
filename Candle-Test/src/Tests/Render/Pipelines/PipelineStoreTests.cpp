@@ -13,9 +13,9 @@
 
 #include <array>
 #include <cstddef>
+#include <expected>
 #include <filesystem>
 #include <format>
-#include <span>
 #include <string>
 #include <string_view>
 #include <utility>
@@ -60,6 +60,14 @@ namespace {
 			.FragmentEntryPoint = "interopFragment",
 			.ColorAttachmentFormats = { kColorFormat } };
 	}
+
+	ComputePipelineSpecification PipelineFixtureComputeSpec(SharedPtr<Shader> shader)
+	{
+		return { .Shader = std::move(shader), .EntryPoint = "pipelineCompute" };
+	}
+
+	// pipelineCompute's numthreads
+	constexpr LocalGroupSize kFixtureComputeGroupSize{ 8, 4, 2 };
 
 }
 
@@ -245,6 +253,95 @@ CDL_TEST_CASE(PipelineStore, HandlesItNeverGaveOutResolveToNull, Gpu)
 	ExpectNoVulkanDebugMessages(logs);
 }
 
+// From a file that also holds a vertex and fragment pair, as the Renderer's compute pipeline is built from Triangle.spv
+CDL_TEST_CASE(PipelineStore, CreatesAComputePipelineFromTheNamedEntryPoint, Gpu)
+{
+	SkipUnlessCompiled(kFixturePath);
+
+	LoggerFixture logs(LogLevel::Warn, kRenderChannelMask);
+	{
+		TestDevice gpu;
+		BindlessTable bindless(gpu.Device);
+		PipelineStore store(gpu.Device, bindless);
+
+		const GPUPipelineHandle handle = store.CreatePipeline(PipelineFixtureComputeSpec(LoadTestShader("PipelineFixture", kFixturePath)));
+		CDL_EXPECT(handle.IsValid());
+		CDL_EXPECT(store.TryGetPipeline(handle));
+	}
+	ExpectNoVulkanDebugMessages(logs);
+}
+
+// The Renderer divides its dispatch by the group size it reads back here, so a compute pipeline must hand back the entry point
+// it was built from. A default one's 1x1x1 still covers the target, just with far more groups than it needs, so only this shows it.
+CDL_TEST_CASE(PipelineStore, GetEntryPointReturnsTheComputeEntryPointWithItsGroupSize, Gpu)
+{
+	SkipUnlessCompiled(kFixturePath);
+
+	LoggerFixture logs(LogLevel::Warn, kRenderChannelMask);
+	{
+		TestDevice gpu;
+		BindlessTable bindless(gpu.Device);
+		PipelineStore store(gpu.Device, bindless);
+		const GPUPipelineHandle handle = store.CreatePipeline(PipelineFixtureComputeSpec(LoadTestShader("PipelineFixture", kFixturePath)));
+		CDL_CHECK(store.TryGetPipeline(handle));
+
+		const std::expected<ShaderEntryPoint, std::string> entryPoint = store.GetEntryPoint(handle, ShaderStage::Compute);
+		CDL_CHECK_MSG(entryPoint.has_value(), entryPoint.error());
+		CDL_EXPECT_EQ(entryPoint->Name, std::string("pipelineCompute"));
+		CDL_EXPECT_EQ(entryPoint->Stage, ShaderStage::Compute);
+		ExpectGroupSize(entryPoint->LocalSize, kFixtureComputeGroupSize, "pipelineCompute");
+	}
+	ExpectNoVulkanDebugMessages(logs);
+}
+
+// The two stages sit side by side in the store, so asking for one must not hand back the other
+CDL_TEST_CASE(PipelineStore, GetEntryPointReturnsEachStageOfAGraphicsPipeline, Gpu)
+{
+	SkipUnlessCompiled(kFixturePath);
+
+	LoggerFixture logs(LogLevel::Warn, kRenderChannelMask);
+	{
+		TestDevice gpu;
+		BindlessTable bindless(gpu.Device);
+		PipelineStore store(gpu.Device, bindless);
+		const GPUPipelineHandle handle = store.CreatePipeline(PipelineFixtureSpec(LoadTestShader("PipelineFixture", kFixturePath)));
+		CDL_CHECK(store.TryGetPipeline(handle));
+
+		constexpr std::pair<ShaderStage, std::string_view> kStages[] = {
+			{ ShaderStage::Vertex, "pipelineVertex" },
+			{ ShaderStage::Fragment, "pipelineFragment" } };
+		for (const auto& [stage, name] : kStages)
+		{
+			const std::expected<ShaderEntryPoint, std::string> entryPoint = store.GetEntryPoint(handle, stage);
+			CDL_CHECK_MSG(entryPoint.has_value(), entryPoint.error());
+			CDL_EXPECT_EQ(entryPoint->Name, std::string(name));
+			CDL_EXPECT_EQ(entryPoint->Stage, stage);
+		}
+	}
+	ExpectNoVulkanDebugMessages(logs);
+}
+
+// As with TryGetPipeline, a handle the store never gave out leads to nothing, here an error rather than some other entry point
+CDL_TEST_CASE(PipelineStore, GetEntryPointFailsForHandlesItNeverGaveOut, Gpu)
+{
+	SkipUnlessCompiled(kFixturePath);
+
+	LoggerFixture logs(LogLevel::Warn, kRenderChannelMask);
+	{
+		TestDevice gpu;
+		BindlessTable bindless(gpu.Device);
+		PipelineStore store(gpu.Device, bindless);
+
+		CDL_EXPECT_FALSE(store.GetEntryPoint(GPUPipelineHandle{ .Index = 0 }, ShaderStage::Compute).has_value());
+
+		const GPUPipelineHandle only = store.CreatePipeline(PipelineFixtureComputeSpec(LoadTestShader("PipelineFixture", kFixturePath)));
+		CDL_CHECK(store.TryGetPipeline(only));
+		CDL_EXPECT_FALSE(store.GetEntryPoint(GPUPipelineHandle{}, ShaderStage::Compute).has_value());
+		CDL_EXPECT_FALSE(store.GetEntryPoint(GPUPipelineHandle{ .Index = only.Index + 1 }, ShaderStage::Compute).has_value());
+	}
+	ExpectNoVulkanDebugMessages(logs);
+}
+
 // Every pipeline is built on the global layout, so the Renderer binds set 0 once per command buffer rather than once per
 // pipeline. Probes alternate between two pipelines with the set bound once before either, so a pipeline whose layout disagreed
 // at set 0 fails validation at its draws, and one that lost the binding samples the wrong colour.
@@ -279,6 +376,27 @@ namespace {
 		std::string AtFault;	// The entry point the logged reason must name; empty when no name is at fault
 	};
 
+	// The same for a compute spec over PipelineFixture
+	struct RejectedComputeCase
+	{
+		const char* Label;
+		std::string EntryPoint;
+		std::string AtFault;
+	};
+
+	PipelineSpecification RejectedSpec(SharedPtr<Shader> shader, const RejectedCase& rejected)
+	{
+		GraphicsPipelineSpecification spec = PipelineFixtureSpec(std::move(shader));
+		spec.VertexEntryPoint = rejected.Vertex;
+		spec.FragmentEntryPoint = rejected.Fragment;
+		return spec;
+	}
+
+	PipelineSpecification RejectedSpec(SharedPtr<Shader> shader, const RejectedComputeCase& rejected)
+	{
+		return ComputePipelineSpecification{ .Shader = std::move(shader), .EntryPoint = rejected.EntryPoint };
+	}
+
 	// The validation layer logs on Render too, so its messages are left to ExpectNoVulkanDebugMessages
 	std::vector<std::string> PipelineErrors(LoggerFixture& logs)
 	{
@@ -296,7 +414,8 @@ namespace {
 
 	// Each case must come back as an invalid handle before Vulkan sees the spec, and since the handle can't say why, log one
 	// error naming the entry point at fault. What was built before must still resolve as it did.
-	void ExpectEachRejected(LoggerFixture& logs, std::span<const RejectedCase> cases)
+	template<typename Case, size_t N>
+	void ExpectEachRejected(LoggerFixture& logs, const Case (&cases)[N])
 	{
 		TestDevice gpu;
 		BindlessTable bindless(gpu.Device);
@@ -306,14 +425,10 @@ namespace {
 		const vk::Pipeline builtPipeline = store.TryGetPipeline(built);
 		CDL_CHECK(builtPipeline);
 
-		for (const RejectedCase& rejected : cases)
+		for (const Case& rejected : cases)
 		{
-			GraphicsPipelineSpecification spec = PipelineFixtureSpec(shader);
-			spec.VertexEntryPoint = rejected.Vertex;
-			spec.FragmentEntryPoint = rejected.Fragment;
-
 			const size_t errorsBefore = PipelineErrors(logs).size();
-			const GPUPipelineHandle handle = store.CreatePipeline(spec);
+			const GPUPipelineHandle handle = store.CreatePipeline(RejectedSpec(shader, rejected));
 			const std::vector<std::string> errors = PipelineErrors(logs);
 
 			CDL_EXPECT_MSG(!handle.IsValid(), std::format("{} gave a valid handle", rejected.Label));
@@ -363,5 +478,40 @@ CDL_TEST_CASE(PipelineStore, RejectsEntryPointsNamedForTheWrongStage, Gpu)
 
 	LoggerFixture logs(LogLevel::Warn, kRenderChannelMask);
 	ExpectEachRejected(logs, cases);
+	ExpectNoVulkanDebugMessages(logs);
+}
+
+// The default is the engine shaders' name, as for graphics specs. A stage comes from reflection, not the spec, so without the
+// check a vertex or fragment entry point would reach Vulkan as a compute pipeline's one stage.
+CDL_TEST_CASE(PipelineStore, RejectsComputeEntryPointsTheShaderDoesNotHaveOrThatAreNotCompute, Gpu)
+{
+	SkipUnlessCompiled(kFixturePath);
+
+	const ComputePipelineSpecification defaults{};
+	const RejectedComputeCase cases[] = {
+		{ "the default", defaults.EntryPoint, defaults.EntryPoint },
+		{ "a misnamed compute entry point", "missingCompute", "missingCompute" },
+		{ "no entry point", "", "" },
+		{ "a vertex entry point", "pipelineVertex", "pipelineVertex" },
+		{ "a fragment entry point", "pipelineFragment", "pipelineFragment" } };
+
+	LoggerFixture logs(LogLevel::Warn, kRenderChannelMask);
+	ExpectEachRejected(logs, cases);
+	ExpectNoVulkanDebugMessages(logs);
+}
+
+// A shader that failed to load leaves the spec's pointer null, which must come back as an invalid handle rather than a crash
+CDL_TEST_CASE(PipelineStore, RejectsASpecWithNoShader, Gpu)
+{
+	LoggerFixture logs(LogLevel::Warn, kRenderChannelMask);
+	{
+		TestDevice gpu;
+		BindlessTable bindless(gpu.Device);
+		PipelineStore store(gpu.Device, bindless);
+
+		CDL_EXPECT_FALSE(store.CreatePipeline(GraphicsPipelineSpecification{}).IsValid());
+		CDL_EXPECT_FALSE(store.CreatePipeline(ComputePipelineSpecification{}).IsValid());
+		CDL_EXPECT_EQ(PipelineErrors(logs).size(), 2u);
+	}
 	ExpectNoVulkanDebugMessages(logs);
 }

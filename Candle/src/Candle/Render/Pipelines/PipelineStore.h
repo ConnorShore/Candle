@@ -31,6 +31,7 @@ namespace Candle {
 		// Returns nullptr for an invalid or not ready handle (i.e hasn't fully built yet)
 		// TODO: Probably need some async creation for this to be useful, but for now we just block until the pipeline is ready
 		vk::Pipeline TryGetPipeline(GPUPipelineHandle handle);
+		std::expected<ShaderEntryPoint, std::string> GetEntryPoint(GPUPipelineHandle handle, ShaderStage stage) const;
 
 		inline vk::PipelineLayout GetGlobalLayout() const { return m_GlobalLayout; }
 
@@ -39,12 +40,15 @@ namespace Candle {
 		{
 			vk::raii::Pipeline Pipeline{ nullptr };
 			PipelineSpecification Spec;
+			//std::array<ShaderEntryPoint, 2> EntryPoints;	// Max of 2: (vert, frag) but can be 1 (vert, {}) or (compute, {})
 			// TODO: May need to keep entry points here too but will see
 		};
 
 		vk::raii::PipelineLayout CreateGlobalLayout();
 		std::expected<PipelineEntry, std::string> CreateGraphicsPipelineEntry(const GraphicsPipelineSpecification& spec);
 		std::expected<PipelineEntry, std::string> CreateComputePipelineEntry(const ComputePipelineSpecification& spec);
+
+		std::expected<void, std::string> ValidateHandle(GPUPipelineHandle handle) const;
 
 	private:
 		RenderDevice& m_RenderDevice;

@@ -70,33 +70,52 @@ namespace Candle {
 			return pushConstantBlock;
 		}
 
+		LocalGroupSize ExtractLocalGroupSizes(spv_reflect::ShaderModule& shaderModule, std::string_view entryPointName)
+		{
+			const SpvReflectShaderModule& module = shaderModule.GetShaderModule();
+			const SpvReflectEntryPoint* entryPoint = spvReflectGetEntryPoint(&module, entryPointName.data());
+			if (entryPoint == nullptr)
+				return {};
+
+			return {
+				.X{ entryPoint->local_size.x },
+				.Y{ entryPoint->local_size.y },
+				.Z{ entryPoint->local_size.z }
+			};
+		}
+
 		std::expected<std::vector<ShaderEntryPoint>, std::string> ExtractShaderSourceInfo(std::span<const std::byte> shaderCode, const std::filesystem::path& filePath)
 		{
 			auto shaderModule = spv_reflect::ShaderModule(shaderCode.size(), shaderCode.data());
 
-			if (shaderModule.GetResult() != SPV_REFLECT_RESULT_SUCCESS) {
-				return std::unexpected(std::format("Failed to reflect shader file '{}' (SpvReflectResult {})",
-					ToUtf8(filePath), static_cast<int>(shaderModule.GetResult())));
-			}
+			if (shaderModule.GetResult() != SPV_REFLECT_RESULT_SUCCESS) 
+				return std::unexpected(std::format("Failed to reflect shader file '{}' (SpvReflectResult {})", ToUtf8(filePath), static_cast<int>(shaderModule.GetResult())));
 
 			std::vector<ShaderEntryPoint> entryPoints;
 			entryPoints.reserve(shaderModule.GetEntryPointCount());
-			for (uint32_t i = 0; i < shaderModule.GetEntryPointCount(); ++i) {
+			for (uint32_t i = 0; i < shaderModule.GetEntryPointCount(); ++i) 
+			{
 				ShaderStage stage = ToShaderStage(shaderModule.GetEntryPointShaderStage(i));
+				std::string entryPointName = shaderModule.GetEntryPointName(i);
 
 				// If unsupported stage, warn and skip it.
-				if (stage == ShaderStage::Count) {
+				if (stage == ShaderStage::Count) 
+				{
 					CDL_CORE_WARN(LogChannel::Render, "Shader file '{}' has an entry point '{}' with an unhandled stage (SpvReflectShaderStageFlagBits {})",
-						ToUtf8(filePath), shaderModule.GetEntryPointName(i), static_cast<int>(shaderModule.GetEntryPointShaderStage(i)));
+						ToUtf8(filePath), entryPointName, static_cast<int>(shaderModule.GetEntryPointShaderStage(i)));
 					continue;
 				}
 
-				std::string entryPointName = shaderModule.GetEntryPointName(i);
+				// Extract push constant block
 				entryPoints.push_back({ 
 					.Name = entryPointName,
 					.Stage = stage, 
 					.PushConstants = std::move(ExtractPushConstantBlock(shaderModule, entryPointName))
-				});
+					});
+
+				// Extract local group sizes for compute shaders
+				if (stage == ShaderStage::Compute)
+					entryPoints.back().LocalSize = ExtractLocalGroupSizes(shaderModule, entryPointName);
 			}
 
 			return entryPoints;
