@@ -36,7 +36,7 @@ namespace Candle {
 		// Move constructor and assignment operator
 		GPUImage(GPUImage&& other) noexcept
 			: m_Allocator(other.m_Allocator), m_Image(other.m_Image), m_ImageView(std::move(other.m_ImageView)), m_Allocation(other.m_Allocation)
-			, m_Format(other.m_Format), m_MipLevels(other.m_MipLevels)
+			, m_Format(other.m_Format), m_Usage(other.m_Usage), m_MipLevels(other.m_MipLevels)
 		{
 			other.m_Image = nullptr;
 			other.m_Allocator = nullptr;
@@ -52,6 +52,7 @@ namespace Candle {
 				m_ImageView = std::move(other.m_ImageView);
 				m_Allocation = other.m_Allocation;
 				m_Format = other.m_Format;
+				m_Usage = other.m_Usage;
 				m_MipLevels = other.m_MipLevels;
 				other.m_Allocator = nullptr;
 				other.m_Allocation = nullptr;
@@ -67,6 +68,7 @@ namespace Candle {
 		inline VmaAllocation GetAllocation() const { return m_Allocation; }
 
 		inline vk::Format GetFormat() const { return m_Format; }
+		inline vk::ImageUsageFlags GetUsage() const { return m_Usage; }
 		inline uint8_t GetMipLevels() const { return m_MipLevels; }
 		uint32_t GetSizeBytes() const;
 
@@ -81,6 +83,7 @@ namespace Candle {
 		vk::raii::ImageView m_ImageView{ nullptr };
 
 		vk::Format m_Format{ vk::Format::eUndefined };
+		vk::ImageUsageFlags m_Usage{};
 		uint8_t m_MipLevels{ 1 };
 	};
 

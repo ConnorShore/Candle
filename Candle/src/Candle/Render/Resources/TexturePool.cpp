@@ -57,7 +57,7 @@ namespace Candle {
 			.Extent = spec.Extent,
 			.Format = ToVulkanFormat(spec.Format, spec.ColorSpace),
 			.DebugName = spec.DebugName
-			});
+		});
 
 		ImageUploadSpec uploadSpec{
 			.Data = spec.Data,
@@ -87,15 +87,23 @@ namespace Candle {
 		GPUImage image = m_Allocator.CreateImage(GPUImageSpec{
 			.Extent = spec.Extent,
 			.Format = spec.Format,
-			.Usage = vk::ImageUsageFlagBits::eColorAttachment | vk::ImageUsageFlagBits::eSampled,
+			.Usage = spec.Usage,
 			.DebugName = spec.DebugName
-			});
+		});
+
+		// A storage image has to be in General for its writes, so it's sampled there too rather than moving every frame
+		const bool isStorage = static_cast<bool>(spec.Usage & vk::ImageUsageFlagBits::eStorage);
+		const vk::ImageLayout sampledLayout = isStorage ? vk::ImageLayout::eGeneral : vk::ImageLayout::eShaderReadOnlyOptimal;
 
 		vk::ImageView view = image.GetImageView();
-		GPUTextureHandle handle = m_Textures.Insert(TextureEntry{ .Image = std::move(image), .Extent = spec.Extent, .IsRenderTarget = true });
+		GPUTextureHandle handle = m_Textures.Insert(TextureEntry{
+			.Image = std::move(image), .Extent = spec.Extent, .SampledLayout = sampledLayout });
 		StoreDebugName(handle, std::move(spec.DebugName));
 
-		m_BindlessTable.WriteTexture(handle.Index, view);
+		if (spec.Usage & vk::ImageUsageFlagBits::eSampled)
+			m_BindlessTable.WriteTexture(handle.Index, view, sampledLayout);
+		if (isStorage)
+			m_BindlessTable.WriteStorageImage(handle.Index, view);
 		return handle;
 	}
 
@@ -134,7 +142,8 @@ namespace Candle {
 			.Extent = entry->Extent,
 			.SizeBytes = entry->Image.GetSizeBytes(),
 			.MipLevels = entry->Image.GetMipLevels(),
-			.IsRenderTarget = entry->IsRenderTarget
+			.SampledLayout = entry->SampledLayout,
+			.Usage = entry->Image.GetUsage()
 		};
 	}
 
@@ -156,7 +165,7 @@ namespace Candle {
 				.Extent = info.Extent,
 				.MipLevels = info.MipLevels,
 				.Format = info.Format,
-				.IsRenderTarget = info.IsRenderTarget });
+				.Usage = info.Usage });
 		}
 
 		return TexturePoolStats{

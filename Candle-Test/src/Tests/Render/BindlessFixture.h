@@ -17,4 +17,12 @@ CDL_INTEROP_BEGIN
 		uint SamplerIndex;
 	};
 
+	// One thread per texel: the compute shader stores Colour into storageTextures[TextureIndex], as the Renderer's compute pass does.
+	struct BindlessFixtureStorePushConstants
+	{
+		GlobalPushConstants Global;
+		float4 Colour;
+		uint TextureIndex;
+	};
+
 CDL_INTEROP_END

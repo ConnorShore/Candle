@@ -13,6 +13,14 @@ CDL_INTEROP_BEGIN
 		uint TextureIndex;					// Set per draw
 		uint SamplerIndex;					// Set per draw
 		uint TransformIndex;				// Set per draw; index into the FrameData's TransformData array
+		uint ComputeTextureIndex;			// The test compute target, sampled over the base texture
+	};
+
+	struct ComputePushConstants
+	{
+		GlobalPushConstants Global;
+		uint TextureIndex;
+		uint SamplerIndex;
 	};
 
 CDL_INTEROP_END

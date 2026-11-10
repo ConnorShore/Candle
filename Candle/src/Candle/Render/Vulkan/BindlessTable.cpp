@@ -84,12 +84,13 @@ namespace Candle {
 	{
 		std::array poolSize{
 			vk::DescriptorPoolSize(vk::DescriptorType::eSampledImage, kMaxTextures),
-			vk::DescriptorPoolSize(vk::DescriptorType::eSampler, static_cast<uint32_t>(SamplerType::Count)) 
+			vk::DescriptorPoolSize(vk::DescriptorType::eSampler, static_cast<uint32_t>(SamplerType::Count)),
+			vk::DescriptorPoolSize(vk::DescriptorType::eStorageImage, kMaxTextures)
 		};
 		vk::DescriptorPoolCreateInfo poolInfo{
 			// FreeDescriptorSet because vk::raii::DescriptorSet frees itself on destruction
 			.flags = vk::DescriptorPoolCreateFlagBits::eFreeDescriptorSet | vk::DescriptorPoolCreateFlagBits::eUpdateAfterBind,
-			.maxSets = 1,	// One set holds both bindings
+			.maxSets = 1,	// One set holds every binding
 			.poolSizeCount = static_cast<uint32_t>(poolSize.size()),
 			.pPoolSizes = poolSize.data() 
 		};
@@ -101,15 +102,21 @@ namespace Candle {
 	{
 		uint32_t samplerSize = static_cast<uint32_t>(m_Samplers.size());
 		std::array material_bindings = {
-			vk::DescriptorSetLayoutBinding(0, vk::DescriptorType::eSampledImage, static_cast<uint32_t>(kMaxTextures), vk::ShaderStageFlagBits::eFragment, nullptr),
-			vk::DescriptorSetLayoutBinding(1, vk::DescriptorType::eSampler, samplerSize, vk::ShaderStageFlagBits::eFragment, nullptr) 
+			vk::DescriptorSetLayoutBinding(0, vk::DescriptorType::eSampledImage, static_cast<uint32_t>(kMaxTextures), vk::ShaderStageFlagBits::eAll, nullptr),
+			vk::DescriptorSetLayoutBinding(1, vk::DescriptorType::eSampler, samplerSize, vk::ShaderStageFlagBits::eAll, nullptr),
+			vk::DescriptorSetLayoutBinding(2, vk::DescriptorType::eStorageImage, static_cast<uint32_t>(kMaxTextures), vk::ShaderStageFlagBits::eAll, nullptr)
 		};
 
-		std::vector<vk::DescriptorBindingFlags> bindingFlags = {
-			// Unwritten or retired elements are legal while no shader indexes them, and may be written while other elements are in flight
-			vk::DescriptorBindingFlagBits::ePartiallyBound | vk::DescriptorBindingFlagBits::eUpdateAfterBind | vk::DescriptorBindingFlagBits::eUpdateUnusedWhilePending,
-			vk::DescriptorBindingFlagBits::eUpdateAfterBind 
+		// Unwritten or retired elements are legal while no shader indexes them, and may be written while other elements are in flight
+		constexpr vk::DescriptorBindingFlags kSlotFlags = vk::DescriptorBindingFlagBits::ePartiallyBound
+			| vk::DescriptorBindingFlagBits::eUpdateAfterBind | vk::DescriptorBindingFlagBits::eUpdateUnusedWhilePending;
+
+		std::array<vk::DescriptorBindingFlags, 3> bindingFlags = {
+			kSlotFlags,
+			vk::DescriptorBindingFlagBits::eUpdateAfterBind,
+			kSlotFlags
 		};
+		CDL_STATIC_ASSERT(bindingFlags.size() == material_bindings.size(), "Binding flags must match the number of bindings");
 
 		vk::DescriptorSetLayoutBindingFlagsCreateInfo flagsCreateInfo{
 			.bindingCount = static_cast<uint32_t>(bindingFlags.size()),
@@ -165,25 +172,35 @@ namespace Candle {
 		renderDevice.GetDevice().updateDescriptorSets({ samplerWrite }, {});
 	}
 
-	void BindlessTable::WriteTexture(uint32_t index, vk::ImageView view)
+	void BindlessTable::WriteTexture(uint32_t index, vk::ImageView view, vk::ImageLayout layout /*= vk::ImageLayout::eShaderReadOnlyOptimal*/)
 	{
-		CDL_CORE_ASSERT(Platform::IsMainThread(), "BindlessTable textures are written on the main thread");
-		CDL_CORE_ASSERT(index < kMaxTextures, "Texture index is outside the bindless array");
+		WriteImage(0, vk::DescriptorType::eSampledImage, index, view, layout);
+	}
+
+	void BindlessTable::WriteStorageImage(uint32_t index, vk::ImageView view)
+	{
+		WriteImage(2, vk::DescriptorType::eStorageImage, index, view, vk::ImageLayout::eGeneral);
+	}
+
+	void BindlessTable::WriteImage(uint32_t binding, vk::DescriptorType type, uint32_t index, vk::ImageView view, vk::ImageLayout layout)
+	{
+		CDL_CORE_ASSERT(Platform::IsMainThread(), "BindlessTable images are written on the main thread");
+		CDL_CORE_ASSERT(index < kMaxTextures, "Image index is outside the bindless array");
 
 		vk::DescriptorImageInfo imageInfo{
 			.imageView = view,
-			.imageLayout = vk::ImageLayout::eShaderReadOnlyOptimal };	// The layout when sampled, not now: the upload may not have run yet
+			.imageLayout = layout };	// The layout when accessed, not now: the upload may not have run yet
 
-		vk::WriteDescriptorSet textureWrite{
+		vk::WriteDescriptorSet imageWrite{
 			.dstSet = *m_DescriptorSet,
-			.dstBinding = 0,
+			.dstBinding = binding,
 			.dstArrayElement = index,
 			.descriptorCount = 1,
-			.descriptorType = vk::DescriptorType::eSampledImage,
+			.descriptorType = type,
 			.pImageInfo = &imageInfo
 		};
 
-		m_RenderDevice.GetDevice().updateDescriptorSets({ textureWrite }, {});
+		m_RenderDevice.GetDevice().updateDescriptorSets({ imageWrite }, {});
 	}
 
 	void BindlessTable::BindSet(vk::CommandBuffer commandBuffer, vk::PipelineBindPoint bindPoint, vk::PipelineLayout pipelineLayout)

@@ -130,7 +130,7 @@ CDL_TEST_CASE(RenderContext, CreatesAnOutputTargetOfTheInitialSize, Gpu)
 
 		const TextureInfo info = test.Pool().GetTextureInfo(target);
 		CDL_EXPECT(test.Pool().IsAlive(target));
-		CDL_EXPECT(info.IsRenderTarget);
+		CDL_EXPECT(info.Usage & vk::ImageUsageFlagBits::eColorAttachment);
 		CDL_EXPECT(info.Extent == kInitialSize);
 		CDL_EXPECT_EQ(context.GetOutputTextureID(), ToGuiTextureID(target));	// What the application hands ImGui::Image
 	}

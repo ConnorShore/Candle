@@ -111,7 +111,7 @@ namespace Candle {
 			if (ImGui::Selectable("All kinds", !m_KindFilter))
 				m_KindFilter.reset();
 
-			for (TextureKind kind : { TextureKind::Texture, TextureKind::RenderTarget, TextureKind::Default })
+			for (TextureKind kind : { TextureKind::Texture, TextureKind::RenderTarget, TextureKind::Storage, TextureKind::Default })
 			{
 				if (ImGui::Selectable(KindName(kind), m_KindFilter == kind))
 					m_KindFilter = kind;
@@ -307,7 +307,13 @@ namespace Candle {
 		// The defaults hold the pool's first slots (see TexturePool's constructor)
 		if (texture.Handle.Index < static_cast<uint32_t>(DefaultTexture::Count))
 			return TextureKind::Default;
-		return texture.IsRenderTarget ? TextureKind::RenderTarget : TextureKind::Texture;
+
+		// An image that's both is listed as a render target
+		if (texture.Usage & vk::ImageUsageFlagBits::eColorAttachment)
+			return TextureKind::RenderTarget;
+		if (texture.Usage & vk::ImageUsageFlagBits::eStorage)
+			return TextureKind::Storage;
+		return TextureKind::Texture;
 	}
 
 	const char* TextureInspectorPanel::KindName(TextureKind kind)
@@ -317,6 +323,7 @@ namespace Candle {
 		case TextureKind::Default: return "Default";
 		case TextureKind::Texture: return "Texture";
 		case TextureKind::RenderTarget: return "Render target";
+		case TextureKind::Storage: return "Storage";
 		}
 		return "Unknown";
 	}

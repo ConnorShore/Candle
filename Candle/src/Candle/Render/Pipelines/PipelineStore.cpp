@@ -189,14 +189,20 @@ namespace Candle {
 
 	vk::Pipeline PipelineStore::TryGetPipeline(GPUPipelineHandle handle)
 	{
-		if (!handle.IsValid())
-			return nullptr;
-		if (handle.Index >= m_Pipelines.size())
-			return nullptr;
-		if (m_Pipelines[handle.Index].Pipeline == nullptr)
+		
+		if (auto valid = ValidateHandle(handle); !valid.has_value())
 			return nullptr;
 
-		return *m_Pipelines[handle.Index].Pipeline;
+		return m_Pipelines[handle.Index].Pipeline;
+	}
+
+	std::expected<ShaderEntryPoint, std::string> PipelineStore::GetEntryPoint(GPUPipelineHandle handle, ShaderStage stage) const
+	{
+		if (auto valid = ValidateHandle(handle); !valid.has_value())
+			return std::unexpected(valid.error());
+
+		size_t stageIndex = (stage == ShaderStage::Vertex || stage == ShaderStage::Compute) ? 0 : 1;	// Vertex or Compute is index 0, Fragment is index 1
+		return m_Pipelines[handle.Index].EntryPoints[stageIndex];
 	}
 
 	vk::raii::PipelineLayout PipelineStore::CreateGlobalLayout()
@@ -224,9 +230,14 @@ namespace Candle {
 	std::expected<PipelineStore::PipelineEntry, std::string> PipelineStore::CreateGraphicsPipelineEntry(const GraphicsPipelineSpecification& spec)
 	{
 		bool containsDepthAttachment = spec.DepthAttachmentFormat != vk::Format::eUndefined;
+
+		if (!spec.Shader)
+			return std::unexpected("Shader is null");
+
 		auto entryPoints = spec.Shader->GetEntryPoints();
 
 #pragma region Validate Push Constants
+		// TODO: Validate push constants only over the entry points used by this pipeline, not all entry points in the shader
 		ValidatePushConstants(entryPoints);
 #pragma endregion
 
@@ -347,7 +358,57 @@ namespace Candle {
 
 	std::expected<PipelineStore::PipelineEntry, std::string> PipelineStore::CreateComputePipelineEntry(const ComputePipelineSpecification& spec)
 	{
-		return std::unexpected("Compute pipeline creation not implemented yet");
+		// TODO NOW: Consolidate shader/module, validation and initial checks to helper function to be shared by graphics and compute pipelines
+		if (!spec.Shader)
+			return std::unexpected("Shader is null");
+		if (spec.EntryPoint.empty())
+			return std::unexpected("Compute entry point must be specified");
+
+		auto entryPoints = spec.Shader->GetEntryPoints();
+
+#pragma region Validate Push Constants
+		// TODO: Validate push constants only over the entry points used by this pipeline, not all entry points in the shader
+		ValidatePushConstants(entryPoints);
+#pragma endregion
+
+#pragma region Shader Module
+		// Validate that the specified entry points exist in the shader module
+		std::expected<void, std::string> validationResult = ValidateComputeEntryPoints(entryPoints, spec);
+		if (!validationResult)
+			return std::unexpected(validationResult.error());
+
+		// Create shader modules and pipeline shader stage create info for each entry point
+		vk::raii::ShaderModule shaderModule = spec.Shader->CreateModule(m_RenderDevice);
+
+		std::vector<vk::PipelineShaderStageCreateInfo> shaderStages = { CreateShaderStage(shaderModule, entryPoints, spec.EntryPoint) };
+#pragma endregion
+
+#pragma region Compute Pipeline Creation
+		vk::ComputePipelineCreateInfo pipelineCreateInfo{
+			.stage = shaderStages[0],
+			.layout = *m_GlobalLayout
+		};
+		auto pipeline = vk::raii::Pipeline(m_RenderDevice.GetDevice(), nullptr, pipelineCreateInfo);
+		if (!spec.DebugName.empty())
+			m_RenderDevice.SetDebugName(*pipeline, spec.DebugName);
+#pragma endregion
+
+		return PipelineEntry{
+			.Pipeline{ std::move(pipeline) },
+			.Spec{ spec }
+		};
+	}
+
+	std::expected<void, std::string> PipelineStore::ValidateHandle(GPUPipelineHandle handle) const
+	{
+		if (!handle.IsValid())
+			return std::unexpected("Pipeline handle is not valid!");
+		if (handle.Index >= m_Pipelines.size())
+			return std::unexpected("Pipeline entry no longer exists!");
+		if (m_Pipelines[handle.Index].Pipeline == nullptr)
+			return std::unexpected("Pipeline is not ready yet!");
+
+		return {};
 	}
 
 }

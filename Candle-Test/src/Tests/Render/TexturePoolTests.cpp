@@ -40,10 +40,11 @@ namespace {
 		return pool.CreateRenderTarget({ .Extent = extent, .Format = kRenderTargetFormat, .DebugName = "Test Render Target" });
 	}
 
-	constexpr ImageState kShaderReadState{
-		.Layout = vk::ImageLayout::eShaderReadOnlyOptimal,
-		.Access = vk::AccessFlagBits2::eShaderSampledRead,
-		.Stage = vk::PipelineStageFlagBits2::eFragmentShader };
+	// Through the layout the pool reports rather than one the test picks, so validation fails if it isn't the descriptor's
+	ImageState SampledState(const TextureInfo& info)
+	{
+		return { .Layout = info.SampledLayout, .Access = vk::AccessFlagBits2::eShaderSampledRead, .Stage = vk::PipelineStageFlagBits2::eFragmentShader };
+	}
 
 	// Draws into the target as the scene pass does, a clear standing in for the draws, and leaves it where Renderer does:
 	// ready for a shader to sample through its bindless slot.
@@ -64,7 +65,43 @@ namespace {
 			.colorAttachmentCount = 1, .pColorAttachments = &attachment });
 		commands.Buffer.endRendering();
 
-		const vk::ImageMemoryBarrier2 toSampled = MakeImageBarrier(info.Image, kColorAttachmentState, kShaderReadState, kColorSubresourceRange);
+		const vk::ImageMemoryBarrier2 toSampled = MakeImageBarrier(info.Image, kColorAttachmentState, SampledState(info), kColorSubresourceRange);
+		commands.Buffer.pipelineBarrier2({ .imageMemoryBarrierCount = 1, .pImageMemoryBarriers = &toSampled });
+		commands.Buffer.end();
+		SubmitAndWait(gpu.Device, commands.Buffer);
+	}
+
+	constexpr ImageState kStorageWriteState{
+		.Layout = vk::ImageLayout::eGeneral,
+		.Access = vk::AccessFlagBits2::eShaderStorageWrite,
+		.Stage = vk::PipelineStageFlagBits2::eComputeShader };
+
+	// Fills the target through its storage slot as the compute pass does, and leaves it where Renderer does: ready for a
+	// shader to sample through its bindless slot.
+	void StoreIntoTarget(TestTextures& gpu, GPUTextureHandle target, const Texel& colour)
+	{
+		PipelineStore store(gpu.Device, gpu.Bindless);
+		const vk::Pipeline pipeline = store.TryGetPipeline(store.CreatePipeline(ComputePipelineSpecification{
+			.Shader = LoadTestShader("BindlessFixture", kBindlessFixturePath),
+			.EntryPoint = "bindlessStore" }));
+		CDL_CHECK(pipeline);
+
+		const TextureInfo info = gpu.Pool.GetTextureInfo(target);
+		TestCommands commands(gpu.Device);
+		commands.Buffer.begin({ .flags = vk::CommandBufferUsageFlagBits::eOneTimeSubmit });
+
+		const vk::ImageMemoryBarrier2 toStorage = MakeImageBarrier(info.Image, {}, kStorageWriteState, kColorSubresourceRange);
+		commands.Buffer.pipelineBarrier2({ .imageMemoryBarrierCount = 1, .pImageMemoryBarriers = &toStorage });
+
+		gpu.Bindless.BindSet(*commands.Buffer, vk::PipelineBindPoint::eCompute, store.GetGlobalLayout());
+		commands.Buffer.bindPipeline(vk::PipelineBindPoint::eCompute, pipeline);
+		const GPU::BindlessFixtureStorePushConstants pushConstants{
+			.Colour = glm::vec4(colour[0], colour[1], colour[2], colour[3]) / 255.0f,
+			.TextureIndex = info.Index };
+		commands.Buffer.pushConstants(store.GetGlobalLayout(), kPushConstantStages, 0, sizeof(pushConstants), &pushConstants);
+		commands.Buffer.dispatch(info.Extent.x, info.Extent.y, 1);
+
+		const vk::ImageMemoryBarrier2 toSampled = MakeImageBarrier(info.Image, kStorageWriteState, SampledState(info), kColorSubresourceRange);
 		commands.Buffer.pipelineBarrier2({ .imageMemoryBarrierCount = 1, .pImageMemoryBarriers = &toSampled });
 		commands.Buffer.end();
 		SubmitAndWait(gpu.Device, commands.Buffer);
@@ -120,8 +157,8 @@ CDL_TEST_CASE(TexturePool, LiveTexturesGetDistinctSlotsAndViews, Gpu)
 	ExpectNoVulkanDebugMessages(logs);
 }
 
-// Not square, so swapped extents show. Only render targets are drawn into, and the renderer asserts on that.
-CDL_TEST_CASE(TexturePool, TextureInfoReportsItsExtentAndThatItIsNoRenderTarget, Gpu)
+// Not square, so swapped extents show. Only color attachments are drawn into, and the renderer asserts on that.
+CDL_TEST_CASE(TexturePool, TextureInfoReportsItsExtentAndThatItIsNoColorAttachment, Gpu)
 {
 	LoggerFixture logs(LogLevel::Warn, kRenderChannelMask);
 	{
@@ -131,7 +168,7 @@ CDL_TEST_CASE(TexturePool, TextureInfoReportsItsExtentAndThatItIsNoRenderTarget,
 
 		CDL_EXPECT(info.Extent == glm::uvec2(3, 2));
 		CDL_EXPECT(info.Image);
-		CDL_EXPECT_FALSE(info.IsRenderTarget);
+		CDL_EXPECT_FALSE(info.Usage & vk::ImageUsageFlagBits::eColorAttachment);
 	}
 	ExpectNoVulkanDebugMessages(logs);
 }
@@ -151,8 +188,23 @@ CDL_TEST_CASE(TexturePool, CreateRenderTargetReturnsAValidHandleAndItsInfo, Gpu)
 		CDL_EXPECT(info.ImageView);
 		CDL_EXPECT(info.Image);
 		CDL_EXPECT(info.Extent == glm::uvec2(5, 3));
-		CDL_EXPECT(info.IsRenderTarget);
+		CDL_EXPECT(info.Usage == (vk::ImageUsageFlagBits::eColorAttachment | vk::ImageUsageFlagBits::eSampled));	// The spec's default
 		CDL_EXPECT_EQ(LiveAllocations(gpu.Allocator), kDefaultTextureAllocations + 1u);
+	}
+	ExpectNoVulkanDebugMessages(logs);
+}
+
+// The Renderer only draws the scene into an output target with eColorAttachment, so a storage target must not report it.
+CDL_TEST_CASE(TexturePool, StorageTargetReportsOnlyTheUsageItWasCreatedWith, Gpu)
+{
+	LoggerFixture logs(LogLevel::Warn, kRenderChannelMask);
+	{
+		TestTextures gpu;
+		constexpr vk::ImageUsageFlags kStorageUsage = vk::ImageUsageFlagBits::eStorage | vk::ImageUsageFlagBits::eSampled;
+		const TextureInfo info = gpu.Pool.GetTextureInfo(gpu.Pool.CreateRenderTarget({ .Extent = { 1, 1 }, .Format = kRenderTargetFormat, .Usage = kStorageUsage }));
+
+		CDL_EXPECT(info.Usage == kStorageUsage);
+		CDL_EXPECT_FALSE(info.Usage & vk::ImageUsageFlagBits::eColorAttachment);
 	}
 	ExpectNoVulkanDebugMessages(logs);
 }
@@ -168,6 +220,25 @@ CDL_TEST_CASE(TexturePool, RenderTargetsAndTexturesGetDistinctSlots, Gpu)
 
 		CDL_EXPECT_NE(texture.Index, target.Index);
 		CDL_EXPECT(gpu.Pool.GetTextureInfo(texture).ImageView != gpu.Pool.GetTextureInfo(target).ImageView);
+	}
+	ExpectNoVulkanDebugMessages(logs);
+}
+
+// Uploads land in ShaderReadOnlyOptimal and drawn targets move there to be sampled, but a storage target stays in General
+// for its writes, so its descriptor expects General. Renderer transitions to whatever this reports before sampling.
+CDL_TEST_CASE(TexturePool, SampledLayoutIsGeneralOnlyForStorageTargets, Gpu)
+{
+	LoggerFixture logs(LogLevel::Warn, kRenderChannelMask);
+	{
+		TestTextures gpu;
+		const GPUTextureHandle texture = CreateTexel(gpu.Pool);
+		const GPUTextureHandle target = CreateRenderTarget(gpu.Pool, { 1, 1 });
+		const GPUTextureHandle storage = gpu.Pool.CreateRenderTarget({
+			.Extent = { 1, 1 }, .Format = kRenderTargetFormat, .Usage = vk::ImageUsageFlagBits::eStorage | vk::ImageUsageFlagBits::eSampled });
+
+		CDL_EXPECT_EQ(gpu.Pool.GetTextureInfo(texture).SampledLayout, vk::ImageLayout::eShaderReadOnlyOptimal);
+		CDL_EXPECT_EQ(gpu.Pool.GetTextureInfo(target).SampledLayout, vk::ImageLayout::eShaderReadOnlyOptimal);
+		CDL_EXPECT_EQ(gpu.Pool.GetTextureInfo(storage).SampledLayout, vk::ImageLayout::eGeneral);
 	}
 	ExpectNoVulkanDebugMessages(logs);
 }
@@ -210,6 +281,31 @@ CDL_TEST_CASE(TexturePool, RenderTargetCanBeDrawnIntoThenSampled, Gpu)
 		CDL_CHECK_EQ(sampled.size(), size_t{ kExtent.x } * kExtent.y);
 		for (size_t i = 0; i < sampled.size(); ++i)
 			ExpectTexelNear(sampled[i], kClearColour, std::format("texel {}", i), 0);
+	}
+	ExpectNoVulkanDebugMessages(logs);
+}
+
+// The compute pass stores through the target's slot of binding 2 and the scene samples the same slot of binding 0, both in
+// General. Validation catches a sampled descriptor expecting another layout, and the colour a view at the wrong slot.
+CDL_TEST_CASE(TexturePool, StorageTargetCanBeWrittenByComputeThenSampled, Gpu)
+{
+	SkipUnlessCompiled(kBindlessFixturePath);
+
+	LoggerFixture logs(LogLevel::Warn, kRenderChannelMask);
+	{
+		TestTextures gpu;
+		constexpr glm::uvec2 kExtent{ 3, 2 };
+		constexpr Texel kStoredColour{ 51, 102, 153, 255 };
+		const GPUTextureHandle target = gpu.Pool.CreateRenderTarget({
+			.Extent = kExtent, .Format = kRenderTargetFormat,
+			.Usage = vk::ImageUsageFlagBits::eStorage | vk::ImageUsageFlagBits::eSampled, .DebugName = "Test Storage Target" });
+
+		StoreIntoTarget(gpu, target, kStoredColour);
+		const std::vector<Texel> sampled = SampleTextures(gpu, ProbeEveryTexel(target, kExtent));
+
+		CDL_CHECK_EQ(sampled.size(), size_t{ kExtent.x } * kExtent.y);
+		for (size_t i = 0; i < sampled.size(); ++i)
+			ExpectTexelNear(sampled[i], kStoredColour, std::format("texel {}", i), 0);
 	}
 	ExpectNoVulkanDebugMessages(logs);
 }
@@ -327,10 +423,10 @@ CDL_TEST_CASE(TexturePool, CaptureStatsListsEachLiveTextureWithItsHandleNameAndF
 
 		CDL_EXPECT_EQ(textureStats->DebugName, "Inspected Texture");
 		CDL_EXPECT_EQ(textureStats->Format, vk::Format::eR8G8B8A8Srgb);
-		CDL_EXPECT_FALSE(textureStats->IsRenderTarget);
+		CDL_EXPECT_FALSE(textureStats->Usage & vk::ImageUsageFlagBits::eColorAttachment);
 		CDL_EXPECT_EQ(targetStats->DebugName, "Inspected Target");
 		CDL_EXPECT_EQ(targetStats->Format, vk::Format::eB8G8R8A8Unorm);
-		CDL_EXPECT(targetStats->IsRenderTarget);
+		CDL_EXPECT(targetStats->Usage & vk::ImageUsageFlagBits::eColorAttachment);
 		CDL_EXPECT(targetStats->Extent == glm::uvec2(5, 3));
 		CDL_EXPECT_GT(targetStats->SizeBytes, 0u);
 	}

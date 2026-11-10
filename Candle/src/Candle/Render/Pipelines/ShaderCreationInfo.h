@@ -29,12 +29,20 @@ namespace Candle {
 		std::vector<PushConstantMember> Members;
 	};
 
+	struct LocalGroupSize
+	{
+		uint32_t X{ 1 };
+		uint32_t Y{ 1 };
+		uint32_t Z{ 1 };
+	};
+
 	// Reflection is per entry point, not per stage: one .spv holds every entry point of its source, and may hold several of one stage.
 	struct ShaderEntryPoint
 	{
 		std::string Name;
 		ShaderStage Stage;
 		PushConstantBlock PushConstants;
+		LocalGroupSize LocalGroupSize;	// Only valid for compute entry points
 	};
 
 	struct ShaderCreationInfo

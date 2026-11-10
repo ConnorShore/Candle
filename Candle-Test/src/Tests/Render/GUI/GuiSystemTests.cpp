@@ -171,7 +171,7 @@ CDL_TEST_CASE(GuiSystem, UploadsImGuisFontAtlasIntoThePool, Gpu)
 
 		const TextureInfo info = test.Pool.GetTextureInfo(atlasCommand->Texture);
 		CDL_EXPECT(info.Extent == glm::uvec2(atlas->Width, atlas->Height));
-		CDL_EXPECT_FALSE(info.IsRenderTarget);
+		CDL_EXPECT_FALSE(info.Usage & vk::ImageUsageFlagBits::eColorAttachment);
 
 		for (const GPUTextureHandle texture : DistinctTextures(gui))
 			CDL_EXPECT_MSG(test.Pool.IsAlive(texture), std::format("texture {} generation {} isn't alive", texture.Index, texture.Generation));

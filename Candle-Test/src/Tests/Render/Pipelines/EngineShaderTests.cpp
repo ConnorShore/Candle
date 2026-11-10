@@ -80,24 +80,36 @@ CDL_TEST_CASE(EngineShaders, CompiledShadersAreNamedExactlyAsTheyAreLoaded, Unit
 	}
 }
 
-// The Renderer pushes GPU::MeshDrawPushConstants into the triangle pipeline, so the compiled shader must agree with it byte for byte.
-CDL_TEST_CASE(EngineShaders, TrianglePushBlockMatchesMeshDrawPushConstants, Unit)
+// The Renderer pushes GPU::MeshDrawPushConstants into the triangle pipeline and GPU::ComputePushConstants into the test compute
+// pipeline built from the same file, so each stage's block must agree with its struct byte for byte.
+CDL_TEST_CASE(EngineShaders, TrianglePushBlocksMatchTheirPushConstants, Unit)
 {
 	SkipUnlessCompiled(kTriangleShaderPath);
 
 	const SharedPtr<Shader> shader = LoadTestShader("Triangle", kTriangleShaderPath);
 
-	using PushConstants = GPU::MeshDrawPushConstants;
-	const std::array members = {
-		CDL_INTEROP_MEMBER(PushConstants, Global),
-		CDL_INTEROP_MEMBER(PushConstants, Vertices),
-		CDL_INTEROP_MEMBER(PushConstants, TextureIndex),
-		CDL_INTEROP_MEMBER(PushConstants, SamplerIndex),
-		CDL_INTEROP_MEMBER(PushConstants, TransformIndex) };
+	using MeshDraw = GPU::MeshDrawPushConstants;
+	const std::array meshDrawMembers = {
+		CDL_INTEROP_MEMBER(MeshDraw, Global),
+		CDL_INTEROP_MEMBER(MeshDraw, Vertices),
+		CDL_INTEROP_MEMBER(MeshDraw, TextureIndex),
+		CDL_INTEROP_MEMBER(MeshDraw, SamplerIndex),
+		CDL_INTEROP_MEMBER(MeshDraw, TransformIndex),
+		CDL_INTEROP_MEMBER(MeshDraw, ComputeTextureIndex) };
+
+	using Compute = GPU::ComputePushConstants;
+	const std::array computeMembers = {
+		CDL_INTEROP_MEMBER(Compute, Global),
+		CDL_INTEROP_MEMBER(Compute, TextureIndex),
+		CDL_INTEROP_MEMBER(Compute, SamplerIndex) };
+
 	for (const ShaderEntryPoint& entryPoint : shader->GetEntryPoints())
 	{
 		CDL_NOTE(entryPoint.Name);
-		ExpectPushBlockMatches<PushConstants>(entryPoint.PushConstants, members);
+		if (entryPoint.Stage == ShaderStage::Compute)
+			ExpectPushBlockMatches<Compute>(entryPoint.PushConstants, computeMembers);
+		else
+			ExpectPushBlockMatches<MeshDraw>(entryPoint.PushConstants, meshDrawMembers);
 	}
 }
 
