@@ -80,6 +80,17 @@ namespace Candle {
 				.DebugName = "Depth Target" };
 		}
 
+		// The renderer can't draw anything without its own shaders, so a missing or bad .spv is fatal
+		// TODO: Temporary until the asset manager loads shaders
+		SharedPtr<Shader> LoadEngineShader(const std::string& name, const std::filesystem::path& filePath)
+		{
+			auto shader = ShaderLoader::LoadShader(name, filePath);
+			if (!shader)
+				CDL_CORE_PANIC(LogChannel::Render, "{}", shader.error());
+
+			return std::move(*shader);
+		}
+
 		// TODO: Eventually move out of here once render grpah is implemented
 		template<typename T>
 		void ApplyPushConstants(vk::CommandBuffer commandBuffer, vk::PipelineLayout layout, const T& data)
@@ -109,7 +120,7 @@ namespace Candle {
 		// Load shaders into pipeline for now 
 		// TODO: Eventually will be part of the asset manager's initialization and will use asset handles rather than pointers
 		m_TrianglePipeline = m_PipelineStore.CreatePipeline(GraphicsPipelineSpecification{
-			.Shader = ShaderLoader::LoadShader("TrianglePipeline", info.ShaderDirectory / "Triangle.spv").value(),
+			.Shader = LoadEngineShader("TrianglePipeline", info.ShaderDirectory / "Triangle.spv"),
 			.VertexEntryPoint = "VertMain",
 			.FragmentEntryPoint = "FragMain",
 			.ColorAttachmentFormats = { info.TargetFormat },
@@ -117,7 +128,7 @@ namespace Candle {
 			.DebugName = "Triangle Pipeline"
 		});
 		m_DebugDrawPipeline = m_PipelineStore.CreatePipeline(GraphicsPipelineSpecification{
-			.Shader = ShaderLoader::LoadShader("DebugDrawPipeline", info.ShaderDirectory / "DebugDraw.spv").value(),
+			.Shader = LoadEngineShader("DebugDrawPipeline", info.ShaderDirectory / "DebugDraw.spv"),
 			.VertexEntryPoint = "VertMain",
 			.FragmentEntryPoint = "FragMain",
 			.Topology = PrimitiveTopology::LineList,
@@ -126,7 +137,7 @@ namespace Candle {
 			.DebugName = "Debug Draw Pipeline"
 		});
 		m_GuiPipeline = m_PipelineStore.CreatePipeline(GraphicsPipelineSpecification{
-			.Shader = ShaderLoader::LoadShader("GuiPipeline", info.ShaderDirectory / "Gui.spv").value(),
+			.Shader = LoadEngineShader("GuiPipeline", info.ShaderDirectory / "Gui.spv"),
 			.VertexEntryPoint = "VertMain",
 			.FragmentEntryPoint = "FragMain",
 			.Blend = BlendMode::AlphaBlend,

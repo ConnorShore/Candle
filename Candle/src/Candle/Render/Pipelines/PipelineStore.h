@@ -18,6 +18,8 @@ namespace Candle {
 	class RenderDevice;
 	class BindlessTable;
 
+	// Threading: not synchronized. CreatePipeline runs on the main thread before the render thread starts, and the render
+	// thread only reads from then on (Thread::Start is the hand-off). Creating a pipeline after that races with those reads.
 	class PipelineStore
 	{
 	public:
