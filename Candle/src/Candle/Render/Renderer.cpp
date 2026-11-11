@@ -121,7 +121,7 @@ namespace Candle {
 		, m_TexturePool(texturePool)
 		, m_BindlessTable(bindlessTable)
 		, m_GPUAllocator(allocator)
-		, m_PipelineStore(renderDevice, bindlessTable)
+		, m_PipelineStore(renderDevice, bindlessTable, info.PipelineCacheDirectory)
 		, m_RenderToSwapChain(info.RenderToSwapChain)
 		, m_TargetFormat(info.TargetFormat)
 		, m_DepthFormat(FindDepthFormat(renderDevice))
@@ -171,6 +171,9 @@ namespace Candle {
 			.EntryPoint = "CompMain",
 			.DebugName = "Test Compute Pipeline"
 			});
+
+		// Save the pipeline cache to disk so that it can be loaded next time the engine is run
+		m_PipelineStore.SaveCache();
 	}
 
 	void Renderer::Render(const FramePacket& packet, FrameContext& frame, SwapChainImage& target)

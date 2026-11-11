@@ -103,7 +103,7 @@ CDL_TEST_CASE(BindlessTable, BindsAgainstTheGlobalPipelineLayout, Gpu)
 	LoggerFixture logs(LogLevel::Warn, kRenderChannelMask);
 	{
 		TestTextures gpu;
-		const PipelineStore store(gpu.Device, gpu.Bindless);
+		const TestPipelineStore store(gpu.Device, gpu.Bindless);
 		TestCommands commands(gpu.Device);
 
 		commands.Buffer.begin({ .flags = vk::CommandBufferUsageFlagBits::eOneTimeSubmit });
@@ -121,7 +121,7 @@ CDL_TEST_CASE(BindlessTable, WritingWhileBoundLeavesTheCommandBufferSubmittable,
 	LoggerFixture logs(LogLevel::Warn, kRenderChannelMask);
 	{
 		TestTextures gpu;
-		const PipelineStore store(gpu.Device, gpu.Bindless);
+		const TestPipelineStore store(gpu.Device, gpu.Bindless);
 		TestCommands commands(gpu.Device);
 
 		commands.Buffer.begin({ .flags = vk::CommandBufferUsageFlagBits::eOneTimeSubmit });

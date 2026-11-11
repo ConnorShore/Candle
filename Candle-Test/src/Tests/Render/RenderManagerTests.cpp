@@ -50,12 +50,13 @@ namespace {
 	struct TestRenderManager
 	{
 		explicit TestRenderManager(const RenderSpecification& spec = StrictRenderSpec())
-			: Manager(spec, ApplicationInfo{ .Name = "Candle-Test" }, kEngineAssetDir, AppWindow, Jobs) {}
+			: Manager(spec, ApplicationInfo{ .Name = "Candle-Test" }, kEngineAssetDir, SavedDir.Path(), AppWindow, Jobs) {}
 
 		WindowingBackend Backend;
 		Window AppWindow{ TestWindowSpec() };
 		JobSystem Jobs;	// Never started; RenderManager only reads its worker count
 		TempDirectory Files;
+		TempDirectory SavedDir;	// Outlives the RenderManager, whose pipeline store writes into it as it's destroyed
 		RenderManager Manager;
 		AssetManager Assets;	// After the RenderManager whose pools its handlers upload into
 		GPUTextureHandle DefaultTexture = RegisterHandlersAndLoadTexture();	// Before the render thread, as Application loads its assets
@@ -171,6 +172,28 @@ CDL_TEST_CASE(RenderManager, RendersFramesAndShutsDownCleanly, Gpu)
 
 		CDL_EXPECT_GE(after, before + kFrames - kFramePacketCount + 1);
 		CDL_EXPECT_LE(after, before + kFrames + 1);
+	}
+	ExpectNoVulkanDebugMessages(logs);
+}
+
+// The cache is per machine, so it goes under the saved directory rather than the engine's assets. It's on disk as soon as the
+// Renderer has built its pipelines, so a crash or a debugger stop later on still leaves it for the next run.
+CDL_TEST_CASE(RenderManager, SavesThePipelineCacheUnderTheSavedDirectoryOncePipelinesAreBuilt, Gpu)
+{
+	SkipUnlessRendererShadersCompiled();
+
+	LoggerFixture logs(LogLevel::Warn, kRenderChannelMask);
+	{
+		TestRenderManager test;
+
+		std::vector<std::filesystem::path> saved;
+		for (const std::filesystem::directory_entry& entry : std::filesystem::recursive_directory_iterator(test.SavedDir.Path()))
+			if (entry.is_regular_file())
+				saved.push_back(entry.path());
+
+		CDL_CHECK_MSG(saved.size() == 1, std::format("the saved directory holds {} files, expected the pipeline cache", saved.size()));
+		CDL_EXPECT_MSG(saved.front().parent_path() == test.SavedDir / "pipelines", std::format("the cache was saved as {}", saved.front().string()));
+		CDL_EXPECT_GT(std::filesystem::file_size(saved.front()), 0u);
 	}
 	ExpectNoVulkanDebugMessages(logs);
 }

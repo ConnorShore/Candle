@@ -158,6 +158,19 @@ namespace Candle::Test {
 		inline ~TestTextures() { Device.WaitIdle(); }
 	};
 
+	struct TestCacheDirectory
+	{
+		TempDirectory CacheDirectory;
+	};
+
+	// Caches to a directory of its own, removed with it, so tests neither share a cache nor leave one in the repo.
+	// The directory is the first base, so it outlives the store, which writes its cache out as it's destroyed.
+	struct TestPipelineStore : TestCacheDirectory, PipelineStore
+	{
+		TestPipelineStore(RenderDevice& device, BindlessTable& bindless)
+			: PipelineStore(device, bindless, CacheDirectory.Path()) {}
+	};
+
 	// The images every TexturePool holds from construction to destruction, one per DefaultTexture
 	inline constexpr uint32_t kDefaultTextureAllocations = static_cast<uint32_t>(DefaultTexture::Count);
 
@@ -476,7 +489,7 @@ namespace Candle::Test {
 		constexpr vk::Format kTargetFormat = vk::Format::eR8G8B8A8Unorm;	// UNORM, so the shader's result is stored unconverted
 		const vk::Extent2D extent{ static_cast<uint32_t>(probes.size()), 1 };
 
-		PipelineStore store(gpu.Device, gpu.Bindless);
+		TestPipelineStore store(gpu.Device, gpu.Bindless);
 		const SharedPtr<Shader> shader = LoadTestShader("BindlessFixture", kBindlessFixturePath);
 		std::vector<vk::Pipeline> pipelines;
 		for (uint32_t i = 0; i < pipelineCount; ++i)

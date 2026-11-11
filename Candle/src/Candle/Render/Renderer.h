@@ -33,8 +33,9 @@ namespace Candle {
 	{
 		vk::Format TargetFormat;
 		vk::Extent2D TargetExtent;
-		std::filesystem::path ShaderDirectory;	// Until shaders come through the asset system
-		bool RenderToSwapChain = true;			// If false, the scene renders into each packet's OutputTarget and only the GUI reaches the target
+		std::filesystem::path ShaderDirectory;			// Until shaders come through the asset system
+		std::filesystem::path PipelineCacheDirectory;	// Where to read/write the pipeline cache file	
+		bool RenderToSwapChain = true;					// If false, the scene renders into each packet's OutputTarget and only the GUI reaches the target
 	};
 
 	// Turns one packet into recorded GPU work. Knows nothing about threads, windows or presentation.

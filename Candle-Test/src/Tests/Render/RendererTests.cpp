@@ -87,6 +87,7 @@ namespace {
 	struct TestRenderer : TestTextures
 	{
 		GeometryPool Geometry{ Allocator, Uploader, Registry };
+		TempDirectory CacheDirectory;	// Before the renderer, whose pipeline store writes into it as it's destroyed
 		Renderer SceneRenderer;
 		FrameContext Frame = CreateFrameContext(*this);
 
@@ -95,6 +96,7 @@ namespace {
 				.TargetFormat = kTargetFormat,
 				.TargetExtent = extent,
 				.ShaderDirectory = kEngineShaderDirectory,
+				.PipelineCacheDirectory = CacheDirectory.Path(),
 				.RenderToSwapChain = renderTo == RenderTo::SwapChain }) {}
 		~TestRenderer() { Device.WaitIdle(); }
 

@@ -39,7 +39,8 @@ namespace Candle {
 	class RenderManager
 	{
 	public:
-		RenderManager(const RenderSpecification& renderSpec, const ApplicationInfo& appInfo, const std::filesystem::path& engineAssetDir, Window& window, JobSystem& jobSystem);
+		RenderManager(const RenderSpecification& renderSpec, const ApplicationInfo& appInfo, const std::filesystem::path& engineAssetDir,
+			const std::filesystem::path& savedDir, Window& window, JobSystem& jobSystem);
 		~RenderManager(); // Join render thread, wait for GPU idle (shutdown only), reverse teardown
 
 		void SpawnRenderThread();	// Spawns the render thread, which will run RenderThreadMain() until the application exits (called from the main thread on application startup)

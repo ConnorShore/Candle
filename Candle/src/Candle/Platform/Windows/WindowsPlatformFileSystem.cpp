@@ -91,6 +91,14 @@ namespace Candle {
 			return buffer;
 		}
 
+		bool DirectoryExists(const wchar_t* path) 
+		{
+			DWORD attributes = GetFileAttributesW(path);
+
+			// Check if the path is valid and corresponds to a directory
+			return (attributes != INVALID_FILE_ATTRIBUTES &&
+				(attributes & FILE_ATTRIBUTE_DIRECTORY));
+		}
 	}
 
 	std::expected<std::vector<std::byte>, FileError> Platform::ReadFile(const std::filesystem::path& path)
@@ -147,6 +155,29 @@ namespace Candle {
 
 		if (bytesWritten != static_cast<DWORD>(data.size()))
 			return std::unexpected(FileError{ FileErrorCode::IO, ERROR_WRITE_FAULT });
+
+		return {};
+	}
+
+	std::expected<void, FileError> Platform::CreateDirectories(const std::filesystem::path& path)
+	{
+		std::filesystem::path currPath = "";
+		for (const auto& curDir : path)
+		{
+			currPath = currPath / curDir;
+
+			LPCWSTR dir = currPath.c_str();
+			if (DirectoryExists(dir))
+				continue;
+
+			if (!::CreateDirectoryW(dir, NULL))
+			{
+				if (::GetLastError() == ERROR_ALREADY_EXISTS && DirectoryExists(dir))
+					continue;
+
+				return std::unexpected(LastFileError());
+			}
+		}
 
 		return {};
 	}

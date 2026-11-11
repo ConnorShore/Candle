@@ -35,7 +35,8 @@ namespace Candle {
 
 	}
 
-	RenderManager::RenderManager(const RenderSpecification& renderSpec, const ApplicationInfo& appInfo, const std::filesystem::path& engineAssetDir, Window& window, JobSystem& jobSystem)
+	RenderManager::RenderManager(const RenderSpecification& renderSpec, const ApplicationInfo& appInfo, const std::filesystem::path& engineAssetDir,
+		const std::filesystem::path& savedDir, Window& window, JobSystem& jobSystem)
 		: m_Specification(renderSpec)
 		, m_RenderInstance(CreateRenderInstanceSpec(renderSpec, appInfo))
 		, m_RenderDevice(m_RenderInstance, m_Specification)
@@ -49,6 +50,7 @@ namespace Candle {
 			.TargetFormat = m_SwapChain.GetSurfaceFormat().format,
 			.TargetExtent = m_SwapChain.GetExtent(),
 			.ShaderDirectory = engineAssetDir / "shaders/bin",
+			.PipelineCacheDirectory = savedDir / "pipelines",
 			.RenderToSwapChain = renderSpec.RenderToSwapChain })
 		, m_CommandPoolManager(m_RenderDevice, jobSystem.GetNumWorkers())
 		, m_RenderThread({

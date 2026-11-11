@@ -11,11 +11,15 @@
 #include <Candle/Render/Pipelines/PipelineStore.h>
 #include <Candle/Render/Vulkan/RenderDevice.h>
 
+#include <algorithm>
 #include <array>
 #include <cstddef>
+#include <cstdint>
+#include <cstring>
 #include <expected>
 #include <filesystem>
 #include <format>
+#include <span>
 #include <string>
 #include <string_view>
 #include <utility>
@@ -90,7 +94,7 @@ CDL_TEST_CASE(PipelineStore, GlobalLayoutTakesTheSetAndTheWholeRangeWithNoPipeli
 	{
 		TestDevice gpu;
 		BindlessTable bindless(gpu.Device);
-		const PipelineStore store(gpu.Device, bindless);
+		const TestPipelineStore store(gpu.Device, bindless);
 		CDL_CHECK(store.GetGlobalLayout());
 		TestCommands commands(gpu.Device);
 
@@ -114,7 +118,7 @@ CDL_TEST_CASE(PipelineStore, CreatesFromAShaderFollowingThePushConstantContract,
 	{
 		TestDevice gpu;
 		BindlessTable bindless(gpu.Device);
-		PipelineStore store(gpu.Device, bindless);
+		TestPipelineStore store(gpu.Device, bindless);
 		const GPUPipelineHandle handle = store.CreatePipeline(InteropFixtureSpec(LoadTestShader("ShaderInteropFixture", kInteropFixturePath)));
 
 		CDL_EXPECT(handle.IsValid());
@@ -133,7 +137,7 @@ CDL_TEST_CASE(PipelineStore, OnlyTheNamedEntryPointsBecomeStages, Gpu)
 	{
 		TestDevice gpu;
 		BindlessTable bindless(gpu.Device);
-		PipelineStore store(gpu.Device, bindless);
+		TestPipelineStore store(gpu.Device, bindless);
 		const SharedPtr<Shader> shader = LoadTestShader("ShaderLoaderFixture", kShaderLoaderFixturePath);
 		CDL_CHECK_MSG(shader->GetEntryPoints().size() > 2, "the fixture holds no entry points beyond the two named, so this can't tell");
 
@@ -156,7 +160,7 @@ CDL_TEST_CASE(PipelineStore, BuildsAVertexOnlyPipelineForDepthOnlyPasses, Gpu)
 	{
 		TestDevice gpu;
 		BindlessTable bindless(gpu.Device);
-		PipelineStore store(gpu.Device, bindless);
+		TestPipelineStore store(gpu.Device, bindless);
 
 		const GPUPipelineHandle handle = store.CreatePipeline(GraphicsPipelineSpecification{
 			.Shader = LoadTestShader("PipelineFixture", kFixturePath),
@@ -177,7 +181,7 @@ CDL_TEST_CASE(PipelineStore, CreatesForEachBlendModeWithoutValidationMessages, G
 	{
 		TestDevice gpu;
 		BindlessTable bindless(gpu.Device);
-		PipelineStore store(gpu.Device, bindless);
+		TestPipelineStore store(gpu.Device, bindless);
 		SharedPtr<Shader> shader = LoadTestShader("PipelineFixture", kFixturePath);
 
 		for (BlendMode blend : { BlendMode::Opaque, BlendMode::AlphaBlend, BlendMode::PremultipliedAlpha, BlendMode::Additive })
@@ -208,7 +212,7 @@ CDL_TEST_CASE(PipelineStore, EachHandleKeepsResolvingToItsOwnPipeline, Gpu)
 	{
 		TestDevice gpu;
 		BindlessTable bindless(gpu.Device);
-		PipelineStore store(gpu.Device, bindless);
+		TestPipelineStore store(gpu.Device, bindless);
 		const SharedPtr<Shader> plain = LoadTestShader("PipelineFixture", kFixturePath);
 		const SharedPtr<Shader> interop = LoadTestShader("ShaderInteropFixture", kInteropFixturePath);
 
@@ -241,7 +245,7 @@ CDL_TEST_CASE(PipelineStore, HandlesItNeverGaveOutResolveToNull, Gpu)
 	{
 		TestDevice gpu;
 		BindlessTable bindless(gpu.Device);
-		PipelineStore store(gpu.Device, bindless);
+		TestPipelineStore store(gpu.Device, bindless);
 
 		CDL_EXPECT_FALSE(store.TryGetPipeline(GPUPipelineHandle{ .Index = 0 }));
 
@@ -262,7 +266,7 @@ CDL_TEST_CASE(PipelineStore, CreatesAComputePipelineFromTheNamedEntryPoint, Gpu)
 	{
 		TestDevice gpu;
 		BindlessTable bindless(gpu.Device);
-		PipelineStore store(gpu.Device, bindless);
+		TestPipelineStore store(gpu.Device, bindless);
 
 		const GPUPipelineHandle handle = store.CreatePipeline(PipelineFixtureComputeSpec(LoadTestShader("PipelineFixture", kFixturePath)));
 		CDL_EXPECT(handle.IsValid());
@@ -281,7 +285,7 @@ CDL_TEST_CASE(PipelineStore, GetEntryPointReturnsTheComputeEntryPointWithItsGrou
 	{
 		TestDevice gpu;
 		BindlessTable bindless(gpu.Device);
-		PipelineStore store(gpu.Device, bindless);
+		TestPipelineStore store(gpu.Device, bindless);
 		const GPUPipelineHandle handle = store.CreatePipeline(PipelineFixtureComputeSpec(LoadTestShader("PipelineFixture", kFixturePath)));
 		CDL_CHECK(store.TryGetPipeline(handle));
 
@@ -303,7 +307,7 @@ CDL_TEST_CASE(PipelineStore, GetEntryPointReturnsEachStageOfAGraphicsPipeline, G
 	{
 		TestDevice gpu;
 		BindlessTable bindless(gpu.Device);
-		PipelineStore store(gpu.Device, bindless);
+		TestPipelineStore store(gpu.Device, bindless);
 		const GPUPipelineHandle handle = store.CreatePipeline(PipelineFixtureSpec(LoadTestShader("PipelineFixture", kFixturePath)));
 		CDL_CHECK(store.TryGetPipeline(handle));
 
@@ -330,7 +334,7 @@ CDL_TEST_CASE(PipelineStore, GetEntryPointFailsForHandlesItNeverGaveOut, Gpu)
 	{
 		TestDevice gpu;
 		BindlessTable bindless(gpu.Device);
-		PipelineStore store(gpu.Device, bindless);
+		TestPipelineStore store(gpu.Device, bindless);
 
 		CDL_EXPECT_FALSE(store.GetEntryPoint(GPUPipelineHandle{ .Index = 0 }, ShaderStage::Compute).has_value());
 
@@ -419,7 +423,7 @@ namespace {
 	{
 		TestDevice gpu;
 		BindlessTable bindless(gpu.Device);
-		PipelineStore store(gpu.Device, bindless);
+		TestPipelineStore store(gpu.Device, bindless);
 		const SharedPtr<Shader> shader = LoadTestShader("PipelineFixture", kFixturePath);
 		const GPUPipelineHandle built = store.CreatePipeline(PipelineFixtureSpec(shader));
 		const vk::Pipeline builtPipeline = store.TryGetPipeline(built);
@@ -507,11 +511,221 @@ CDL_TEST_CASE(PipelineStore, RejectsASpecWithNoShader, Gpu)
 	{
 		TestDevice gpu;
 		BindlessTable bindless(gpu.Device);
-		PipelineStore store(gpu.Device, bindless);
+		TestPipelineStore store(gpu.Device, bindless);
 
 		CDL_EXPECT_FALSE(store.CreatePipeline(GraphicsPipelineSpecification{}).IsValid());
 		CDL_EXPECT_FALSE(store.CreatePipeline(ComputePipelineSpecification{}).IsValid());
 		CDL_EXPECT_EQ(PipelineErrors(logs).size(), 2u);
+	}
+	ExpectNoVulkanDebugMessages(logs);
+}
+
+namespace {
+
+	// The store names its own file, so a test finds it as the one file in the directory the store was given
+	std::filesystem::path SavedCachePath(const std::filesystem::path& dir)
+	{
+		std::vector<std::filesystem::path> files;
+		for (const std::filesystem::directory_entry& entry : std::filesystem::directory_iterator(dir))
+			files.push_back(entry.path());
+		CDL_CHECK_MSG(files.size() == 1, std::format("the cache directory holds {} files, expected the store's one", files.size()));
+		return files.front();
+	}
+
+	std::vector<std::byte> ReadSavedCache(const std::filesystem::path& dir)
+	{
+		const std::filesystem::path path = SavedCachePath(dir);
+		auto cache = Platform::ReadFile(path);
+		CDL_CHECK_MSG(cache.has_value(), std::format("couldn't read {}", path.string()));
+		return std::move(*cache);
+	}
+
+	// Every cache starts with this, naming the device and driver that wrote it, which the driver checks before taking the rest
+	vk::PipelineCacheHeaderVersionOne ReadCacheHeader(std::span<const std::byte> cache)
+	{
+		vk::PipelineCacheHeaderVersionOne header{};
+		CDL_CHECK_MSG(cache.size() >= sizeof(header), std::format("the cache is {} bytes, too short for its header", cache.size()));
+		std::memcpy(&header, cache.data(), sizeof(header));
+		return header;
+	}
+
+	void ExpectCacheIsForDevice(RenderDevice& device, std::span<const std::byte> cache)
+	{
+		const vk::PipelineCacheHeaderVersionOne header = ReadCacheHeader(cache);
+		const vk::PhysicalDeviceProperties properties = device.GetPhysicalDevice().getProperties();
+		CDL_EXPECT_GE(header.headerSize, sizeof(header));
+		CDL_EXPECT_EQ(header.headerVersion, vk::PipelineCacheHeaderVersion::eOne);
+		CDL_EXPECT_EQ(header.vendorID, properties.vendorID);
+		CDL_EXPECT_EQ(header.deviceID, properties.deviceID);
+		CDL_EXPECT_MSG(std::ranges::equal(header.pipelineCacheUUID, properties.pipelineCacheUUID), "the cache was written for another driver");
+	}
+
+}
+
+// The cache only reaches disk as the store goes, and the file must be the driver's data untouched, header first
+CDL_TEST_CASE(PipelineStore, WritesThisDevicesCacheIntoItsDirectoryWhenDestroyed, Gpu)
+{
+	SkipUnlessCompiled(kFixturePath);
+
+	LoggerFixture logs(LogLevel::Warn, kRenderChannelMask);
+	{
+		TestDevice gpu;
+		BindlessTable bindless(gpu.Device);
+		const TempDirectory cacheDirectory;
+		{
+			PipelineStore store(gpu.Device, bindless, cacheDirectory.Path());
+			const SharedPtr<Shader> shader = LoadTestShader("PipelineFixture", kFixturePath);
+			CDL_CHECK(store.TryGetPipeline(store.CreatePipeline(PipelineFixtureSpec(shader))));
+			CDL_CHECK(store.TryGetPipeline(store.CreatePipeline(PipelineFixtureComputeSpec(shader))));
+		}
+		ExpectCacheIsForDevice(gpu.Device, ReadSavedCache(cacheDirectory.Path()));
+	}
+	ExpectNoVulkanDebugMessages(logs);
+}
+
+// The Renderer saves once its pipelines are built, so a crash or a debugger stop afterwards still leaves the cache on disk
+CDL_TEST_CASE(PipelineStore, SaveCacheWritesTheCacheBeforeTheStoreGoes, Gpu)
+{
+	SkipUnlessCompiled(kFixturePath);
+
+	LoggerFixture logs(LogLevel::Warn, kRenderChannelMask);
+	{
+		TestDevice gpu;
+		BindlessTable bindless(gpu.Device);
+		const TempDirectory cacheDirectory;
+		PipelineStore store(gpu.Device, bindless, cacheDirectory.Path());
+		CDL_CHECK(store.TryGetPipeline(store.CreatePipeline(PipelineFixtureSpec(LoadTestShader("PipelineFixture", kFixturePath)))));
+
+		store.SaveCache();
+		ExpectCacheIsForDevice(gpu.Device, ReadSavedCache(cacheDirectory.Path()));
+		CDL_EXPECT_EQ(PipelineErrors(logs).size(), 0u);
+	}
+	ExpectNoVulkanDebugMessages(logs);
+}
+
+// A fresh build has no saved directory, let alone a cache directory in it. The store makes it rather than lose the cache.
+CDL_TEST_CASE(PipelineStore, CreatesItsCacheDirectoryWhenItIsMissing, Gpu)
+{
+	SkipUnlessCompiled(kFixturePath);
+
+	LoggerFixture logs(LogLevel::Warn, kRenderChannelMask);
+	{
+		TestDevice gpu;
+		BindlessTable bindless(gpu.Device);
+		const TempDirectory root;
+		const std::filesystem::path cacheDirectory = root / "pipelines" / "bin";
+		{
+			PipelineStore store(gpu.Device, bindless, cacheDirectory);
+			CDL_CHECK(store.TryGetPipeline(store.CreatePipeline(PipelineFixtureSpec(LoadTestShader("PipelineFixture", kFixturePath)))));
+		}
+		CDL_EXPECT_EQ(PipelineErrors(logs).size(), 0u);
+		ExpectCacheIsForDevice(gpu.Device, ReadSavedCache(cacheDirectory));
+	}
+	ExpectNoVulkanDebugMessages(logs);
+}
+
+// A store that builds nothing writes back only what it loaded, so its cache outgrowing one from a store that started with
+// nothing shows it took up what the last store left. The store doesn't report cache hits, so size is the tell. Some drivers
+// keep their own cache and leave the application's one empty, which leaves nothing to tell by.
+CDL_TEST_CASE(PipelineStore, StartsFromTheCacheTheLastStoreWrote, Gpu)
+{
+	SkipUnlessCompiled(kFixturePath);
+	SkipUnlessCompiled(kInteropFixturePath);
+
+	LoggerFixture logs(LogLevel::Warn, kRenderChannelMask);
+	{
+		TestDevice gpu;
+		BindlessTable bindless(gpu.Device);
+		const TempDirectory reused;
+		const TempDirectory fresh;
+		{
+			PipelineStore first(gpu.Device, bindless, reused.Path());
+			CDL_CHECK(first.TryGetPipeline(first.CreatePipeline(PipelineFixtureSpec(LoadTestShader("PipelineFixture", kFixturePath)))));
+			CDL_CHECK(first.TryGetPipeline(first.CreatePipeline(InteropFixtureSpec(LoadTestShader("ShaderInteropFixture", kInteropFixturePath)))));
+		}
+		{
+			const PipelineStore unseeded(gpu.Device, bindless, fresh.Path());
+		}
+
+		const size_t builtSize = ReadSavedCache(reused.Path()).size();
+		const size_t emptySize = ReadSavedCache(fresh.Path()).size();
+		if (builtSize <= emptySize)
+			CDL_SKIP(std::format("the driver kept nothing of two built pipelines in the application's cache ({} bytes, {} with none)", builtSize, emptySize));
+
+		{
+			const PipelineStore second(gpu.Device, bindless, reused.Path());
+		}
+
+		const size_t reloadedSize = ReadSavedCache(reused.Path()).size();
+		CDL_EXPECT_MSG(reloadedSize > emptySize,
+			std::format("the reloaded cache wrote back {} bytes, no more than the {} of one that loaded nothing", reloadedSize, emptySize));
+	}
+	ExpectNoVulkanDebugMessages(logs);
+}
+
+// A driver update or a switch to the other GPU leaves a cache the driver won't take. The store must still build over it, and
+// write one this device takes in its place, or every run after starts cold.
+CDL_TEST_CASE(PipelineStore, BuildsOverACacheFromAnotherDriverAndReplacesIt, Gpu)
+{
+	SkipUnlessCompiled(kFixturePath);
+
+	LoggerFixture logs(LogLevel::Warn, kRenderChannelMask);
+	{
+		TestDevice gpu;
+		BindlessTable bindless(gpu.Device);
+		const TempDirectory cacheDirectory;
+		const SharedPtr<Shader> shader = LoadTestShader("PipelineFixture", kFixturePath);
+		{
+			PipelineStore store(gpu.Device, bindless, cacheDirectory.Path());
+			CDL_CHECK(store.TryGetPipeline(store.CreatePipeline(PipelineFixtureSpec(shader))));
+		}
+
+		// A new driver reports a new UUID, so this is the cache as the old one left it
+		std::vector<std::byte> cache = ReadSavedCache(cacheDirectory.Path());
+		vk::PipelineCacheHeaderVersionOne header = ReadCacheHeader(cache);
+		for (uint8_t& byte : header.pipelineCacheUUID)
+			byte = static_cast<uint8_t>(~byte);
+		std::memcpy(cache.data(), &header, sizeof(header));
+		CDL_CHECK(Platform::WriteFile(SavedCachePath(cacheDirectory.Path()), cache).has_value());
+
+		{
+			PipelineStore store(gpu.Device, bindless, cacheDirectory.Path());
+			CDL_EXPECT(store.TryGetPipeline(store.CreatePipeline(PipelineFixtureSpec(shader))));
+		}
+		ExpectCacheIsForDevice(gpu.Device, ReadSavedCache(cacheDirectory.Path()));
+	}
+	ExpectNoVulkanDebugMessages(logs);
+}
+
+// A file where the cache directory should be stops the write. The store is going by the time it finds out, so all it can do is
+// log it, and it mustn't touch the file in the way.
+CDL_TEST_CASE(PipelineStore, LogsACacheItCannotWriteAndLeavesWhatIsInTheWay, Gpu)
+{
+	SkipUnlessCompiled(kFixturePath);
+
+	LoggerFixture logs(LogLevel::Warn, kRenderChannelMask);
+	{
+		TestDevice gpu;
+		BindlessTable bindless(gpu.Device);
+		const TempDirectory root;
+		const std::filesystem::path inTheWay = root / "pipelines";
+		const std::vector<std::byte> inTheWayBytes = BytePattern(16, 0x5A);
+		CDL_CHECK(Platform::WriteFile(inTheWay, inTheWayBytes).has_value());
+
+		size_t errorsBeforeSave = 0;
+		{
+			PipelineStore store(gpu.Device, bindless, inTheWay);
+			CDL_CHECK(store.TryGetPipeline(store.CreatePipeline(PipelineFixtureSpec(LoadTestShader("PipelineFixture", kFixturePath)))));
+			errorsBeforeSave = PipelineErrors(logs).size();
+		}
+
+		const std::vector<std::string> errors = PipelineErrors(logs);
+		CDL_CHECK_EQ(errors.size(), errorsBeforeSave + 1);
+		CDL_EXPECT_MSG(errors.back().contains(inTheWay.string()), std::format("'{}' doesn't name {}", errors.back(), inTheWay.string()));
+
+		const auto left = Platform::ReadFile(inTheWay);
+		CDL_CHECK(left.has_value());
+		CDL_EXPECT_MSG(*left == inTheWayBytes, "the store changed the file where its cache directory should be");
 	}
 	ExpectNoVulkanDebugMessages(logs);
 }

@@ -1,5 +1,5 @@
-// Platform's file calls: byte-exact round trips, the text read's byte-order-mark handling, error codes a caller
-// can branch on, and concurrent use. Sharing violations need a raw OS handle, so they live under Platform/Windows.
+// Platform's file calls: byte-exact round trips, the text read's byte-order-mark handling, directory creation, error codes
+// a caller can branch on, and concurrent use. Sharing violations need a raw OS handle, so they live under Platform/Windows.
 
 #include "TestFramework.h"
 #include "TestHelpers.h"
@@ -195,6 +195,67 @@ CDL_TEST_CASE(FileSystem, DirectoryIsAccessDenied, Unit)
 	CDL_EXPECT_EQ(written.error().Code, FileErrorCode::AccessDenied);
 }
 
+// WriteFile never makes parent directories, so this is what a caller runs first when the tree may not be there yet.
+CDL_TEST_CASE(FileSystem, CreateDirectoriesMakesEveryMissingLevel, Unit)
+{
+	TempDirectory dir;
+	const std::filesystem::path deepest = dir / "one" / "two" / "three";
+
+	CDL_CHECK(Platform::CreateDirectories(deepest).has_value());
+	CDL_EXPECT(std::filesystem::is_directory(dir / "one"));
+	CDL_EXPECT(std::filesystem::is_directory(dir / "one" / "two"));
+	CDL_EXPECT(std::filesystem::is_directory(deepest));
+	CDL_EXPECT(Platform::WriteFile(deepest / "file.bin", Pattern(8, 7)).has_value());
+}
+
+// Callers run it before every save, so a tree that's already there, whole or in part, must succeed and keep what it holds.
+CDL_TEST_CASE(FileSystem, CreateDirectoriesSucceedsOverATreeThatIsAlreadyThere, Unit)
+{
+	TempDirectory dir;
+	CDL_CHECK(Platform::CreateDirectories(dir / "kept").has_value());
+	CDL_CHECK(Platform::WriteFile(dir / "kept" / "file.bin", Pattern(64, 8)).has_value());
+
+	CDL_EXPECT(Platform::CreateDirectories(dir.Path()).has_value());
+	CDL_EXPECT(Platform::CreateDirectories(dir / "kept").has_value());
+	CDL_EXPECT(Platform::CreateDirectories(dir / "kept" / "new").has_value());
+	CDL_EXPECT(std::filesystem::is_directory(dir / "kept" / "new"));
+
+	const auto read = Platform::ReadFile(dir / "kept" / "file.bin");
+	CDL_CHECK(read.has_value());
+	CDL_EXPECT(*read == Pattern(64, 8));
+}
+
+// A bare file name's parent is empty, meaning the working directory, which is always there.
+CDL_TEST_CASE(FileSystem, CreateDirectoriesOfAnEmptyPathSucceeds, Unit)
+{
+	CDL_EXPECT(Platform::CreateDirectories(std::filesystem::path("file.bin").parent_path()).has_value());
+}
+
+// A file can't become a directory, and must neither pass for one nor be replaced by one.
+CDL_TEST_CASE(FileSystem, CreateDirectoriesFailsWhereAFileIsInTheWay, Unit)
+{
+	TempDirectory dir;
+	const std::filesystem::path file = dir / "file.bin";
+	CDL_CHECK(Platform::WriteFile(file, Pattern(32, 9)).has_value());
+
+	CDL_EXPECT_FALSE(Platform::CreateDirectories(file).has_value());
+	CDL_EXPECT_FALSE(Platform::CreateDirectories(file / "below").has_value());
+
+	const auto read = Platform::ReadFile(file);
+	CDL_CHECK(read.has_value());
+	CDL_EXPECT(*read == Pattern(32, 9));
+}
+
+// As for files, this fails if a narrow-string API sneaks into the path handling.
+CDL_TEST_CASE(FileSystem, CreateDirectoriesHandlesPathsOutsideTheAnsiCodePage, Unit)
+{
+	TempDirectory dir;
+	const std::filesystem::path deepest = dir / L"папка" / L"フォルダ";
+
+	CDL_CHECK(Platform::CreateDirectories(deepest).has_value());
+	CDL_EXPECT(std::filesystem::is_directory(deepest));
+}
+
 CDL_TEST_CASE(FileSystem, ToStringNamesEveryCode, Unit)
 {
 	CDL_EXPECT_EQ(std::string_view(ToString(FileErrorCode::NotFound)), "NotFound"sv);
@@ -253,6 +314,29 @@ CDL_TEST_CASE(FileSystem, ConcurrentWritersToSeparateFilesDoNotInterfere, Stress
 				++failures[thread];
 		}
 	});
+
+	for (int thread = 0; thread < threadCount; ++thread)
+		CDL_EXPECT_EQ(failures[thread], 0);
+}
+
+// Two callers making one missing tree race: one finds a level missing, the other makes it, and the first's create then fails
+// because it's there. Each round starts every thread together on a fresh tree, so the race keeps coming up.
+CDL_TEST_CASE(FileSystem, ConcurrentCreatorsOfOneTreeAllSucceed, Stress)
+{
+	TempDirectory dir;
+	constexpr int kRounds = 25;
+	const int threadCount = StressThreadCount();
+	std::vector<int> failures(threadCount, 0);
+
+	for (int round = 0; round < kRounds; ++round)
+	{
+		const std::filesystem::path deepest = dir / std::format("round-{}", round) / "one" / "two";
+		RunConcurrently(threadCount, [&](int thread) {
+			if (!Platform::CreateDirectories(deepest))
+				++failures[thread];
+		});
+		CDL_EXPECT(std::filesystem::is_directory(deepest));
+	}
 
 	for (int thread = 0; thread < threadCount; ++thread)
 		CDL_EXPECT_EQ(failures[thread], 0);
