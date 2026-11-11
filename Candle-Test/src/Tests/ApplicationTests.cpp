@@ -128,8 +128,9 @@ CDL_TEST_CASE(Application, HeadlessNeverStartsWindowing, Unit)
 	RestoreLoggerDefaults();
 }
 
-// Anchored to the executable, so the app finds its assets from any working directory; an absolute path is used as given.
-CDL_TEST_CASE(Application, AssetDirectoriesResolveAgainstTheExecutableUnlessAbsolute, Unit)
+// Anchored to the executable, so the app finds its assets and what it saved from any working directory; an absolute path is
+// used as given.
+CDL_TEST_CASE(Application, DirectoriesResolveAgainstTheExecutableUnlessAbsolute, Unit)
 {
 	const std::filesystem::path exeDir = Platform::GetExecutableDirectory();
 	const std::filesystem::path absolute = exeDir.root_path() / "ProjectAssets";
@@ -137,10 +138,12 @@ CDL_TEST_CASE(Application, AssetDirectoriesResolveAgainstTheExecutableUnlessAbso
 		ApplicationSpecification spec = QuietSpec();
 		spec.EngineAssetDir = "EngineAssets";
 		spec.ProjectAssetDir = absolute;
+		spec.SavedDir = "SavedFiles";
 
 		TestApplication app(spec);
 		CDL_EXPECT(app.GetSpecification().EngineAssetDir == exeDir / "EngineAssets");
 		CDL_EXPECT(app.GetSpecification().ProjectAssetDir == absolute);
+		CDL_EXPECT(app.GetSpecification().SavedDir == exeDir / "SavedFiles");
 	}
 	RestoreLoggerDefaults();
 }

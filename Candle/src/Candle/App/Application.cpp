@@ -20,13 +20,15 @@ namespace Candle {
 	namespace {
 
 		// Resolved once, so nothing downstream depends on the working directory
-		ApplicationSpecification ResolveAssetDirectories(ApplicationSpecification spec)
+		ApplicationSpecification ResolveDirectories(ApplicationSpecification spec)
 		{
 			const std::filesystem::path exeDir = Platform::GetExecutableDirectory();
 			if (spec.EngineAssetDir.is_relative())
 				spec.EngineAssetDir = exeDir / spec.EngineAssetDir;
 			if (spec.ProjectAssetDir.is_relative())
 				spec.ProjectAssetDir = exeDir / spec.ProjectAssetDir;
+			if (spec.SavedDir.is_relative())
+				spec.SavedDir = exeDir / spec.SavedDir;
 			return spec;
 		}
 
@@ -55,13 +57,13 @@ namespace Candle {
 	Application::WindowingScope::~WindowingScope() { if (Enabled) Platform::ShutdownWindowing(); }
 
 	Application::Application(const ApplicationSpecification& appSpecs)
-		: m_Specification(ResolveAssetDirectories(appSpecs))
+		: m_Specification(ResolveDirectories(appSpecs))
 		, m_LoggerScope(m_Specification.LoggerSpec)
 		, m_WindowingScope(!m_Specification.Headless)
 		, m_Window(m_Specification.Headless ? ScopedPtr<Window>() : ScopedPtr<Window>::Create(m_Specification.WindowSpec))
 		, m_ConsoleManager()
 		, m_DebugDrawManager(m_ConsoleManager)
-		, m_RenderManager(m_Specification.Headless ? ScopedPtr<RenderManager>() : ScopedPtr<RenderManager>::Create(m_Specification.RenderSpec, m_Specification.AppInfo, m_Specification.EngineAssetDir, *m_Window, m_JobSystem))
+		, m_RenderManager(m_Specification.Headless ? ScopedPtr<RenderManager>() : ScopedPtr<RenderManager>::Create(m_Specification.RenderSpec, m_Specification.AppInfo, m_Specification.EngineAssetDir, m_Specification.SavedDir, *m_Window, m_JobSystem))
 		, m_GuiSystem(m_Specification.Headless ? ScopedPtr<GuiSystem>() : ScopedPtr<GuiSystem>::Create(*m_Window, m_RenderManager->GetTexturePool()))
 		, m_DebugUIManager(m_Specification.Headless ? ScopedPtr<DebugUIManager>() : ScopedPtr<DebugUIManager>::Create(m_ConsoleManager, *m_LoggerScope.MainThreadSink, m_RenderManager->GetTexturePool()))
 		, m_RenderContext(m_RenderManager.Get(), m_Specification.RenderSpec.RenderToSwapChain, { m_Specification.WindowSpec.Width, m_Specification.WindowSpec.Height })

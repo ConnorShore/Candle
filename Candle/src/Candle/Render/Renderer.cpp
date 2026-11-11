@@ -171,6 +171,9 @@ namespace Candle {
 			.EntryPoint = "CompMain",
 			.DebugName = "Test Compute Pipeline"
 			});
+
+		// Save the pipeline cache to disk so that it can be loaded next time the engine is run
+		m_PipelineStore.SaveCache();
 	}
 
 	void Renderer::Render(const FramePacket& packet, FrameContext& frame, SwapChainImage& target)

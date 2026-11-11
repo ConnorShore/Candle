@@ -175,33 +175,7 @@ namespace Candle {
 	{
 		// Write out the pipeline cache to disk if it has been populated
 		if (m_PipelineCache != nullptr)
-		{
-			auto data = m_PipelineCache.getData();
-			if (!data.empty())
-			{
-				// Convert uint8_t vector to std::byte vector for writing
-				std::vector<std::byte> dataBytes(data.size());
-				dataBytes.assign(reinterpret_cast<const std::byte*>(data.data()), reinterpret_cast<const std::byte*>(data.data()) + data.size());
-
-				auto result = Platform::CreateDirectories(m_PipelineCacheFile.parent_path());
-				if (!result)
-				{
-					CDL_CORE_ERROR(LogChannel::Render, "Failed to create directories for pipeline cache file '{}': {} (OS error {})",
-						m_PipelineCacheFile.string(), ToString(result.error().Code), result.error().OSError);
-					return;
-				}
-
-				result = Platform::WriteFile(m_PipelineCacheFile, dataBytes);
-				if (!result)
-				{
-					CDL_CORE_ERROR(LogChannel::Render, "Failed to write pipeline cache to '{}': {} (OS error {})",
-						m_PipelineCacheFile.string(), ToString(result.error().Code), result.error().OSError);
-					return;
-				}
-
-				CDL_CORE_INFO(LogChannel::Render, "Pipeline cache successfully written to '{}', size {} bytes", m_PipelineCacheFile.string(), data.size());
-			}
-		}
+			SaveCache();
 	}
 
 	GPUPipelineHandle PipelineStore::CreatePipeline(PipelineSpecification spec)
@@ -229,6 +203,41 @@ namespace Candle {
 			return nullptr;
 
 		return m_Pipelines[handle.Index].Pipeline;
+	}
+
+	void PipelineStore::SaveCache()
+	{
+		if (m_PipelineCache == nullptr)
+		{
+			CDL_CORE_WARN(LogChannel::Render, "Pipeline cache is not initialized; cannot save cache");
+			return;
+		}
+
+		auto data = m_PipelineCache.getData();
+		if (!data.empty())
+		{
+			// Convert uint8_t vector to std::byte vector for writing
+			std::vector<std::byte> dataBytes(data.size());
+			dataBytes.assign(reinterpret_cast<const std::byte*>(data.data()), reinterpret_cast<const std::byte*>(data.data()) + data.size());
+
+			auto result = Platform::CreateDirectories(m_PipelineCacheFile.parent_path());
+			if (!result)
+			{
+				CDL_CORE_ERROR(LogChannel::Render, "Failed to create directories for pipeline cache file '{}': {} (OS error {})",
+					m_PipelineCacheFile.string(), ToString(result.error().Code), result.error().OSError);
+				return;
+			}
+
+			result = Platform::WriteFile(m_PipelineCacheFile, dataBytes);
+			if (!result)
+			{
+				CDL_CORE_ERROR(LogChannel::Render, "Failed to write pipeline cache to '{}': {} (OS error {})",
+					m_PipelineCacheFile.string(), ToString(result.error().Code), result.error().OSError);
+				return;
+			}
+
+			CDL_CORE_INFO(LogChannel::Render, "Pipeline cache successfully written to '{}', size {} bytes", m_PipelineCacheFile.string(), data.size());
+		}
 	}
 
 	std::expected<ShaderEntryPoint, std::string> PipelineStore::GetEntryPoint(GPUPipelineHandle handle, ShaderStage stage) const
@@ -453,17 +462,23 @@ namespace Candle {
 		std::vector<std::byte> data;
 
 		auto result = Platform::ReadFile(m_PipelineCacheFile);
-		if (!result)
-			CDL_CORE_WARN(LogChannel::Render, "Failed to read pipeline cache file '{}': {} (OS error {})",
-				kPipelineCacheFileName, ToString(result.error().Code), result.error().OSError);
-		else
+		if (!result && result.error().Code != FileErrorCode::NotFound)	// Ignore not found, as it just means the cache doesn't exist yet
+		{
+			CDL_CORE_ERROR(LogChannel::Render, "Failed to read pipeline cache file '{}': {} (OS error {})",
+				m_PipelineCacheFile.string(), ToString(result.error().Code), result.error().OSError);
+		}
+		else if (result)
+		{
 			data = std::move(*result);
+			CDL_CORE_INFO(LogChannel::Render, "Pipeline cache loaded from file '{}', size {} bytes", m_PipelineCacheFile.string(), data.size());
+		}
 
 		vk::PipelineCacheCreateInfo pipelineCacheInfo{
 			.initialDataSize = data.size(),
 			.pInitialData = data.data()
 		};
 		m_PipelineCache = vk::raii::PipelineCache{ m_RenderDevice.GetDevice(), pipelineCacheInfo };
+		m_RenderDevice.SetDebugName(*m_PipelineCache, "Pipeline Cache");
 		CDL_CORE_INFO(LogChannel::Render, "Pipeline cache initialized from file '{}', size {} bytes", kPipelineCacheFileName, data.size());
 	}
 

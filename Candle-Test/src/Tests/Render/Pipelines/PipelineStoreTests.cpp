@@ -583,7 +583,27 @@ CDL_TEST_CASE(PipelineStore, WritesThisDevicesCacheIntoItsDirectoryWhenDestroyed
 	ExpectNoVulkanDebugMessages(logs);
 }
 
-// The default cache directory is ignored by git, so a fresh clone doesn't have it. The store makes it rather than lose the cache.
+// The Renderer saves once its pipelines are built, so a crash or a debugger stop afterwards still leaves the cache on disk
+CDL_TEST_CASE(PipelineStore, SaveCacheWritesTheCacheBeforeTheStoreGoes, Gpu)
+{
+	SkipUnlessCompiled(kFixturePath);
+
+	LoggerFixture logs(LogLevel::Warn, kRenderChannelMask);
+	{
+		TestDevice gpu;
+		BindlessTable bindless(gpu.Device);
+		const TempDirectory cacheDirectory;
+		PipelineStore store(gpu.Device, bindless, cacheDirectory.Path());
+		CDL_CHECK(store.TryGetPipeline(store.CreatePipeline(PipelineFixtureSpec(LoadTestShader("PipelineFixture", kFixturePath)))));
+
+		store.SaveCache();
+		ExpectCacheIsForDevice(gpu.Device, ReadSavedCache(cacheDirectory.Path()));
+		CDL_EXPECT_EQ(PipelineErrors(logs).size(), 0u);
+	}
+	ExpectNoVulkanDebugMessages(logs);
+}
+
+// A fresh build has no saved directory, let alone a cache directory in it. The store makes it rather than lose the cache.
 CDL_TEST_CASE(PipelineStore, CreatesItsCacheDirectoryWhenItIsMissing, Gpu)
 {
 	SkipUnlessCompiled(kFixturePath);
@@ -605,7 +625,8 @@ CDL_TEST_CASE(PipelineStore, CreatesItsCacheDirectoryWhenItIsMissing, Gpu)
 }
 
 // A store that builds nothing writes back only what it loaded, so its cache outgrowing one from a store that started with
-// nothing shows it took up what the last store left. The store doesn't report cache hits, so size is the tell.
+// nothing shows it took up what the last store left. The store doesn't report cache hits, so size is the tell. Some drivers
+// keep their own cache and leave the application's one empty, which leaves nothing to tell by.
 CDL_TEST_CASE(PipelineStore, StartsFromTheCacheTheLastStoreWrote, Gpu)
 {
 	SkipUnlessCompiled(kFixturePath);
@@ -623,14 +644,19 @@ CDL_TEST_CASE(PipelineStore, StartsFromTheCacheTheLastStoreWrote, Gpu)
 			CDL_CHECK(first.TryGetPipeline(first.CreatePipeline(InteropFixtureSpec(LoadTestShader("ShaderInteropFixture", kInteropFixturePath)))));
 		}
 		{
-			const PipelineStore second(gpu.Device, bindless, reused.Path());
-		}
-		{
 			const PipelineStore unseeded(gpu.Device, bindless, fresh.Path());
 		}
 
-		const size_t reloadedSize = ReadSavedCache(reused.Path()).size();
+		const size_t builtSize = ReadSavedCache(reused.Path()).size();
 		const size_t emptySize = ReadSavedCache(fresh.Path()).size();
+		if (builtSize <= emptySize)
+			CDL_SKIP(std::format("the driver kept nothing of two built pipelines in the application's cache ({} bytes, {} with none)", builtSize, emptySize));
+
+		{
+			const PipelineStore second(gpu.Device, bindless, reused.Path());
+		}
+
+		const size_t reloadedSize = ReadSavedCache(reused.Path()).size();
 		CDL_EXPECT_MSG(reloadedSize > emptySize,
 			std::format("the reloaded cache wrote back {} bytes, no more than the {} of one that loaded nothing", reloadedSize, emptySize));
 	}
@@ -671,8 +697,9 @@ CDL_TEST_CASE(PipelineStore, BuildsOverACacheFromAnotherDriverAndReplacesIt, Gpu
 	ExpectNoVulkanDebugMessages(logs);
 }
 
-// A pipeline doesn't hold on to the cache it was built through, so replacing the cache leaves the built ones as they were
-CDL_TEST_CASE(PipelineStore, RecreatingTheCacheLeavesBuiltPipelinesInPlace, Gpu)
+// A file where the cache directory should be stops the write. The store is going by the time it finds out, so all it can do is
+// log it, and it mustn't touch the file in the way.
+CDL_TEST_CASE(PipelineStore, LogsACacheItCannotWriteAndLeavesWhatIsInTheWay, Gpu)
 {
 	SkipUnlessCompiled(kFixturePath);
 
@@ -680,16 +707,25 @@ CDL_TEST_CASE(PipelineStore, RecreatingTheCacheLeavesBuiltPipelinesInPlace, Gpu)
 	{
 		TestDevice gpu;
 		BindlessTable bindless(gpu.Device);
-		TestPipelineStore store(gpu.Device, bindless);
-		const SharedPtr<Shader> shader = LoadTestShader("PipelineFixture", kFixturePath);
-		const GPUPipelineHandle built = store.CreatePipeline(PipelineFixtureSpec(shader));
-		const vk::Pipeline builtPipeline = store.TryGetPipeline(built);
-		CDL_CHECK(builtPipeline);
+		const TempDirectory root;
+		const std::filesystem::path inTheWay = root / "pipelines";
+		const std::vector<std::byte> inTheWayBytes = BytePattern(16, 0x5A);
+		CDL_CHECK(Platform::WriteFile(inTheWay, inTheWayBytes).has_value());
 
-		store.RecreatePipelineCache();
+		size_t errorsBeforeSave = 0;
+		{
+			PipelineStore store(gpu.Device, bindless, inTheWay);
+			CDL_CHECK(store.TryGetPipeline(store.CreatePipeline(PipelineFixtureSpec(LoadTestShader("PipelineFixture", kFixturePath)))));
+			errorsBeforeSave = PipelineErrors(logs).size();
+		}
 
-		CDL_EXPECT(store.TryGetPipeline(built) == builtPipeline);
-		CDL_EXPECT(store.TryGetPipeline(store.CreatePipeline(PipelineFixtureComputeSpec(shader))));
+		const std::vector<std::string> errors = PipelineErrors(logs);
+		CDL_CHECK_EQ(errors.size(), errorsBeforeSave + 1);
+		CDL_EXPECT_MSG(errors.back().contains(inTheWay.string()), std::format("'{}' doesn't name {}", errors.back(), inTheWay.string()));
+
+		const auto left = Platform::ReadFile(inTheWay);
+		CDL_CHECK(left.has_value());
+		CDL_EXPECT_MSG(*left == inTheWayBytes, "the store changed the file where its cache directory should be");
 	}
 	ExpectNoVulkanDebugMessages(logs);
 }

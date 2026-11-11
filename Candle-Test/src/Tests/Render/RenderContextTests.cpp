@@ -34,7 +34,8 @@ namespace {
 		WindowingBackend Backend;
 		Window AppWindow{ TestWindowSpec() };
 		JobSystem Jobs;	// Never started; RenderManager only reads its worker count
-		RenderManager Manager{ OutputTargetRenderSpec(), ApplicationInfo{ .Name = "Candle-Test" }, kEngineAssetDir, AppWindow, Jobs };
+		TempDirectory SavedDir;	// Outlives the RenderManager, whose pipeline store writes into it as it's destroyed
+		RenderManager Manager{ OutputTargetRenderSpec(), ApplicationInfo{ .Name = "Candle-Test" }, kEngineAssetDir, SavedDir.Path(), AppWindow, Jobs };
 
 		TexturePool& Pool() { return Manager.GetTexturePool(); }
 	};
