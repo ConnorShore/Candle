@@ -25,6 +25,7 @@ namespace Candle {
 	class RenderPipeline;
 	class GPUAllocator;
 	class GPUBuffer;
+	class FrameGraph;
 
 	struct FrameContext;
 	struct FramePacket;
@@ -46,6 +47,7 @@ namespace Candle {
 		Renderer(RenderDevice& renderDevice, GeometryPool& geometryPool, TexturePool& texturePool, BindlessTable& bindlessTable,
 					GPUAllocator& allocator, const RendererCreationInfo& info);	// pipelines, bindless tables, render graph
 		void Render(const FramePacket& packet, FrameContext& frame, SwapChainImage& target);   // target is imported into the graph; its owner presents it
+		void OldRender(const FramePacket& packet, FrameContext& frame, SwapChainImage& target);   // target is imported into the graph; its owner presents it
 
 		// targetExtent is the colour target's real extent, since the depth image must cover the same render area.
 		// Only when rendering to the swapchain: otherwise depth follows the output target instead (see MatchDepthToOutput).
@@ -59,7 +61,7 @@ namespace Candle {
 		inline vk::Format GetTargetFormat() const { return m_TargetFormat; }
 
 	private:
-		// Where the scene pass draws: a colour attachment the caller has transitioned for it, and its extent
+		// Where the scene pass draws: a color attachment the caller has transitioned for it, and its extent
 		struct SceneTarget
 		{
 			vk::ImageView ColorView;
@@ -85,6 +87,7 @@ namespace Candle {
 		BindlessTable& m_BindlessTable;
 		GPUAllocator& m_GPUAllocator;
 		PipelineStore m_PipelineStore;
+		FrameGraph m_FrameGraph;
 
 		bool m_RenderToSwapChain;
 		vk::Format m_TargetFormat;

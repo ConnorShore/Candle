@@ -1,5 +1,7 @@
 #pragma once
 
+#include "TextureInfo.h"
+
 #include "Candle/Render/Resources/GPUHandles.h"
 #include "Candle/Render/Vulkan/GPUImage.h"
 #include "Candle/Render/Resources/GPUResourcePool.h"
@@ -21,20 +23,6 @@ namespace Candle {
 	class GPUUploader;
 	class GPUResourceRegistry;
 	class BindlessTable;
-
-	// Values, not references into the pool, so an info stays safe to hold after its texture is released
-	struct TextureInfo
-	{
-		uint32_t Index{ std::numeric_limits<uint32_t>::max() };
-		vk::ImageView ImageView{ nullptr };
-		vk::Image Image{ nullptr };		// For barriers, when the renderer draws into a render target
-		vk::Format Format{ vk::Format::eUndefined };
-		glm::uvec2 Extent{ 0, 0 };
-		uint32_t SizeBytes{ 0 };
-		uint8_t MipLevels{ 1 };
-		vk::ImageLayout SampledLayout{ vk::ImageLayout::eShaderReadOnlyOptimal };	// What its bindless descriptor expects, so it must be in this whenever it's sampled
-		vk::ImageUsageFlags Usage{};	// eColorAttachment is what lets the scene draw into it
-	};
 
 	struct TextureCreateSpec
 	{
@@ -100,6 +88,7 @@ namespace Candle {
 
 		// The default handle resolves to DefaultTexture::Error; a stale one asserts, and resolves to it too outside Debug
 		TextureInfo GetTextureInfo(GPUTextureHandle handle) const;
+		const GPUImage* GetTextureGPUImage(GPUTextureHandle handle) const;
 		TexturePoolStats CaptureStats() const;
 
 		// Created and written into the bindless table with the pool, and never released

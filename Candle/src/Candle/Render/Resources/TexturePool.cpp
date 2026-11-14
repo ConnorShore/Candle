@@ -147,6 +147,22 @@ namespace Candle {
 		};
 	}
 
+
+	const GPUImage* TexturePool::GetTextureGPUImage(GPUTextureHandle handle) const
+	{
+		const TextureEntry* entry = m_Textures.TryGet(handle);
+		CDL_CORE_ASSERT(entry || !handle.IsValid(), "GetTextureGPUImage was given a stale texture handle");
+
+		if (!entry)
+		{
+			handle = GetDefaultTexture(DefaultTexture::Error);
+			entry = &m_Textures.Get(handle);
+		}
+
+		auto image = &entry->Image;
+		return image;
+	}
+
 	TexturePoolStats TexturePool::CaptureStats() const
 	{
 		CDL_CORE_ASSERT(Platform::IsMainThread(), "TexturePool::CaptureStats must be called on the main thread");

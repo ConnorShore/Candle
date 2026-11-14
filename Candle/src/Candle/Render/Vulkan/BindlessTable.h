@@ -29,8 +29,12 @@ namespace Candle {
 
 		// layout is the one the image is in whenever it's sampled, not its layout now
 		void WriteTexture(uint32_t index, vk::ImageView view, vk::ImageLayout layout = vk::ImageLayout::eShaderReadOnlyOptimal);
+		void WriteFrameGraphTexture(uint32_t index, vk::ImageView view, vk::ImageLayout layout = vk::ImageLayout::eShaderReadOnlyOptimal);
 		void WriteStorageImage(uint32_t index, vk::ImageView view);	// Storage images are always accessed in General
+		void WriteFrameGraphStorageImage(uint32_t index, vk::ImageView view);	// Storage images are always accessed in General
+
 		void BindSet(vk::CommandBuffer commandBuffer, vk::PipelineBindPoint bindPoint, vk::PipelineLayout pipelineLayout);
+
 
 		inline vk::DescriptorSet GetSet() const { return *m_DescriptorSet; }
 		inline vk::DescriptorSetLayout GetLayout() const { return *m_DescriptorSetLayout; }
@@ -41,7 +45,7 @@ namespace Candle {
 		void CreateDescriptorSet(RenderDevice& renderDevice);
 		void CreateSamplers(RenderDevice& renderDevice);
 
-		void WriteImage(uint32_t binding, vk::DescriptorType type, uint32_t index, vk::ImageView view, vk::ImageLayout layout);
+		void WriteImage(uint32_t binding, vk::DescriptorType type, uint32_t index, vk::ImageView view, vk::ImageLayout layout, bool frameGraphTexture);
 
 	private:
 		RenderDevice& m_RenderDevice;

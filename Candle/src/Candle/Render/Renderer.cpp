@@ -20,6 +20,9 @@
 
 #include "Candle/Render/Pipelines/ShaderLoader.h"
 
+#include "Candle/Render/FrameGraph/FrameGraph.h"
+#include "Candle/Render/FrameGraph/FrameGraphHandles.h"
+
 #include <cmath>
 #include <span>
 
@@ -176,7 +179,74 @@ namespace Candle {
 		m_PipelineStore.SaveCache();
 	}
 
+	// TODO: Would move to its own "Module" class (i.e. SceneModule)
+	//struct SceneOutput
+	//{
+	//	FGTextureHandle Target;
+	//	FGTextureHandle Depth;
+	//};
+
+	////auto m_DepthFormat = FindDepth
+
+	//SceneOutput AddPasses(FrameGraph& frameGraph, FGTextureHandle colorTex, FGTextureHandle computeTex)
+	//{
+	//	struct PassData
+	//	{
+	//		FGTextureHandle Color;
+	//		FGTextureHandle Depth;
+	//		FGTextureHandle ComputeTex;
+	//	};
+	//	frameGraph.AddPass<PassData>("TrianglePass",
+	//		[&](FrameGraphBuilder& builder, PassData& data)
+	//		{
+	//			data.Color = colorTex;
+	//			data.Depth = builder.CreateTexture("Depth", { .Size = FGSize{ .Mode = FGSizeMode::RelativeToOutput, .Scale = 1.0f }, .Format = m_DepthFormat });
+	//			data.ComputeTex = computeTex;
+
+	//			builder.ColorAttachment(data.Color, 0, FGLoad::Clear, { 0.0f, 0.0f, 0.0f, 1.0f });
+	//			builder.DepthAttachment(data.Depth, FGLoad::Clear);
+	//			builder.Read(data.ComputeTex, FGUsage::SampledFragment);
+	//		},
+	//		[this](FGNoData& data, FrameGraphContext& ctx)
+	//		{
+	//			ctx.BindPipeline(m_TrianglePipeline);
+	//			for (const DrawItem& item : ctx.GetPacket().DrawItems)
+	//			{
+	//				// The GPU doesn't bounds-check a read through a device address, so skip a bad index in every config
+	//				if (item.TransformIndex >= packet.TransformData.size())
+	//				{
+	//					CDL_CORE_ASSERT(false, "DrawItem's TransformIndex is past the packet's TransformData");
+	//					continue;
+	//				}
+
+	//				MeshDrawInfo drawInfo = m_GeometryPool.GetMeshInfo(item.Mesh);
+	//				TextureInfo textureInfo = m_TexturePool.GetTextureInfo(item.Texture);
+
+	//				GPU::MeshDrawPushConstants pushConstants{
+	//					.Global = globalPCs,
+	//					.Vertices = drawInfo.VerticesAddr,
+	//					.TextureIndex = textureInfo.Index,
+	//					.SamplerIndex = static_cast<uint32_t>(item.Sampler),
+	//					.TransformIndex = item.TransformIndex,
+	//					.ComputeTextureIndex = computeTextureIndex
+	//				};
+
+	//				//ApplyPushConstants(*frame.CommandBuffer, m_PipelineStore.GetGlobalLayout(), pushConstants);
+	//				ctx.PushConstants(pushConstants);
+	//				ctx.GetCommandBuffer().bindIndexBuffer(drawInfo.Indices, 0, vk::IndexType::eUint32);
+	//				ctx.GetCommandBuffer().drawIndexed(drawInfo.IndexCount, 1, 0, 0, 0);
+	//			}
+	//		});
+	//}
+
+	//
+
 	void Renderer::Render(const FramePacket& packet, FrameContext& frame, SwapChainImage& target)
+	{
+		const FGTextureHandle backBuffer = m_FrameGraph.ImportSwapChainImage(target);
+	}
+
+	void Renderer::OldRender(const FramePacket& packet, FrameContext& frame, SwapChainImage& target)
 	{
 		CDL_PROFILE_SCOPE("Renderer::Render");
 

@@ -8,6 +8,7 @@ namespace Candle {
 	{
 		vk::Extent2D Extent;
 		vk::Format	 Format;
+		// TODO: Mi
 	};
 
 	// The state an image was last left in: what a barrier transitions from or to. The default is a fresh image.
