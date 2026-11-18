@@ -17,22 +17,6 @@ namespace Candle {
 
 	}
 
-	CacheImportResult ResourceCache::ImportExistingTexture(TextureInfo& info, const GPUImage* image, uint64_t currentTimelineVal)
-	{
-		m_Cache.emplace_back(CacheEntry{
-			.Image = image,
-			.Key = { .Format = info.Desc.Format, .Extent = vk::Extent2D(info.Desc.Extent.x, info.Desc.Extent.y), .Usage = FGUsage::SampledFragment },
-			.State = { .Layout = info.SampledLayout, .Access = vk::AccessFlagBits2::eShaderSampledRead, .Stage = vk::PipelineStageFlagBits2::eFragmentShader },
-			.BindlessIndex = info.Index,
-			.LastFrameUsed = currentTimelineVal
-			});
-
-		return CacheImportResult{ 
-			.Index = static_cast<uint32_t>(m_Cache.size() - 1), 
-			.Entry = m_Cache.back()
-		};
-	}
-
 	CacheImportResult ResourceCache::CreateOrGetTexture(FGTextureKey key, uint64_t currentTimelineVal)
 	{
 		// Check if a texture with the same key already exists in the cache

@@ -1,5 +1,7 @@
 #pragma once
 
+#include "Candle/Render/Vulkan/Image.h"
+
 #include <cstdint>
 #include <glm/glm.hpp>
 #include <vulkan/vulkan.hpp>

@@ -6,14 +6,17 @@
 #include "ResourceCache.h"
 
 #include "Candle/Render/Resources/GPUHandles.h"
+#include "Candle/Render/Vulkan/Image.h"
 
 #include "Candle/Core/Memory/Collections/ArenaAllocator.h"
 
 #include <glm/glm.hpp>
 
+#include <limits>
 #include <string>
+#include <string_view>
+#include <type_traits>
 #include <vector>
-#include <functional>
 
 namespace Candle {
 
@@ -40,6 +43,19 @@ namespace Candle {
 	// Empty (default) type for PassData
 	struct FGNoData {};
 
+	struct FGTextureEntry
+	{
+		std::string_view Name;	// Must outlive the frame, e.g. a string literal
+		ImageDesc Desc;			// Imports: from the pool or swapchain. Transients: resolved from Spec at compile
+		FGTextureSpec Spec;		// Transients only
+		bool Imported{ false };
+		vk::Image Image{ nullptr };
+		vk::ImageView ImageView{ nullptr };
+		uint32_t BindlessIndex{ std::numeric_limits<uint32_t>::max() };	// None for the swapchain
+		ImageState InitialState, FinalState;
+		uint32_t CacheIndex{ std::numeric_limits<uint32_t>::max() };	// Transients only
+	};
+
 	class FrameGraph
 	{
 	public:
@@ -50,47 +66,42 @@ namespace Candle {
 		void Compile();
 		void Execute(vk::CommandBuffer& commandBuffer);
 
-		//TODO: The pass data and lambda need to be added in the ArenaAllocator
 		template<typename PassData = FGNoData, typename SetupFunc, typename ExecuteFunc>
 		const PassData& AddPass(std::string_view name, SetupFunc setup, ExecuteFunc execute)
 		{
-			// The pass is allocated in the frame arena, so it will be destroyed when the frame graph is reset
-			FrameGraphPassConcept* pass = m_FrameArena.New<FrameGraphPass<PassData, ExecuteFunc>>(std::move(execute));
+			CDL_STATIC_ASSERT(std::is_trivially_destructible_v<PassData>, "PassData lives in the frame arena, which never runs destructors");
+			CDL_STATIC_ASSERT(std::is_trivially_destructible_v<ExecuteFunc>,
+				"Execute's captures live in the frame arena, which never runs destructors; capture handles and pointers, not containers");
+
+			using Pass = FrameGraphPass<PassData, ExecuteFunc>;
+			Pass* pass = m_FrameArena.New<Pass>(std::move(execute));
 			FrameGraphPassNode node(name, pass);
 
 			FrameGraphBuilder builder(*this, node);	// TODO: Use concepts to enforce that the setup function takes a FrameGraphBuilder& and PassData& as parameters
-
-			// Call setup then add the node
-			std::invoke(setup, builder, PassData);
+			setup(builder, pass->Data);
 
 			m_Passes.push_back(std::move(node));
 
-			return m_Passes.back().Data;
+			// Arena memory never moves, unlike m_Passes, so this stays valid until Reset
+			return pass->Data;
 		}
 
-		FGTextureHandle ImportSwapChainImage(SwapChainImage& image, uint64_t timelineValue);
-		FGTextureHandle ImportTexture(GPUTextureHandle texture, uint64_t timelineValue);
+		FGTextureHandle ImportSwapChainImage(SwapChainImage& image);
+		FGTextureHandle ImportTexture(std::string_view name, GPUTextureHandle texture);
 
-	private:
-		struct FGTextureEntry
+		inline const FGTextureEntry& GetTexture(FGTextureHandle handle) const
 		{
-			std::string_view Name;
-			FGTextureSpec Spec;
-			bool Imported{ false };
-			vk::Image Image;
-			vk::ImageView ImageView;
-			ImageState InitialState, FinalState;
-			uint32_t CacheIndex;
-		};
+			CDL_CORE_ASSERT(handle.Index < m_Textures.size(), "FGTextureHandle is not from this frame");
+			return m_Textures[handle.Index];
+		}
 
 	private:
 		TexturePool& m_TexturePool;
 		ArenaAllocator m_FrameArena;
 		ResourceCache m_ResourceCache;
 
+		glm::uvec2 m_OutputExtent{ 0, 0 };
 		std::vector<FrameGraphPassNode> m_Passes;
-
-		// TODO: Will probably move to ResourceCache
 		std::vector<FGTextureEntry> m_Textures;
 		//std::vector<FGBufferHandle> m_Buffers;
 	};

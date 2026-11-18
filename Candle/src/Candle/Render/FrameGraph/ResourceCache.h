@@ -3,7 +3,6 @@
 #include "FrameGraphResources.h"
 #include "FrameGraphHandles.h"
 
-#include "Candle/Render/TextureInfo.h"
 #include "Candle/Render/Resources/GPUHandles.h"
 #include "Candle/Render/Resources/DeletionQueue.h"
 
@@ -47,11 +46,6 @@ namespace Candle {
 	public:
 		ResourceCache(GPUAllocator& allocator, BindlessTable& bindlessTable);
 		~ResourceCache();
-
-		// Gets the texture from the texture pool with GetTextureInfo (should be safe on render thread for the frame)
-		// Then adds a CacheEntry to the cache and returns the CacheIndex (index in the vector)
-		// TODO: May want to return the FGTextureKey or CacheEntry but will see once start using it
-		CacheImportResult ImportExistingTexture(TextureInfo& info, const GPUImage* image, uint64_t currentTimelineVal);
 
 		// Retrieves a usable entry with a matching key
 		// If one doesn't exist a new entry is created (used for transient resources)

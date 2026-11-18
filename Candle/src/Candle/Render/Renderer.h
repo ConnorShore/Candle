@@ -5,6 +5,7 @@
 #include "Candle/Render/Vulkan/GPUImage.h"
 #include "Candle/Render/Resources/DeletionQueue.h"
 #include "Candle/Render/ShaderInterop/GlobalPushConstants.h"
+#include "Candle/Render/FrameGraph/FrameGraph.h"
 
 #include <glm/glm.hpp>
 
@@ -25,7 +26,6 @@ namespace Candle {
 	class RenderPipeline;
 	class GPUAllocator;
 	class GPUBuffer;
-	class FrameGraph;
 
 	struct FrameContext;
 	struct FramePacket;

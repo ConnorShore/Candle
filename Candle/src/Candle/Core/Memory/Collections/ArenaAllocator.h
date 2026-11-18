@@ -10,7 +10,7 @@ namespace Candle {
 	concept IsTrivial = std::is_trivially_destructible_v<T>;
 
 	// A simple arena allocator that allocates memory in a linear fashion and can be reset to free all allocations at once.
-	// Data must be trivially copyable as no destructors will ever be called during Reset()
+	// Data must be trivially destructible as no destructors will ever be called during Reset()
 	// Threading: Not synchronized, single user only
 	class ArenaAllocator
 	{

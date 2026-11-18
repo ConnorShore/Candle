@@ -87,7 +87,6 @@ namespace Candle {
 
 		// The default handle resolves to DefaultTexture::Error; a stale one asserts, and resolves to it too outside Debug
 		TextureInfo GetTextureInfo(GPUTextureHandle handle) const;
-		const GPUImage* GetTextureGPUImage(GPUTextureHandle handle) const;
 		TexturePoolStats CaptureStats() const;
 
 		// Created and written into the bindless table with the pool, and never released

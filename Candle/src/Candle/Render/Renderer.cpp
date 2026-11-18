@@ -125,6 +125,7 @@ namespace Candle {
 		, m_BindlessTable(bindlessTable)
 		, m_GPUAllocator(allocator)
 		, m_PipelineStore(renderDevice, bindlessTable, info.PipelineCacheDirectory)
+		, m_FrameGraph({ .Allocator = allocator, .BindlessTable = bindlessTable, .TexturePool = texturePool })
 		, m_RenderToSwapChain(info.RenderToSwapChain)
 		, m_TargetFormat(info.TargetFormat)
 		, m_DepthFormat(FindDepthFormat(renderDevice))
@@ -243,7 +244,13 @@ namespace Candle {
 
 	void Renderer::Render(const FramePacket& packet, FrameContext& frame, SwapChainImage& target)
 	{
+		const glm::uvec2 outputExtent = m_RenderToSwapChain ? target.GetDesc().Extent : m_TexturePool.GetTextureInfo(packet.OutputTarget).Desc.Extent;
+		m_FrameGraph.Reset(outputExtent);
+
 		const FGTextureHandle backBuffer = m_FrameGraph.ImportSwapChainImage(target);
+
+		// The graph records nothing yet, so the frame is still drawn by hand
+		OldRender(packet, frame, target);
 	}
 
 	void Renderer::OldRender(const FramePacket& packet, FrameContext& frame, SwapChainImage& target)

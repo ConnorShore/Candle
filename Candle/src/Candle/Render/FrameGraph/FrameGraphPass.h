@@ -1,31 +1,28 @@
 #pragma once
 
-#include "Candle/Core/Memory/ScopedPtr.h"
-
+#include <string>
 #include <string_view>
-#include <vector>
-#include <functional>
+#include <utility>
 
 namespace Candle {
 
-	struct FramePassContext;
-	struct FrameGraphResourceHandle;
+	struct FrameGraphContext;
 
 	struct FrameGraphPassConcept
 	{
-		FrameGraphPassConcept() = default;
-		~FrameGraphPassConcept() = default;
+		virtual void operator()(FrameGraphContext& context) const = 0;
 
-		virtual void operator()(FramePassContext& context) = 0;
+	protected:
+		~FrameGraphPassConcept() = default;	// Passes live in the frame arena, so nothing may delete one through its base
 	};
 
 	template<typename PassData, typename ExecuteFunc>
-	struct FrameGraphPass : public FrameGraphPassConcept
+	struct FrameGraphPass final : public FrameGraphPassConcept
 	{
 		FrameGraphPass(ExecuteFunc execute) : Execute(std::move(execute)) {}
-		void operator()(FramePassContext& context) override
+		void operator()(FrameGraphContext& context) const override
 		{
-			Execute(context, Data);
+			Execute(Data, context);
 		}
 
 		PassData Data;
@@ -39,9 +36,7 @@ namespace Candle {
 		}
 
 		std::string Name;
-		FrameGraphPassConcept* Pass;
-		std::vector<FrameGraphResourceHandle> ReadResources;
-		std::vector<FrameGraphResourceHandle> WriteResources;
+		FrameGraphPassConcept* Pass;	// Owned by the frame arena, valid until Reset
 	};
 
 }
