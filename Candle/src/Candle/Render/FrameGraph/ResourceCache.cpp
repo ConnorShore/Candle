@@ -21,7 +21,7 @@ namespace Candle {
 	{
 		m_Cache.emplace_back(CacheEntry{
 			.Image = image,
-			.Key = { .Format = info.Format, .Extent = vk::Extent2D(info.Extent.x, info.Extent.y), .Usage = FGUsage::SampledFragment },
+			.Key = { .Format = info.Desc.Format, .Extent = vk::Extent2D(info.Desc.Extent.x, info.Desc.Extent.y), .Usage = FGUsage::SampledFragment },
 			.State = { .Layout = info.SampledLayout, .Access = vk::AccessFlagBits2::eShaderSampledRead, .Stage = vk::PipelineStageFlagBits2::eFragmentShader },
 			.BindlessIndex = info.Index,
 			.LastFrameUsed = currentTimelineVal

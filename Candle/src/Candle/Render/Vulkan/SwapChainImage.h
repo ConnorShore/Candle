@@ -31,8 +31,10 @@ namespace Candle {
 		// Overwrites the tracked state without a barrier; for an image last used outside our command stream, e.g. by presentation
 		void SetState(const ImageState& state);
 
+		inline vk::Image GetImage() const { return m_Image; }
 		inline vk::ImageView GetImageView() const { return *m_ImageView; }
 		inline const ImageDesc& GetDesc() const { return m_Desc; }
+		inline const ImageState& GetState() const { return m_State; }
 
 	private:
 		vk::Image m_Image;

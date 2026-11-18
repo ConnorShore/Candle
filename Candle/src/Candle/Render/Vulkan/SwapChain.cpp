@@ -18,6 +18,8 @@ namespace Candle {
 		// An acquired image is first used as a color attachment; its first barrier starts here to chain with the wait
 		constexpr vk::PipelineStageFlags2 kAcquireWaitStage = vk::PipelineStageFlagBits2::eColorAttachmentOutput;
 
+		constexpr vk::ImageUsageFlags kImageUsage = vk::ImageUsageFlagBits::eColorAttachment;
+
 		// Choosing the best surface format is a matter of preference, but we will just pick the first one for now.
 		// The 3 things to consider when choosing a surface format are:
 		// 1. Surface format (color depth)
@@ -160,7 +162,7 @@ namespace Candle {
 											   .imageColorSpace = m_SwapChainSurfaceFormat.colorSpace,
 											   .imageExtent = extent,
 											   .imageArrayLayers = 1,
-											   .imageUsage = vk::ImageUsageFlagBits::eColorAttachment,
+											   .imageUsage = kImageUsage,
 											   .imageSharingMode = vk::SharingMode::eExclusive,
 											   .preTransform = surfaceCapabilities.currentTransform,
 											   .compositeAlpha = vk::CompositeAlphaFlagBitsKHR::eOpaque,
@@ -192,7 +194,7 @@ namespace Candle {
 			m_RenderDevice.SetDebugName(image, std::format("Swapchain Image {}", i));
 			m_RenderDevice.SetDebugName(*imageView, std::format("Swapchain Image {} View", i));
 
-			ImageDesc desc{ .Extent = extent, .Format = m_SwapChainSurfaceFormat.format };
+			ImageDesc desc{ .Extent = { extent.width, extent.height }, .Format = m_SwapChainSurfaceFormat.format, .Usage = kImageUsage };
 			m_SwapChainImages.emplace_back(image, std::move(imageView), desc);
 			m_PresentSemaphores.emplace_back(m_RenderDevice.GetDevice(), vk::SemaphoreCreateInfo{});
 			m_RenderDevice.SetDebugName(*m_PresentSemaphores.back(), std::format("Present Semaphore [image {}]", i));

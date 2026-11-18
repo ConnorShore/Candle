@@ -80,9 +80,9 @@ CDL_TEST_CASE(SwapChain, ImagesMatchTheWindowAndSurfaceFormat, Gpu)
 		const glm::uvec2 size = test.AppWindow.GetSize();
 		const ImageDesc& desc = test.Chain.GetImage(0).GetDesc();
 
-		CDL_EXPECT_EQ(desc.Extent.width, size.x);
-		CDL_EXPECT_EQ(desc.Extent.height, size.y);
+		CDL_EXPECT(desc.Extent == size);
 		CDL_EXPECT_EQ(desc.Format, test.Chain.GetSurfaceFormat().format);
+		CDL_EXPECT(desc.Usage & vk::ImageUsageFlagBits::eColorAttachment);
 	}
 	ExpectNoVulkanDebugMessages(logs);
 }
@@ -182,7 +182,7 @@ CDL_TEST_CASE(SwapChain, GetExtentIsTheImagesExtentNotTheRequestedOne, Gpu)
 		test.Chain.Recreate(windowSize + glm::uvec2(100, 50));
 
 		const vk::Extent2D extent = test.Chain.GetExtent();
-		CDL_EXPECT(extent == test.Chain.GetImage(0).GetDesc().Extent);
+		CDL_EXPECT(glm::uvec2(extent.width, extent.height) == test.Chain.GetImage(0).GetDesc().Extent);
 		CDL_EXPECT_EQ(extent.width, windowSize.x);
 		CDL_EXPECT_EQ(extent.height, windowSize.y);
 	}

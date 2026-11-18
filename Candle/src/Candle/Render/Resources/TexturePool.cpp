@@ -71,7 +71,7 @@ namespace Candle {
 			vk::AccessFlagBits2::eShaderSampledRead);
 
 		vk::ImageView view = image.GetImageView();
-		GPUTextureHandle handle = m_Textures.Insert(TextureEntry{ .Image = std::move(image), .Extent = spec.Extent });
+		GPUTextureHandle handle = m_Textures.Insert(TextureEntry{ .Image = std::move(image) });
 		StoreDebugName(handle, std::move(spec.DebugName));
 
 		// Published here so no texture can be handed out before a shader can sample it
@@ -96,8 +96,7 @@ namespace Candle {
 		const vk::ImageLayout sampledLayout = isStorage ? vk::ImageLayout::eGeneral : vk::ImageLayout::eShaderReadOnlyOptimal;
 
 		vk::ImageView view = image.GetImageView();
-		GPUTextureHandle handle = m_Textures.Insert(TextureEntry{
-			.Image = std::move(image), .Extent = spec.Extent, .SampledLayout = sampledLayout });
+		GPUTextureHandle handle = m_Textures.Insert(TextureEntry{ .Image = std::move(image), .SampledLayout = sampledLayout });
 		StoreDebugName(handle, std::move(spec.DebugName));
 
 		if (spec.Usage & vk::ImageUsageFlagBits::eSampled)
@@ -138,12 +137,9 @@ namespace Candle {
 			.Index = handle.Index,
 			.ImageView = entry->Image.GetImageView(),
 			.Image = entry->Image.GetImage(),
-			.Format = entry->Image.GetFormat(),
-			.Extent = entry->Extent,
+			.Desc = entry->Image.GetDesc(),
 			.SizeBytes = entry->Image.GetSizeBytes(),
-			.MipLevels = entry->Image.GetMipLevels(),
-			.SampledLayout = entry->SampledLayout,
-			.Usage = entry->Image.GetUsage()
+			.SampledLayout = entry->SampledLayout
 		};
 	}
 
@@ -178,10 +174,10 @@ namespace Candle {
 				.Handle = handle,
 				.DebugName = m_DebugNames[handle.Index],
 				.SizeBytes = info.SizeBytes,
-				.Extent = info.Extent,
-				.MipLevels = info.MipLevels,
-				.Format = info.Format,
-				.Usage = info.Usage });
+				.Extent = info.Desc.Extent,
+				.MipLevels = info.Desc.MipLevels,
+				.Format = info.Desc.Format,
+				.Usage = info.Desc.Usage });
 		}
 
 		return TexturePoolStats{

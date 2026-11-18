@@ -293,13 +293,16 @@ namespace Candle {
 
 		if (m_RenderToSwapChain)
 		{
+			const glm::uvec2 targetExtent = target.GetDesc().Extent;
+			const SceneTarget sceneTarget{ .ColorView = target.GetImageView(), .Extent = { targetExtent.x, targetExtent.y } };
+
 			// The scene pass clears the target, so it runs every frame, even with nothing to draw
 			target.Transition(kColorAttachmentWrite, frame.CommandBuffer);
-			RenderTrianglePipeline(packet, frame, { .ColorView = target.GetImageView(), .Extent = target.GetDesc().Extent }, global);
+			RenderTrianglePipeline(packet, frame, sceneTarget, global);
 
 			// The debug draw pass draws over the scene; the tracked state makes this transition order it after the scene's writes
 			target.Transition(kColorAttachmentReadWrite, frame.CommandBuffer);
-			RenderDebugDrawPipeline(packet, frame, { .ColorView = target.GetImageView(), .Extent = target.GetDesc().Extent }, vk::AttachmentLoadOp::eLoad, global);
+			RenderDebugDrawPipeline(packet, frame, sceneTarget, vk::AttachmentLoadOp::eLoad, global);
 
 			// The GUI pass draws over the scene; the tracked state makes this transition order it after the scene's writes
 			target.Transition(kColorAttachmentReadWrite, frame.CommandBuffer);
@@ -308,9 +311,9 @@ namespace Candle {
 		else
 		{
 			const TextureInfo output = m_TexturePool.GetTextureInfo(packet.OutputTarget);
-			if (output.Usage & vk::ImageUsageFlagBits::eColorAttachment)
+			if (output.Desc.Usage & vk::ImageUsageFlagBits::eColorAttachment)
 			{
-				CDL_CORE_ASSERT(output.Extent == m_DepthExtent, "Depth must match the output target; RenderManager calls MatchDepthToOutput first");
+				CDL_CORE_ASSERT(output.Desc.Extent == m_DepthExtent,"Depth must match the output target; RenderManager calls MatchDepthToOutput first");
 
 				// Undefined discards last frame's contents, which the clear replaces. Last frame's GUI pass sampled it, and a write
 				// after a read needs only an execution dependency, so the source has a stage but no access
@@ -319,7 +322,7 @@ namespace Candle {
 					kColorAttachmentWrite, kColorRange);
 				frame.CommandBuffer.pipelineBarrier2({ .imageMemoryBarrierCount = 1, .pImageMemoryBarriers = &toAttachment });
 
-				const SceneTarget sceneTarget{ .ColorView = output.ImageView, .Extent = { output.Extent.x, output.Extent.y } };
+				const SceneTarget sceneTarget{ .ColorView = output.ImageView, .Extent = { output.Desc.Extent.x, output.Desc.Extent.y } };
 				RenderTrianglePipeline(packet, frame, sceneTarget, global);
 
 				// The debug pass loads what the scene pass wrote, so it has to wait for those writes
@@ -614,7 +617,7 @@ namespace Candle {
 			.storeOp = vk::AttachmentStoreOp::eStore,
 			.clearValue = clearColor };
 
-		vk::Extent2D swapChainExtent = target.GetDesc().Extent;
+		const vk::Extent2D swapChainExtent{ target.GetDesc().Extent.x, target.GetDesc().Extent.y };
 
 		// Setup the rendering info for the render pass begin info. 
 		// This specifies the render area, the number of layers, and the color attachment info.
@@ -731,7 +734,7 @@ namespace Candle {
 
 			// dispatch takes a group count, rounded up so the groups cover the whole target
 			const LocalGroupSize& groupSize = compEntryPoint->LocalSize;
-			frame.CommandBuffer.dispatch((target.Extent.x + groupSize.X - 1) / groupSize.X, (target.Extent.y + groupSize.Y - 1) / groupSize.Y, 1);
+			frame.CommandBuffer.dispatch((target.Desc.Extent.x + groupSize.X - 1) / groupSize.X, (target.Desc.Extent.y + groupSize.Y - 1) / groupSize.Y, 1);
 		}
 
 		// The scene pass samples it next

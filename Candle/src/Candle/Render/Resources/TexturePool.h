@@ -1,7 +1,6 @@
 #pragma once
 
-#include "TextureInfo.h"
-
+#include "Candle/Render/TextureInfo.h"
 #include "Candle/Render/Resources/GPUHandles.h"
 #include "Candle/Render/Vulkan/GPUImage.h"
 #include "Candle/Render/Resources/GPUResourcePool.h"
@@ -100,7 +99,6 @@ namespace Candle {
 		struct TextureEntry
 		{
 			GPUImage Image;
-			glm::uvec2 Extent;
 			vk::ImageLayout SampledLayout{ vk::ImageLayout::eShaderReadOnlyOptimal };
 
 			uint64_t GetSizeBytes() const { return Image.GetSizeBytes(); }

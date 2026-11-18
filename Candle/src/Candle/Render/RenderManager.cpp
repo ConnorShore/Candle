@@ -223,7 +223,7 @@ namespace Candle {
 			for (const FrameContext& context : m_FrameContexts)
 				lastUseValue = std::max(lastUseValue, context.RetireValue);
 
-			m_Renderer.MatchDepthToOutput(m_TexturePool.GetTextureInfo(packet->OutputTarget).Extent, lastUseValue);
+			m_Renderer.MatchDepthToOutput(m_TexturePool.GetTextureInfo(packet->OutputTarget).Desc.Extent, lastUseValue);
 		}
 
 		// Record command buffers for rendering

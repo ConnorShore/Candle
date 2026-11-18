@@ -50,7 +50,7 @@ namespace {
 			.viewType = vk::ImageViewType::e2D,
 			.format = kFormat,
 			.subresourceRange = SwapChainImage::kSubresourceRange });
-		return SwapChainImage(*owned.Handle, std::move(view), ImageDesc{ .Extent = kExtent, .Format = kFormat });
+		return SwapChainImage(*owned.Handle, std::move(view), ImageDesc{ .Extent = { kExtent.width, kExtent.height }, .Format = kFormat });
 	}
 
 }
@@ -63,9 +63,10 @@ CDL_TEST_CASE(SwapChainImage, KeepsItsDescriptionAndView, Gpu)
 		OwnedImage owned = CreateSwapChainLikeImage(gpu.Device);
 		SwapChainImage image = WrapImage(gpu.Device, owned);
 
-		CDL_EXPECT_EQ(image.GetDesc().Extent.width, kExtent.width);
-		CDL_EXPECT_EQ(image.GetDesc().Extent.height, kExtent.height);
+		CDL_EXPECT_EQ(image.GetDesc().Extent.x, kExtent.width);
+		CDL_EXPECT_EQ(image.GetDesc().Extent.y, kExtent.height);
 		CDL_EXPECT_EQ(image.GetDesc().Format, kFormat);
+		CDL_EXPECT(image.GetImage() == *owned.Handle);
 		CDL_EXPECT(image.GetImageView());
 	}
 	ExpectNoVulkanDebugMessages(logs);
@@ -86,6 +87,7 @@ CDL_TEST_CASE(SwapChainImage, TransitionsFromTheLayoutItLastMovedTo, Gpu)
 		commands.Buffer.clearColorImage(*owned.Handle, vk::ImageLayout::eTransferDstOptimal, vk::ClearColorValue(0.0f, 0.0f, 0.0f, 1.0f), SwapChainImage::kSubresourceRange);
 		image.Transition(kColorAttachment, commands.Buffer);
 		commands.Buffer.end();
+		CDL_EXPECT_EQ(image.GetState().Layout, kColorAttachment.Layout);
 
 		SubmitAndWait(gpu.Device, commands.Buffer);
 	}
@@ -111,6 +113,7 @@ CDL_TEST_CASE(SwapChainImage, SetStateAdoptsALayoutChangedElsewhere, Gpu)
 		commands.Buffer.pipelineBarrier2({ .imageMemoryBarrierCount = 1, .pImageMemoryBarriers = &elsewhere });
 
 		image.SetState(general);
+		CDL_EXPECT_EQ(image.GetState().Layout, vk::ImageLayout::eGeneral);
 		image.Transition(kColorAttachment, commands.Buffer);
 		commands.Buffer.end();
 

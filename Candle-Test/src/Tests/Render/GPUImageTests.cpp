@@ -191,12 +191,14 @@ CDL_TEST_CASE(GPUImage, KeepsItsDescriptionThroughEitherMove, Gpu)
 		CDL_CHECK_EQ(source.GetFormat(), vk::Format::eD16Unorm);
 
 		GPUImage constructed(std::move(source));
+		CDL_EXPECT(constructed.GetDesc().Extent == kDepthSpec.Extent);
 		CDL_EXPECT_EQ(constructed.GetFormat(), vk::Format::eD16Unorm);
 		CDL_EXPECT(constructed.GetUsage() == kDepthSpec.Usage);
 		CDL_EXPECT_EQ(constructed.GetMipLevels(), uint8_t{ 1 });
 
 		GPUImage assigned = CreateImage(gpu.Allocator);
 		assigned = std::move(constructed);
+		CDL_EXPECT(assigned.GetDesc().Extent == kDepthSpec.Extent);
 		CDL_EXPECT_EQ(assigned.GetFormat(), vk::Format::eD16Unorm);
 		CDL_EXPECT(assigned.GetUsage() == kDepthSpec.Usage);
 		CDL_EXPECT_EQ(assigned.GetMipLevels(), uint8_t{ 1 });

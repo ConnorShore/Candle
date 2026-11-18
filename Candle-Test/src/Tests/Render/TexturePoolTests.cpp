@@ -61,7 +61,7 @@ namespace {
 			.imageView = info.ImageView, .imageLayout = vk::ImageLayout::eColorAttachmentOptimal,
 			.loadOp = vk::AttachmentLoadOp::eClear, .storeOp = vk::AttachmentStoreOp::eStore,
 			.clearValue = vk::ClearColorValue(colour[0] / 255.0f, colour[1] / 255.0f, colour[2] / 255.0f, colour[3] / 255.0f) };
-		commands.Buffer.beginRendering({ .renderArea = { { 0, 0 }, { info.Extent.x, info.Extent.y } }, .layerCount = 1,
+		commands.Buffer.beginRendering({ .renderArea = { { 0, 0 }, { info.Desc.Extent.x, info.Desc.Extent.y } }, .layerCount = 1,
 			.colorAttachmentCount = 1, .pColorAttachments = &attachment });
 		commands.Buffer.endRendering();
 
@@ -99,7 +99,7 @@ namespace {
 			.Colour = glm::vec4(colour[0], colour[1], colour[2], colour[3]) / 255.0f,
 			.TextureIndex = info.Index };
 		commands.Buffer.pushConstants(store.GetGlobalLayout(), kPushConstantStages, 0, sizeof(pushConstants), &pushConstants);
-		commands.Buffer.dispatch(info.Extent.x, info.Extent.y, 1);
+		commands.Buffer.dispatch(info.Desc.Extent.x, info.Desc.Extent.y, 1);
 
 		const vk::ImageMemoryBarrier2 toSampled = MakeImageBarrier(info.Image, kStorageWriteState, SampledState(info), kColorSubresourceRange);
 		commands.Buffer.pipelineBarrier2({ .imageMemoryBarrierCount = 1, .pImageMemoryBarriers = &toSampled });
@@ -166,9 +166,9 @@ CDL_TEST_CASE(TexturePool, TextureInfoReportsItsExtentAndThatItIsNoColorAttachme
 		const std::vector<Texel> texels(3 * 2, kWhite);
 		const TextureInfo info = gpu.Pool.GetTextureInfo(CreateBoundTexture(gpu, { 3, 2 }, texels));
 
-		CDL_EXPECT(info.Extent == glm::uvec2(3, 2));
+		CDL_EXPECT(info.Desc.Extent == glm::uvec2(3, 2));
 		CDL_EXPECT(info.Image);
-		CDL_EXPECT_FALSE(info.Usage & vk::ImageUsageFlagBits::eColorAttachment);
+		CDL_EXPECT_FALSE(info.Desc.Usage & vk::ImageUsageFlagBits::eColorAttachment);
 	}
 	ExpectNoVulkanDebugMessages(logs);
 }
@@ -187,8 +187,8 @@ CDL_TEST_CASE(TexturePool, CreateRenderTargetReturnsAValidHandleAndItsInfo, Gpu)
 		CDL_EXPECT_EQ(info.Index, target.Index);	// The bindless element the target is published at, for the GUI to sample
 		CDL_EXPECT(info.ImageView);
 		CDL_EXPECT(info.Image);
-		CDL_EXPECT(info.Extent == glm::uvec2(5, 3));
-		CDL_EXPECT(info.Usage == (vk::ImageUsageFlagBits::eColorAttachment | vk::ImageUsageFlagBits::eSampled));	// The spec's default
+		CDL_EXPECT(info.Desc.Extent == glm::uvec2(5, 3));
+		CDL_EXPECT(info.Desc.Usage == (vk::ImageUsageFlagBits::eColorAttachment | vk::ImageUsageFlagBits::eSampled));	// The spec's default
 		CDL_EXPECT_EQ(LiveAllocations(gpu.Allocator), kDefaultTextureAllocations + 1u);
 	}
 	ExpectNoVulkanDebugMessages(logs);
@@ -203,8 +203,8 @@ CDL_TEST_CASE(TexturePool, StorageTargetReportsOnlyTheUsageItWasCreatedWith, Gpu
 		constexpr vk::ImageUsageFlags kStorageUsage = vk::ImageUsageFlagBits::eStorage | vk::ImageUsageFlagBits::eSampled;
 		const TextureInfo info = gpu.Pool.GetTextureInfo(gpu.Pool.CreateRenderTarget({ .Extent = { 1, 1 }, .Format = kRenderTargetFormat, .Usage = kStorageUsage }));
 
-		CDL_EXPECT(info.Usage == kStorageUsage);
-		CDL_EXPECT_FALSE(info.Usage & vk::ImageUsageFlagBits::eColorAttachment);
+		CDL_EXPECT(info.Desc.Usage == kStorageUsage);
+		CDL_EXPECT_FALSE(info.Desc.Usage & vk::ImageUsageFlagBits::eColorAttachment);
 	}
 	ExpectNoVulkanDebugMessages(logs);
 }

@@ -53,10 +53,10 @@ namespace Candle {
 
 		CacheImportResult result = m_ResourceCache.ImportExistingTexture(info, image, timelineValue);
 
-		FGSize size{ .Mode = FGSizeMode::Absolute, .Extent = info.Extent };
+		FGSize size{ .Mode = FGSizeMode::Absolute, .Extent = info.Desc.Extent };
 		FrameGraph::FGTextureEntry entry{
 			.Name = "Imported Texture Test",
-			.Spec = FGTextureSpec{ .Size = size, .Format = info.Format },
+			.Spec = FGTextureSpec{ .Size = size, .Format = info.Desc.Format },
 			.Imported = true,
 			.Image = image->GetImage(),
 			.ImageView = image->GetImageView(),

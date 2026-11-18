@@ -124,7 +124,7 @@ namespace {
 		const vk::Image image = *owned.Handle;
 		vk::raii::ImageView view(device.GetDevice(), vk::ImageViewCreateInfo{
 			.image = image, .viewType = vk::ImageViewType::e2D, .format = kTargetFormat, .subresourceRange = SwapChainImage::kSubresourceRange });
-		return { std::move(owned), SwapChainImage(image, std::move(view), ImageDesc{ .Extent = extent, .Format = kTargetFormat }) };
+		return { std::move(owned), SwapChainImage(image, std::move(view), ImageDesc{ .Extent = { extent.width, extent.height }, .Format = kTargetFormat }) };
 	}
 
 	// One frame as RenderManager draws it, without the acquire and present: record, submit and wait, then read the target.
@@ -134,7 +134,8 @@ namespace {
 		test.SceneRenderer.Render(packet, test.Frame, target.Image);
 		SubmitAndWait(test.Device, test.Frame.CommandBuffer);
 
-		std::vector<Texel> texels = ToTexels(ReadBackImage(test, *target.Owned.Handle, target.Image.GetDesc().Extent, kPresentState));
+		const glm::uvec2 extent = target.Image.GetDesc().Extent;
+		std::vector<Texel> texels = ToTexels(ReadBackImage(test, *target.Owned.Handle, { extent.x, extent.y }, kPresentState));
 		target.Image.SetState(kTransferSrcState);	// Where the readback left it, so the next frame's first barrier starts from there
 		return texels;
 	}
@@ -230,7 +231,7 @@ namespace {
 	// Every texel of a render target, read through its bindless slot as the GUI samples it, in row order
 	std::vector<Texel> SampleRenderTarget(TestRenderer& test, GPUTextureHandle target)
 	{
-		return SampleTextures(test, ProbeEveryTexel(target, test.Pool.GetTextureInfo(target).Extent));
+		return SampleTextures(test, ProbeEveryTexel(target, test.Pool.GetTextureInfo(target).Desc.Extent));
 	}
 
 	// ShadeAlone for a renderer drawing into an output target: the texture drawn alone, read back from the target
