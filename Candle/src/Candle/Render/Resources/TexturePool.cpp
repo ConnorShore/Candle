@@ -14,6 +14,8 @@ namespace Candle {
 
 		using DefaultTexel = std::array<std::byte, 4>;	// One linear RGBA8 texel, so its bytes are exactly what a shader samples
 
+		constexpr uint32_t kMaxPoolTextures = kMaxTextures - kMaxFrameGraphTextures;
+
 		constexpr DefaultTexel GetDefaultTexel(DefaultTexture texture)
 		{
 			switch (texture)
@@ -49,6 +51,8 @@ namespace Candle {
 
 	GPUTextureHandle TexturePool::CreateTexture(TextureCreateSpec spec)
 	{
+		CDL_CORE_ASSERT(Platform::IsMainThread(), "TexturePool textures are created on the main thread");
+		CDL_CORE_ASSERT(m_Textures.GetLiveCount() < kMaxPoolTextures, "TexturePool has reached its maximum capacity of {} textures", kMaxPoolTextures);
 		CDL_CORE_ASSERT(spec.Extent.x > 0 && spec.Extent.y > 0, "A texture must have an area > 0");
 		CDL_CORE_ASSERT(spec.Data.size_bytes() == static_cast<size_t>(spec.Extent.x) * spec.Extent.y * BytesPerTexel(spec.Format),
 			"Texture data must be Extent.x * Extent.y tightly packed texels of its format");

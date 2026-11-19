@@ -21,9 +21,8 @@ namespace Candle {
 	struct FGTextureSpec
 	{
 		FGSize Size;
-
-		// TOOD: Maybe move to own format spec
 		vk::Format Format{ vk::Format::eUndefined };
+
 	};
 
 	struct FGBufferSpec
@@ -31,6 +30,8 @@ namespace Candle {
 		uint32_t Size{ 0 };
 	};
 
+	// FGUsage is a higher-level concept than Vulkan's image and buffer usage flags, so it can be used to describe both. 
+	// It also describes the access pattern, which is needed for the frame graph to insert the right barriers.
 	enum FGUsage
 	{
 		TransferSrc,

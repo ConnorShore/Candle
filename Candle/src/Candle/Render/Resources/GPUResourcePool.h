@@ -158,6 +158,8 @@ namespace Candle {
 			return std::move(liveHandles);
 		}
 
+		inline size_t GetLiveCount() const { return m_Payloads.size() - m_FreeIndices.size(); }
+
 	protected:
 		inline void DestroyPayload(uint32_t index) override { m_Payloads[index].reset(); }
 

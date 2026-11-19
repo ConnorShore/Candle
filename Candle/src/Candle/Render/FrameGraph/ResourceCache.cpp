@@ -17,14 +17,15 @@ namespace Candle {
 
 	}
 
-	CacheImportResult ResourceCache::CreateOrGetTexture(FGTextureKey key, uint64_t currentTimelineVal)
+	CacheImportResult ResourceCache::CreateOrGetTexture(FGTextureKey key)
 	{
 		// Check if a texture with the same key already exists in the cache
 		for (size_t i = 0; i < m_Cache.size(); ++i)
 		{
 			if (m_Cache[i].Key == key)
 			{
-				m_Cache[i].LastFrameUsed = currentTimelineVal; // Update the last frame used
+				// TODO NOW: Figure out how to set this
+				//m_Cache[i].LastFrameUsed = currentTimelineVal; // Update the last frame used,
 				return CacheImportResult{
 					.Index = static_cast<uint32_t>(i),
 					.Entry = m_Cache[i]
@@ -40,8 +41,6 @@ namespace Candle {
 			.Image = nullptr, // Placeholder, actual image creation logic should be implemented
 			.Key = key,
 			.State = { .Layout = vk::ImageLayout::eUndefined, .Access = vk::AccessFlagBits2::eNone, .Stage = vk::PipelineStageFlagBits2::eNone },
-			.BindlessIndex = 0, // TODO NOW: Set outside of this method, but may be able to set it in here once flow is figured out 
-			.LastFrameUsed = 0	// TODO NOW: Set outside of this method, but may be able to set it in here once flow is figured out
 			});
 
 		return CacheImportResult{

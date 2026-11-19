@@ -8,6 +8,10 @@
 
 namespace Candle {
 
+	constexpr uint8_t kTextureBindlessIndex = 0;
+	constexpr uint8_t kSamplerBindlessIndex = 1;
+	constexpr uint8_t kStorageImageBindlessIndex = 2;
+
 	class RenderDevice;
 
 	// Set 0 of every pipeline layout. Binding 0 is Texture2D[kMaxTextures], element i being TexturePool slot i;
@@ -34,7 +38,6 @@ namespace Candle {
 		void WriteFrameGraphStorageImage(uint32_t index, vk::ImageView view);	// Storage images are always accessed in General
 
 		void BindSet(vk::CommandBuffer commandBuffer, vk::PipelineBindPoint bindPoint, vk::PipelineLayout pipelineLayout);
-
 
 		inline vk::DescriptorSet GetSet() const { return *m_DescriptorSet; }
 		inline vk::DescriptorSetLayout GetLayout() const { return *m_DescriptorSetLayout; }
