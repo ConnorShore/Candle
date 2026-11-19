@@ -32,10 +32,10 @@ namespace Candle {
 		BindlessTable& operator=(const BindlessTable&) = delete;
 
 		// layout is the one the image is in whenever it's sampled, not its layout now
-		void WriteTexture(uint32_t index, vk::ImageView view, vk::ImageLayout layout = vk::ImageLayout::eShaderReadOnlyOptimal);
-		void WriteFrameGraphTexture(uint32_t index, vk::ImageView view, vk::ImageLayout layout = vk::ImageLayout::eShaderReadOnlyOptimal);
-		void WriteStorageImage(uint32_t index, vk::ImageView view);	// Storage images are always accessed in General
-		void WriteFrameGraphStorageImage(uint32_t index, vk::ImageView view);	// Storage images are always accessed in General
+		uint32_t WriteTexture(uint32_t index, vk::ImageView view, vk::ImageLayout layout = vk::ImageLayout::eShaderReadOnlyOptimal);
+		uint32_t WriteFrameGraphTexture(uint32_t index, vk::ImageView view, vk::ImageLayout layout = vk::ImageLayout::eShaderReadOnlyOptimal);
+		uint32_t WriteStorageImage(uint32_t index, vk::ImageView view);	// Storage images are always accessed in General
+		uint32_t WriteFrameGraphStorageImage(uint32_t index, vk::ImageView view);	// Storage images are always accessed in General
 
 		void BindSet(vk::CommandBuffer commandBuffer, vk::PipelineBindPoint bindPoint, vk::PipelineLayout pipelineLayout);
 
@@ -48,7 +48,7 @@ namespace Candle {
 		void CreateDescriptorSet(RenderDevice& renderDevice);
 		void CreateSamplers(RenderDevice& renderDevice);
 
-		void WriteImage(uint32_t binding, vk::DescriptorType type, uint32_t index, vk::ImageView view, vk::ImageLayout layout, bool frameGraphTexture);
+		uint32_t WriteImage(uint32_t binding, vk::DescriptorType type, uint32_t index, vk::ImageView view, vk::ImageLayout layout, bool frameGraphTexture);
 
 	private:
 		RenderDevice& m_RenderDevice;

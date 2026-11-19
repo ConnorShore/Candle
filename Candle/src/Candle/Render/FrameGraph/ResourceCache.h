@@ -39,6 +39,7 @@ namespace Candle {
 		uint32_t BindlessIndex;
 		vk::Image Image;
 		vk::ImageView ImageView;
+		ImageState State;
 	};
 
 	using CacheIndex = uint32_t;
@@ -52,6 +53,8 @@ namespace Candle {
 		// Retrieves a usable entry with a matching key
 		// If one doesn't exist a new entry is created (used for transient resources)
 		CacheImportResult CreateOrGetTexture(FGTextureKey key, uint64_t currentTimelineVal);
+
+		void SetTextureState(CacheIndex index, const ImageState& state);
 
 	private:
 		GPUAllocator& m_Allocator;

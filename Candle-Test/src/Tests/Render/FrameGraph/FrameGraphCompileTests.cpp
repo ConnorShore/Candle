@@ -717,7 +717,7 @@ CDL_TEST_CASE(FrameGraphCompile, TransientUsageIsExactlyWhatItsPassesDeclared, G
 	ExpectNoVulkanDebugMessages(logs);
 }
 
-// A depth format can't be a colour attachment, so a usage that assumes colour fails validation when the image is made
+// A depth format can't be a color attachment, so a usage that assumes color fails validation when the image is made
 CDL_TEST_CASE(FrameGraphCompile, DepthTransientIsCreatedAsADepthImage, Gpu)
 {
 	LoggerFixture logs(LogLevel::Warn, kRenderChannelMask);

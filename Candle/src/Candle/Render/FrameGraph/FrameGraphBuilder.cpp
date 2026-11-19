@@ -63,9 +63,7 @@ namespace Candle {
 			.Desc = {
 				.Extent = ResolveSize(spec.Size, m_Graph.m_OutputExtent),
 				.Format = spec.Format,
-				.Usage = vk::ImageUsageFlagBits::eSampled 
-						| (isDepthFormat ? vk::ImageUsageFlagBits::eDepthStencilAttachment : vk::ImageUsageFlagBits::eColorAttachment) 
-						| vk::ImageUsageFlagBits::eTransferDst,
+				.Usage = vk::ImageUsageFlagBits::eSampled | (isDepthFormat ? vk::ImageUsageFlagBits::eDepthStencilAttachment : vk::ImageUsageFlagBits::eColorAttachment),
 				.MipLevels = 1
 			},
 			.Imported = false,

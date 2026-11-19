@@ -174,27 +174,27 @@ namespace Candle {
 		renderDevice.GetDevice().updateDescriptorSets({ samplerWrite }, {});
 	}
 
-	void BindlessTable::WriteTexture(uint32_t index, vk::ImageView view, vk::ImageLayout layout /*= vk::ImageLayout::eShaderReadOnlyOptimal*/)
+	uint32_t BindlessTable::WriteTexture(uint32_t index, vk::ImageView view, vk::ImageLayout layout /*= vk::ImageLayout::eShaderReadOnlyOptimal*/)
 	{
-		WriteImage(kTextureBindlessIndex, vk::DescriptorType::eSampledImage, index, view, layout, false);
+		return WriteImage(kTextureBindlessIndex, vk::DescriptorType::eSampledImage, index, view, layout, false);
 	}
 
-	void BindlessTable::WriteFrameGraphTexture(uint32_t index, vk::ImageView view, vk::ImageLayout layout /*= vk::ImageLayout::eShaderReadOnlyOptimal*/)
+	uint32_t BindlessTable::WriteFrameGraphTexture(uint32_t index, vk::ImageView view, vk::ImageLayout layout /*= vk::ImageLayout::eShaderReadOnlyOptimal*/)
 	{
-		WriteImage(kTextureBindlessIndex, vk::DescriptorType::eSampledImage, kFrameGraphTextureStartIndex + index, view, layout, true);
+		return WriteImage(kTextureBindlessIndex, vk::DescriptorType::eSampledImage, kFrameGraphTextureStartIndex + index, view, layout, true);
 	}
 
-	void BindlessTable::WriteStorageImage(uint32_t index, vk::ImageView view)
+	uint32_t BindlessTable::WriteStorageImage(uint32_t index, vk::ImageView view)
 	{
-		WriteImage(kStorageImageBindlessIndex, vk::DescriptorType::eStorageImage, index, view, vk::ImageLayout::eGeneral, false);
+		return WriteImage(kStorageImageBindlessIndex, vk::DescriptorType::eStorageImage, index, view, vk::ImageLayout::eGeneral, false);
 	}
 
-	void BindlessTable::WriteFrameGraphStorageImage(uint32_t index, vk::ImageView view)
+	uint32_t BindlessTable::WriteFrameGraphStorageImage(uint32_t index, vk::ImageView view)
 	{
-		WriteImage(kStorageImageBindlessIndex, vk::DescriptorType::eStorageImage, kFrameGraphTextureStartIndex + index, view, vk::ImageLayout::eGeneral, true);
+		return WriteImage(kStorageImageBindlessIndex, vk::DescriptorType::eStorageImage, kFrameGraphTextureStartIndex + index, view, vk::ImageLayout::eGeneral, true);
 	}
 
-	void BindlessTable::WriteImage(uint32_t binding, vk::DescriptorType type, uint32_t index, vk::ImageView view, vk::ImageLayout layout, bool frameGraphTexture)
+	uint32_t BindlessTable::WriteImage(uint32_t binding, vk::DescriptorType type, uint32_t index, vk::ImageView view, vk::ImageLayout layout, bool frameGraphTexture)
 	{
 		uint32_t minIndex = frameGraphTexture ? kFrameGraphTextureStartIndex : 0;
 		uint32_t maxIndex = frameGraphTexture ? kMaxTextures : kFrameGraphTextureStartIndex;
@@ -216,6 +216,8 @@ namespace Candle {
 		};
 
 		m_RenderDevice.GetDevice().updateDescriptorSets({ imageWrite }, {});
+
+		return index;	// The index is the bindless index, which is the same as the array element
 	}
 
 	void BindlessTable::BindSet(vk::CommandBuffer commandBuffer, vk::PipelineBindPoint bindPoint, vk::PipelineLayout pipelineLayout)

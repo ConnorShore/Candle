@@ -100,6 +100,15 @@ namespace Candle {
 			texture.ImageView = cacheResult.ImageView;
 			texture.BindlessIndex = cacheResult.BindlessIndex;
 			texture.CacheIndex = cacheResult.CacheIndex;
+
+			// Earlier frames in flight share this image, so the first barrier waits for their access. The layout is dropped:
+			// transient contents don't carry across frames, and Undefined stays correct even if the cached layout is stale.
+			texture.InitialState = {
+				.Layout = vk::ImageLayout::eUndefined,
+				.Access = cacheResult.State.Access,
+				.Stage = cacheResult.State.Stage
+			};
+			texture.FinalState = texture.InitialState;
 		}
 
 		// Walk texture array and for imported textures, create a final barrier to transition them to their final state for the next frame
@@ -214,6 +223,14 @@ namespace Candle {
 			FGTextureEntry& texture = m_Textures[finalBarrier.Texture.Index];
 			finalBarrier.FromState = texture.FinalState;
 			texture.FinalState = finalBarrier.ToState;	// Update the texture's final state for the next frame
+		}
+
+		// Next frame's first barrier waits on this. Everything runs on the graphics queue, so a barrier there
+		// also covers last frame's command buffer; a second queue would need a semaphore instead.
+		for (const FGTextureEntry& texture : m_Textures)
+		{
+			if (!texture.Imported)
+				m_ResourceCache.SetTextureState(texture.CacheIndex, texture.FinalState);
 		}
 	}
 

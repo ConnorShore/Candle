@@ -40,17 +40,18 @@ namespace Candle {
 
 	CacheImportResult ResourceCache::CreateOrGetTexture(FGTextureKey key, uint64_t currentTimelineVal)
 	{
-		// Check if a texture with the same key already exists in the cache
+		// Check if a texture with the same key already exists in the cache (and hasn't been used in this frame yet). If so, return it.
 		for (size_t i = 0; i < m_Cache.size(); ++i)
 		{
-			if (m_Cache[i].Key == key)
+			if (m_Cache[i].Key == key && m_Cache[i].LastFrameUsed < currentTimelineVal)
 			{
 				m_Cache[i].LastFrameUsed = currentTimelineVal; // Update the last frame used,
 				return CacheImportResult{
 					.CacheIndex = static_cast<uint32_t>(i),
 					.BindlessIndex = m_Cache[i].BindlessIndex,
 					.Image = m_Cache[i].Image.GetImage(),
-					.ImageView = m_Cache[i].Image.GetImageView()	
+					.ImageView = m_Cache[i].Image.GetImageView(),
+					.State = m_Cache[i].State
 				};
 			}
 		}
@@ -67,7 +68,7 @@ namespace Candle {
 			.Flags{ VMA_ALLOCATION_CREATE_DEDICATED_MEMORY_BIT },
 			.DebugName{ std::format("FrameGraph Transient Texture {}", m_Cache.size()) }
 		});
-		m_BindlessTable.WriteFrameGraphTexture(static_cast<uint32_t>(m_Cache.size()), image.GetImageView());
+		uint32_t outIndex = m_BindlessTable.WriteFrameGraphTexture(static_cast<uint32_t>(m_Cache.size()), image.GetImageView());
 
 		// Create a new texture in the resource cache
 		CacheEntry& newEntry = m_Cache.emplace_back(CacheEntry{
@@ -78,7 +79,7 @@ namespace Candle {
 				.Access = vk::AccessFlagBits2::eNone, 
 				.Stage = vk::PipelineStageFlagBits2::eNone 
 			},
-			.BindlessIndex{ cacheSize },
+			.BindlessIndex{ outIndex },
 			.LastFrameUsed{ currentTimelineVal }
 		});
 
@@ -86,8 +87,15 @@ namespace Candle {
 			.CacheIndex = cacheSize,
 			.BindlessIndex = newEntry.BindlessIndex,
 			.Image = newEntry.Image.GetImage(),
-			.ImageView = newEntry.Image.GetImageView()
+			.ImageView = newEntry.Image.GetImageView(),
+			.State = newEntry.State
 		};
+	}
+
+	void ResourceCache::SetTextureState(CacheIndex index, const ImageState& state)
+	{
+		CDL_CORE_ASSERT(index < m_Cache.size(), "CacheIndex is out of range");
+		m_Cache[index].State = state;
 	}
 
 }
