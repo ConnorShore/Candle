@@ -108,6 +108,9 @@ namespace Candle {
 			return m_Textures[handle.Index];
 		}
 
+		// Valid from Compile until the next Reset
+		inline const FGCompiledGraph& GetCompiledGraph() const { return m_CompiledGraph; }
+
 	private:
 		friend class FrameGraphBuilder;
 

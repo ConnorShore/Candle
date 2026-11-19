@@ -22,7 +22,6 @@ namespace Candle {
 	{
 		FGSize Size;
 		vk::Format Format{ vk::Format::eUndefined };
-
 	};
 
 	struct FGBufferSpec

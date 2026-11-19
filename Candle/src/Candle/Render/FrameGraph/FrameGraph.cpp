@@ -19,6 +19,22 @@ namespace Candle {
 		// Presentation reads it outside our command stream, so the present semaphore does the waiting, as in OldRender
 		constexpr ImageState kPresentState{ .Layout = vk::ImageLayout::ePresentSrcKHR, .Access = vk::AccessFlagBits2::eNone };
 
+		vk::AttachmentLoadOp ToAttachmentLoadOp(FGLoad load)
+		{
+			switch (load)
+			{
+			case FGLoad::Load:
+				return vk::AttachmentLoadOp::eLoad;
+			case FGLoad::Clear:
+				return vk::AttachmentLoadOp::eClear;
+			case FGLoad::DontCare:
+				return vk::AttachmentLoadOp::eDontCare;
+			default:
+				CDL_CORE_ASSERT(false, "Unknown FGLoad value");
+				return vk::AttachmentLoadOp::eDontCare;
+			}
+		}
+
 	}
 
 	FrameGraph::FrameGraph(FrameGraphSpec spec)
@@ -86,42 +102,84 @@ namespace Candle {
 			texture.CacheIndex = cacheResult.CacheIndex;
 		}
 
+		// Walk texture array and for imported textures, create a final barrier to transition them to their final state for the next frame
+		for (size_t i = 0; i < m_Textures.size(); ++i)
+		{
+			FGTextureEntry& texture = m_Textures[i];
+			if (texture.Imported)
+			{
+				FGBarrier barrier{
+					.Texture{ { static_cast<uint32_t>(i) } },
+					.FromState{ texture.InitialState },		// Will update this from state through compilation so from state is the latest state the texture was in before the end of the frame
+					.ToState{ texture.FinalState }
+				};
+				m_CompiledGraph.FinalBarriers.push_back(barrier);
+
+				// Set texture final state to initial state for the upcoming frame, since the final barrier will transition it to its final state for the next frame
+				m_Textures[i].FinalState = m_Textures[i].InitialState;
+			}
+		}
+
 		// Create the compiled graph by walking the passes and their texture accesses, creating barriers and compiled attachments as needed
 		for (size_t pass = 0; pass < m_Passes.size(); ++pass)
 		{
 			FrameGraphPassNode& passNode = m_Passes[pass];
 			uint32_t barrierStartIndex = static_cast<uint32_t>(m_CompiledGraph.Barriers.size());
 			uint32_t attachmentStartIndex = static_cast<uint32_t>(m_CompiledGraph.Attachments.size());
-			bool hasDepthAttachment = false;
+			int depthAttachmentIndex = -1;
+
 			// Walk texture entries and for each texture access entry that belongs to this pass, create a barrier and compiled attachment if needed
 			for (size_t access = 0; access < m_TextureAccesses[pass].size(); ++access)
 			{
 				FGTextureAccessEntry& textureAccess = m_TextureAccesses[pass][access];
 				FGTextureEntry& texture = m_Textures[textureAccess.Handle.Index];
+				FGUsageInfo usageInfo = GetUsageInfo(textureAccess.Usage);
 
 				// Create a barrier for this texture access
 				FGBarrier barrier{
 					.Texture{ textureAccess.Handle },
-					.FromState{ texture.InitialState },
-					.ToState{ GetUsageInfo(textureAccess.Usage).State }
+					.FromState{ texture.FinalState },
+					.ToState{ usageInfo.State }
 				};
 				m_CompiledGraph.Barriers.push_back(barrier);
+
+				// Update the texture's final state for the next pass
+				m_Textures[textureAccess.Handle.Index].FinalState = usageInfo.State;	
 
 				// If this is a color or depth attachment, create a compiled attachment
 				if (textureAccess.Usage == FGUsage::ColorAttachment || textureAccess.Usage == FGUsage::DepthAttachment)
 				{
 					if (textureAccess.Usage == FGUsage::DepthAttachment)
-						hasDepthAttachment = true;
-						
+					{
+						depthAttachmentIndex = static_cast<int>(access);
+						continue;
+					}
+					
 					FGCompiledAttachment compiledAttachment{
 						.Texture{ textureAccess.Handle },
-						.Layout{ GetUsageInfo(textureAccess.Usage).State.Layout },
-						.LoadOp{ (textureAccess.LoadOp == FGLoad::Clear) ? vk::AttachmentLoadOp::eClear : vk::AttachmentLoadOp::eDontCare },
+						.Layout{ usageInfo.State.Layout },
+						.LoadOp{ ToAttachmentLoadOp(textureAccess.LoadOp) },
 						.StoreOp{ vk::AttachmentStoreOp::eStore }, // TODO: Make this configurable
 						.ClearValue{ textureAccess.ClearVlaue }
 					};
 					m_CompiledGraph.Attachments.push_back(compiledAttachment);
 				}
+			}
+
+			// If there was a depth attachment, create its compiled attachment after the color attachments
+			if (depthAttachmentIndex >= 0)
+			{
+				FGTextureAccessEntry& depthAccess = m_TextureAccesses[pass][depthAttachmentIndex];
+				FGTextureEntry& depthTexture = m_Textures[depthAccess.Handle.Index];
+				FGUsageInfo depthUsageInfo = GetUsageInfo(depthAccess.Usage);
+				FGCompiledAttachment depthAttachment{
+					.Texture{ depthAccess.Handle },
+					.Layout{ depthUsageInfo.State.Layout },
+					.LoadOp{ ToAttachmentLoadOp(depthAccess.LoadOp) },
+					.StoreOp{ vk::AttachmentStoreOp::eStore }, // TODO: Make this configurable
+					.ClearValue{ vk::ClearDepthStencilValue{ 1.0f, 0 } }
+				};
+				m_CompiledGraph.Attachments.push_back(depthAttachment);
 			}
 
 			uint32_t barrierCount = static_cast<uint32_t>(m_CompiledGraph.Barriers.size()) - barrierStartIndex;
@@ -132,8 +190,15 @@ namespace Candle {
 				.BarrierCount = barrierCount,
 				.AttachmentStartIndex = attachmentStartIndex,
 				.AttachmentCount = attachmentCount,
-				.HasDepthAttachment = hasDepthAttachment
+				.HasDepthAttachment = depthAttachmentIndex >= 0
 			});
+		}
+
+		// Walk the final barriers and update their from states to the latest state of the texture at the end of the frame
+		for (FGBarrier& finalBarrier : m_CompiledGraph.FinalBarriers)
+		{
+			FGTextureEntry& texture = m_Textures[finalBarrier.Texture.Index];
+			finalBarrier.FromState = texture.FinalState;
 		}
 	}
 
