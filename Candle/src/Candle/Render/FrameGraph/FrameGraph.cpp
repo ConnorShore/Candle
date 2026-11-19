@@ -132,19 +132,33 @@ namespace Candle {
 			for (size_t access = 0; access < m_TextureAccesses[pass].size(); ++access)
 			{
 				FGTextureAccessEntry& textureAccess = m_TextureAccesses[pass][access];
-				FGTextureEntry& texture = m_Textures[textureAccess.Handle.Index];
+				uint32_t textureIndex = textureAccess.Handle.Index;
+				FGTextureEntry& texture = m_Textures[textureIndex];
 				FGUsageInfo usageInfo = GetUsageInfo(textureAccess.Usage);
 
-				// Create a barrier for this texture access
-				FGBarrier barrier{
-					.Texture{ textureAccess.Handle },
-					.FromState{ texture.FinalState },
-					.ToState{ usageInfo.State }
-				};
-				m_CompiledGraph.Barriers.push_back(barrier);
+				// Create a barrier for this texture access if necessary (can skip if it's a read and the texture is already in the correct layout)
+				bool canSkipBarrier = (!textureAccess.Write && texture.FinalState.Layout == usageInfo.State.Layout);
+				if (canSkipBarrier)
+				{
+					// If the texture is already in the correct layout for a read, we can skip creating a barrier, 
+					// but we still need to update the final state to include the new access flags and stage flags
+					texture.FinalState.Stage |= usageInfo.State.Stage;	
+					texture.FinalState.Access |= usageInfo.State.Access;
+					texture.FinalState.Layout = usageInfo.State.Layout;
+				}
+				else
+				{
+					FGBarrier barrier{
+						.Texture{ textureAccess.Handle },
+						.FromState{ texture.FinalState },
+						.ToState{ usageInfo.State }
+					};
 
-				// Update the texture's final state for the next pass
-				m_Textures[textureAccess.Handle.Index].FinalState = usageInfo.State;	
+					m_CompiledGraph.Barriers.push_back(barrier);
+
+					// Update the texture's final state for the next pass
+					m_Textures[textureIndex].FinalState = usageInfo.State;
+				}
 
 				// If this is a color or depth attachment, create a compiled attachment
 				if (textureAccess.Usage == FGUsage::ColorAttachment || textureAccess.Usage == FGUsage::DepthAttachment)
@@ -199,6 +213,7 @@ namespace Candle {
 		{
 			FGTextureEntry& texture = m_Textures[finalBarrier.Texture.Index];
 			finalBarrier.FromState = texture.FinalState;
+			texture.FinalState = finalBarrier.ToState;	// Update the texture's final state for the next frame
 		}
 	}
 
