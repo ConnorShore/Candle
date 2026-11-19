@@ -17,7 +17,7 @@ namespace Candle {
 	{
 		vk::Format Format;
 		vk::Extent2D Extent;
-		FGUsage Usage;
+		vk::ImageUsageFlags Usage;
 
 		bool operator==(const FGTextureKey& other) const
 		{
@@ -26,7 +26,7 @@ namespace Candle {
 	};
 	struct CacheEntry
 	{
-		const GPUImage* Image;
+		GPUImage Image;
 		FGTextureKey Key;
 		ImageState State;	// Where the last frame left it
 		uint32_t BindlessIndex;
@@ -35,8 +35,10 @@ namespace Candle {
 
 	struct CacheImportResult
 	{
-		uint32_t Index;
-		CacheEntry Entry;
+		uint32_t CacheIndex;
+		uint32_t BindlessIndex;
+		vk::Image Image;
+		vk::ImageView ImageView;
 	};
 
 	using CacheIndex = uint32_t;

@@ -4,6 +4,7 @@
 #include "FrameGraphHandles.h"
 #include "FrameGraphBuilder.h"
 #include "ResourceCache.h"
+#include "FrameGraphCompilerResources.h"
 
 #include "Candle/Render/Resources/GPUHandles.h"
 #include "Candle/Render/Vulkan/Image.h"
@@ -72,7 +73,7 @@ namespace Candle {
 		~FrameGraph();
 
 		void Reset(glm::uvec2 outputExtent);
-		void Compile();
+		void Compile(uint64_t currentTimelineVal);
 		void Execute(vk::CommandBuffer& commandBuffer);
 
 		template<typename PassData = FGNoData, typename SetupFunc, typename ExecuteFunc>
@@ -89,7 +90,7 @@ namespace Candle {
 			// Add an empty texture access list for this pass, which will be filled by the builder. The builder keeps a reference to it, so it must stay valid until Reset.
 			m_TextureAccesses.push_back({});
 
-			FrameGraphBuilder builder(*this, node);	// TODO: Use concepts to enforce that the setup function takes a FrameGraphBuilder& and PassData& as parameters
+			FrameGraphBuilder builder(*this, static_cast<uint32_t>(m_Passes.size()));	// TODO: Use concepts to enforce that the setup function takes a FrameGraphBuilder& and PassData& as parameters
 			setup(builder, pass->Data);
 
 			m_Passes.push_back(std::move(node));
@@ -106,15 +107,15 @@ namespace Candle {
 			CDL_CORE_ASSERT(handle.Index < m_Textures.size(), "FGTextureHandle is not from this frame");
 			return m_Textures[handle.Index];
 		}
-	private:
-		FGTextureHandle CreateTexture(std::string_view name, FGTextureSpec spec);
 
+	private:
 		friend class FrameGraphBuilder;
 
 	private:
 		TexturePool& m_TexturePool;
 		ArenaAllocator m_FrameArena;
 		ResourceCache m_ResourceCache;
+		FGCompiledGraph m_CompiledGraph;
 
 		glm::uvec2 m_OutputExtent{ 0, 0 };
 		std::vector<FrameGraphPassNode> m_Passes;
@@ -125,6 +126,8 @@ namespace Candle {
 		// TODO: Once FG is working, optimize this nested vector (probably to single vector)
 		std::vector<std::vector<FGTextureAccessEntry>> m_TextureAccesses;	// Indexed by pass, so each pass has a list of the textures it reads and writes
 		//std::vector<FGBufferHandle> m_Buffers;
+
+		bool m_ResetBeforeCompile{ false };
 	};
 
 }

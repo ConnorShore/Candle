@@ -4,7 +4,27 @@
 #include "FrameGraphPass.h"
 #include "FrameGraphResources.h"
 
+#include <glm/glm.hpp>
+
 namespace Candle {
+
+	namespace {
+
+		glm::uvec2 ResolveSize(FGSize size, glm::uvec2 outputExtent)
+		{
+			switch (size.Mode)
+			{
+			case FGSizeMode::RelativeToOutput:
+				return glm::uvec2(static_cast<uint32_t>(outputExtent.x * size.Scale), static_cast<uint32_t>(outputExtent.y * size.Scale));
+			case FGSizeMode::Absolute:
+				return size.Extent;
+			default:
+				CDL_CORE_ASSERT(false, "Unknown FGSizeMode");
+				return glm::uvec2(0, 0);
+			}
+		}
+
+	}
 
 	FrameGraphBuilder::FrameGraphBuilder(FrameGraph& graph, uint32_t passIndex)
 		: m_Graph(graph), m_PassIndex(passIndex) 
@@ -13,7 +33,28 @@ namespace Candle {
 
 	FGTextureHandle FrameGraphBuilder::CreateTexture(std::string_view name, FGTextureSpec spec)
 	{
-		return m_Graph.CreateTexture(name, spec);
+		ImageState initialState{
+			.Layout = vk::ImageLayout::eUndefined,
+			.Access = vk::AccessFlagBits2::eNone,
+			.Stage = vk::PipelineStageFlagBits2::eTopOfPipe
+		};
+
+		// During compilation, we will walk the textures (non imported) to create resource cache
+		// and bindless table entries for them
+
+		m_Graph.m_Textures.emplace_back(FGTextureEntry{
+			.Name = name,
+			.Desc = {
+				.Extent = ResolveSize(spec.Size, m_Graph.m_OutputExtent),
+				.Format = spec.Format,
+				.Usage = vk::ImageUsageFlagBits::eSampled | vk::ImageUsageFlagBits::eColorAttachment | vk::ImageUsageFlagBits::eTransferDst,
+				.MipLevels = 1
+			},
+			.Imported = false,
+			.InitialState = initialState,
+			.FinalState = initialState	// Will be updated during compilation to the last pass's final state
+			});
+		return { static_cast<uint32_t>(m_Graph.m_Textures.size() - 1) };
 	}
 
 	void FrameGraphBuilder::ReadTexture(FGTextureHandle texture, FGUsage usage)

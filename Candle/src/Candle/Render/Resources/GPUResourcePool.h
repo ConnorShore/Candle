@@ -45,7 +45,8 @@ namespace Candle {
 
 		GPUResourcePoolStats CaptureStats() const;
 
-		uint32_t GetCapacity() const { return static_cast<uint32_t>(m_Handles.size()); }
+		inline uint32_t GetCapacity() const { return static_cast<uint32_t>(m_Handles.size()); }
+		inline uint32_t GetLiveCount() const { return m_LiveCount; }
 
 	protected:
 		GPUResourcePoolBase(GPUResourceRegistry& registry, uint32_t capacity);
@@ -157,8 +158,6 @@ namespace Candle {
 
 			return std::move(liveHandles);
 		}
-
-		inline size_t GetLiveCount() const { return m_Payloads.size() - m_FreeIndices.size(); }
 
 	protected:
 		inline void DestroyPayload(uint32_t index) override { m_Payloads[index].reset(); }
