@@ -24,6 +24,7 @@ namespace Candle {
 			}
 		}
 
+		// TODO NOW: Consolodate to common location for other files to use
 		bool IsDepthFormat(vk::Format format)
 		{
 			switch (format)

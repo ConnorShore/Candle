@@ -1,12 +1,12 @@
 #pragma once
 
+#include "FrameGraphContext.h"
+
 #include <string>
 #include <string_view>
 #include <utility>
 
 namespace Candle {
-
-	struct FrameGraphContext;
 
 	struct FrameGraphPassConcept
 	{

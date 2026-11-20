@@ -32,6 +32,9 @@ namespace Candle {
 		// A float time steps ~0.24 ms at an hour; wrapping keeps shader animation smooth for one jump per period
 		constexpr double kShaderTimeWrapSeconds = 3600.0;
 
+		// Set to false to draw the frame by hand. The graph has no debug draw or GUI passes yet and can't draw into an output target.
+		constexpr bool kRenderWithFrameGraph = true;
+
 		constexpr vk::ImageSubresourceRange kColorRange{ .aspectMask = vk::ImageAspectFlagBits::eColor, .levelCount = 1, .layerCount = 1 };
 
 		// A color attachment the next pass only writes, since its clear replaces whatever was there
@@ -242,15 +245,154 @@ namespace Candle {
 
 	//
 
+	
+
 	void Renderer::Render(const FramePacket& packet, FrameContext& frame, SwapChainImage& target)
 	{
-		const glm::uvec2 outputExtent = m_RenderToSwapChain ? target.GetDesc().Extent : m_TexturePool.GetTextureInfo(packet.OutputTarget).Desc.Extent;
-		m_FrameGraph.Reset(outputExtent);
+		if (!kRenderWithFrameGraph || !m_RenderToSwapChain)
+		{
+			OldRender(packet, frame, target);
+			return;
+		}
+
+		CDL_PROFILE_SCOPE("Renderer::Render");
+
+		m_RetiredImages.Drain(QueueType::Graphics, m_RenderDevice.GetCompletedTimelineValue(QueueType::Graphics));
+
+		// Write the transform data into the frame's TransformData buffer, if any
+		std::span<const glm::mat4> transforms = packet.TransformData;
+		if (transforms.size() > kMaxTransforms)
+		{
+			// Checked in every config, since the write below would run past the end of the buffer
+			CDL_CORE_ASSERT(false, "FramePacket has more transforms than kMaxTransforms");
+			transforms = transforms.first(kMaxTransforms);
+		}
+
+		if (!transforms.empty())
+			frame.TransformData.Write(std::as_bytes(transforms));
+
+		// Safe to overwrite: RenderManager waited on this slot's RetireValue, and vkQueueSubmit makes host writes visible to the GPU
+		const GPU::FrameData frameData{
+			.ViewProjection = packet.RenderView.Projection * packet.RenderView.View,
+			.TransformData = frame.TransformData.GetDeviceAddress(),
+			.TransformCount = static_cast<uint32_t>(transforms.size()),
+			.Time = static_cast<float>(std::fmod(packet.Time, kShaderTimeWrapSeconds))
+		};
+		frame.FrameData.Write(std::as_bytes(std::span(&frameData, 1)));
+
+		const GPU::GlobalPushConstants global{
+			.Frame = frame.FrameData.GetDeviceAddress()
+		};
+
+		m_FrameGraph.Reset(target.GetDesc().Extent);
 
 		const FGTextureHandle backBuffer = m_FrameGraph.ImportSwapChainImage(target);
+		const FGTextureHandle computeTex = m_FrameGraph.ImportTexture("ComputeTex", m_ComputeTex);
 
-		// The graph records nothing yet, so the frame is still drawn by hand
-		OldRender(packet, frame, target);
+		// Execute runs before Render returns, so the passes may capture its locals
+		m_FrameGraph.AddPass("ComputePass",
+			[&](FrameGraphBuilder& builder, FGNoData&)
+			{
+				builder.WriteTexture(computeTex, FGUsage::StorageCompute);
+			},
+			[this, computeTex, global](const FGNoData&, FrameGraphContext& ctx)
+			{
+				vk::Pipeline computePipeline = m_PipelineStore.TryGetPipeline(m_ComputePipeline);
+				if (!computePipeline)
+				{
+					CDL_CORE_ASSERT(false, "Compute pipeline is not ready");
+					return;
+				}
+
+				auto entryPoint = m_PipelineStore.GetEntryPoint(m_ComputePipeline, ShaderStage::Compute);
+				if (!entryPoint)
+				{
+					CDL_CORE_ASSERT(false, "Failed to get compute pipeline entry point: {}", entryPoint.error());
+					return;
+				}
+
+				const FGTextureEntry& texture = ctx.GetTexture(computeTex);
+				vk::CommandBuffer commandBuffer = ctx.GetCommandBuffer();
+				commandBuffer.bindPipeline(vk::PipelineBindPoint::eCompute, computePipeline);
+
+				const GPU::ComputePushConstants pushConstants{
+					.Global = global,
+					.TextureIndex = texture.BindlessIndex,
+					.SamplerIndex = static_cast<uint32_t>(SamplerType::LinearClamp)
+				};
+				ApplyPushConstants(commandBuffer, m_PipelineStore.GetGlobalLayout(), pushConstants);
+
+				// dispatch takes a group count, rounded up so the groups cover the whole texture
+				const LocalGroupSize& groupSize = entryPoint->LocalSize;
+				commandBuffer.dispatch((texture.Desc.Extent.x + groupSize.X - 1) / groupSize.X, (texture.Desc.Extent.y + groupSize.Y - 1) / groupSize.Y, 1);
+			});
+
+		m_FrameGraph.AddPass("TrianglePass",
+			[&](FrameGraphBuilder& builder, FGNoData&)
+			{
+				const FGTextureHandle depth = builder.CreateTexture("Depth", { .Size = { .Mode = FGSizeMode::RelativeToOutput }, .Format = m_DepthFormat });
+				builder.ColorAttachment(backBuffer, 0, FGLoad::Clear, vk::ClearColorValue(0.0f, 0.0f, 0.0f, 1.0f));
+				builder.DepthAttachment(depth, FGLoad::Clear);
+				builder.ReadTexture(computeTex, FGUsage::SampledFragment);
+			},
+			[this, &packet, computeTex, global](const FGNoData&, FrameGraphContext& ctx)
+			{
+				vk::Pipeline trianglePipeline = m_PipelineStore.TryGetPipeline(m_TrianglePipeline);
+				if (!trianglePipeline)
+				{
+					CDL_CORE_ASSERT(false, "Triangle pipeline is not ready");
+					return;
+				}
+
+				vk::CommandBuffer commandBuffer = ctx.GetCommandBuffer();
+				commandBuffer.bindPipeline(vk::PipelineBindPoint::eGraphics, trianglePipeline);
+
+				const vk::Extent2D extent = ctx.GetRenderExtent();
+				commandBuffer.setViewport(0, vk::Viewport(0.0f, static_cast<float>(extent.height), static_cast<float>(extent.width), -static_cast<float>(extent.height), 0.0f, 1.0f));
+				commandBuffer.setScissor(0, vk::Rect2D(vk::Offset2D(0, 0), extent));
+				commandBuffer.setDepthTestEnable(true);
+
+				const uint32_t computeTextureIndex = ctx.GetTexture(computeTex).BindlessIndex;
+				for (const DrawItem& item : packet.DrawItems)
+				{
+					// The GPU doesn't bounds-check a read through a device address, so skip a bad index in every config
+					if (item.TransformIndex >= packet.TransformData.size())
+					{
+						CDL_CORE_ASSERT(false, "DrawItem's TransformIndex is past the packet's TransformData");
+						continue;
+					}
+
+					MeshDrawInfo drawInfo = m_GeometryPool.GetMeshInfo(item.Mesh);
+					TextureInfo textureInfo = m_TexturePool.GetTextureInfo(item.Texture);
+
+					const GPU::MeshDrawPushConstants pushConstants{
+						.Global = global,
+						.Vertices = drawInfo.VerticesAddr,
+						.TextureIndex = textureInfo.Index,
+						.SamplerIndex = static_cast<uint32_t>(item.Sampler),
+						.TransformIndex = item.TransformIndex,
+						.ComputeTextureIndex = computeTextureIndex
+					};
+
+					ApplyPushConstants(commandBuffer, m_PipelineStore.GetGlobalLayout(), pushConstants);
+					commandBuffer.bindIndexBuffer(drawInfo.Indices, 0, vk::IndexType::eUint32);
+					commandBuffer.drawIndexed(drawInfo.IndexCount, 1, 0, 0, 0);
+				}
+			});
+
+		// The cache only needs this to grow every frame. It's a lower bound on what this frame's submit returns, so evicting by it would be early
+		m_FrameGraph.Compile(m_RenderDevice.GetLastSubmittedTimelineValue(QueueType::Graphics) + 1);
+
+		frame.CommandBuffer.begin({ .flags = vk::CommandBufferUsageFlagBits::eOneTimeSubmit });
+		m_BindlessTable.BindSet(*frame.CommandBuffer, vk::PipelineBindPoint::eGraphics, m_PipelineStore.GetGlobalLayout());
+		m_BindlessTable.BindSet(*frame.CommandBuffer, vk::PipelineBindPoint::eCompute, m_PipelineStore.GetGlobalLayout());
+
+		m_FrameGraph.Execute(m_RenderDevice, frame.CommandBuffer);
+
+		frame.CommandBuffer.end();
+
+		// The final barrier left it ready to present; anything reading the tracked state before the next acquire, like a test's readback, expects that
+		target.SetState(m_FrameGraph.GetTexture(backBuffer).FinalState);
 	}
 
 	void Renderer::OldRender(const FramePacket& packet, FrameContext& frame, SwapChainImage& target)

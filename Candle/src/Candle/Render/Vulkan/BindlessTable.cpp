@@ -198,7 +198,8 @@ namespace Candle {
 	{
 		uint32_t minIndex = frameGraphTexture ? kFrameGraphTextureStartIndex : 0;
 		uint32_t maxIndex = frameGraphTexture ? kMaxTextures : kFrameGraphTextureStartIndex;
-		CDL_CORE_ASSERT(Platform::IsMainThread(), "BindlessTable images are written on the main thread");
+		if (!frameGraphTexture)
+			CDL_CORE_ASSERT(Platform::IsMainThread(), "BindlessTable images are written on the main thread");
 		CDL_CORE_ASSERT(index >= minIndex, "Image index is outside the valid bindless array range");
 		CDL_CORE_ASSERT(index < maxIndex, "Image index is outside the valid bindless array range");
 

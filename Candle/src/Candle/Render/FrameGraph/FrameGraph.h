@@ -5,6 +5,7 @@
 #include "FrameGraphBuilder.h"
 #include "ResourceCache.h"
 #include "FrameGraphCompilerResources.h"
+#include "FrameGraphContext.h"
 
 #include "Candle/Render/Resources/GPUHandles.h"
 #include "Candle/Render/Vulkan/Image.h"
@@ -26,13 +27,7 @@ namespace Candle {
 	class BindlessTable;
 	class TexturePool;
 	class GPUAllocator;
-
-	// Holds things needed for a render pass
-	struct FrameGraphContext 
-	{
-		ResourceCache& Resources;
-		Blackboard& Blackboard;
-	};
+	class RenderDevice;
 
 	struct FrameGraphSpec
 	{
@@ -74,7 +69,7 @@ namespace Candle {
 
 		void Reset(glm::uvec2 outputExtent);
 		void Compile(uint64_t currentTimelineVal);
-		void Execute(vk::CommandBuffer& commandBuffer);
+		void Execute(const RenderDevice& renderDevice, vk::raii::CommandBuffer& commandBuffer);
 
 		template<typename PassData = FGNoData, typename SetupFunc, typename ExecuteFunc>
 		const PassData& AddPass(std::string_view name, SetupFunc setup, ExecuteFunc execute)
@@ -113,6 +108,7 @@ namespace Candle {
 
 	private:
 		friend class FrameGraphBuilder;
+		friend class FrameGraphContext;
 
 	private:
 		TexturePool& m_TexturePool;

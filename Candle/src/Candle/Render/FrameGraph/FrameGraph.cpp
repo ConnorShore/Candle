@@ -2,6 +2,7 @@
 #include "FrameGraph.h"
 #include "FrameGraphResources.h"
 
+#include "Candle/Render/Vulkan/RenderDevice.h"
 #include "Candle/Render/Vulkan/GPUAllocator.h"
 #include "Candle/Render/Vulkan/BindlessTable.h"
 #include "Candle/Render/Vulkan/SwapChainImage.h"
@@ -35,6 +36,23 @@ namespace Candle {
 			}
 		}
 
+		// TODO NOW: Consolodate to common location for other files to use
+		bool IsDepthFormat(vk::Format format)
+		{
+			switch (format)
+			{
+			case vk::Format::eD16Unorm:
+			case vk::Format::eX8D24UnormPack32:
+			case vk::Format::eD32Sfloat:
+			case vk::Format::eD16UnormS8Uint:
+			case vk::Format::eD24UnormS8Uint:
+			case vk::Format::eD32SfloatS8Uint:
+				return true;
+			default:
+				return false;
+			}
+		}
+
 	}
 
 	FrameGraph::FrameGraph(FrameGraphSpec spec)
@@ -46,7 +64,6 @@ namespace Candle {
 
 	FrameGraph::~FrameGraph()
 	{
-
 	}
 
 	void FrameGraph::Reset(glm::uvec2 outputExtent)
@@ -209,6 +226,7 @@ namespace Candle {
 			uint32_t attachmentCount = static_cast<uint32_t>(m_CompiledGraph.Attachments.size()) - attachmentStartIndex;
 			m_CompiledGraph.Passes.push_back({
 				.Name = passNode.Name,
+				.PassIndex = static_cast<uint32_t>(pass),
 				.BarrierStartIndex = barrierStartIndex,
 				.BarrierCount = barrierCount,
 				.AttachmentStartIndex = attachmentStartIndex,
@@ -232,12 +250,130 @@ namespace Candle {
 			if (!texture.Imported)
 				m_ResourceCache.SetTextureState(texture.CacheIndex, texture.FinalState);
 		}
+
+		// TODO: Need to handle pass culling
 	}
 
-	void FrameGraph::Execute(vk::CommandBuffer& commandBuffer)
+	void FrameGraph::Execute(const RenderDevice& renderDevice, vk::raii::CommandBuffer& commandBuffer)
 	{
-		// After frame graph is compiled, walk the passes and execute them in order,
-		// converting the FG objects into the appropriate Vulkan objects and binding them to the command buffer
+		// Walk the compiled graph and execute each pass, creating barriers and attachments as needed
+		for (const FGCompiledPass& pass : m_CompiledGraph.Passes)
+		{
+			// Create barriers
+			if (pass.BarrierCount > 0)
+			{
+				std::vector<vk::ImageMemoryBarrier2> barriers;
+				barriers.reserve(pass.BarrierCount);
+				for (uint32_t i = 0; i < pass.BarrierCount; ++i)
+				{
+					uint32_t barrierIndex = pass.BarrierStartIndex + i;
+					const FGBarrier& barrier = m_CompiledGraph.Barriers[barrierIndex];
+					const FGTextureEntry& texture = m_Textures[barrier.Texture.Index];
+
+					barriers.push_back(MakeImageBarrier(
+						texture.Image,
+						barrier.FromState,
+						barrier.ToState,
+						{
+							.aspectMask = IsDepthFormat(texture.Spec.Format) ? vk::ImageAspectFlagBits::eDepth : vk::ImageAspectFlagBits::eColor,
+							.levelCount = 1,
+							.layerCount = 1
+						}	// TODO: Handle and support subresources (CAN-37)
+					));
+				}
+
+				commandBuffer.pipelineBarrier2({ .imageMemoryBarrierCount = pass.BarrierCount, .pImageMemoryBarriers = barriers.data() });
+			}
+			
+			// Create attachments
+			vk::RenderingAttachmentInfo depthAttachment;
+			std::vector<vk::RenderingAttachmentInfo> colorAttachments;
+			colorAttachments.reserve(pass.AttachmentCount - (pass.HasDepthAttachment ? 1 : 0));
+
+			for (uint32_t i = 0; i < pass.AttachmentCount; ++i)
+			{
+				uint32_t attachmentIndex = pass.AttachmentStartIndex + i;
+				const FGCompiledAttachment& compiledAttachment = m_CompiledGraph.Attachments[attachmentIndex];
+				const FGTextureEntry& texture = m_Textures[compiledAttachment.Texture.Index];
+
+				if (pass.HasDepthAttachment && i == pass.AttachmentCount - 1)
+				{
+					// Create the depth attachment
+					depthAttachment = vk::RenderingAttachmentInfo{
+						.imageView = texture.ImageView,
+						.imageLayout = m_CompiledGraph.Attachments[attachmentIndex].Layout,
+						.loadOp = compiledAttachment.LoadOp,
+						.storeOp = compiledAttachment.StoreOp,
+						.clearValue = compiledAttachment.ClearValue
+					};
+				}
+				else
+				{
+					// Create the color attachment
+					colorAttachments.push_back(vk::RenderingAttachmentInfo{
+						.imageView = texture.ImageView,
+						.imageLayout = compiledAttachment.Layout,
+						.loadOp = compiledAttachment.LoadOp,
+						.storeOp = compiledAttachment.StoreOp,
+						.clearValue = compiledAttachment.ClearValue
+					});
+				}
+			}
+
+			// Create the rendering info for the render pass
+			vk::RenderingInfo renderingInfo{
+				.renderArea = { 
+					.offset = { 0, 0 }, 
+					.extent = vk::Extent2D{ m_OutputExtent.x, m_OutputExtent.y }
+				},
+				.layerCount = 1,
+				.colorAttachmentCount = static_cast<uint32_t>(colorAttachments.size()),
+				.pColorAttachments = colorAttachments.data(),
+				.pDepthAttachment = pass.HasDepthAttachment ? &depthAttachment : nullptr
+			};
+
+			// Begin rendering
+			GPUDebugScope passDebugInfo(renderDevice, commandBuffer, std::string(pass.Name).c_str());
+			commandBuffer.beginRendering(renderingInfo);
+
+			// Set viewport, scissor, depth test
+			commandBuffer.setViewport(0, vk::Viewport(0.0f, static_cast<float>(m_OutputExtent.y), static_cast<float>(m_OutputExtent.x), -static_cast<float>(m_OutputExtent.y), 0.0f, 1.0f));
+			commandBuffer.setScissor(0, vk::Rect2D(vk::Offset2D{ 0, 0 }, vk::Extent2D{ m_OutputExtent.x, m_OutputExtent.y }));
+			commandBuffer.setDepthTestEnable(pass.HasDepthAttachment);
+
+			// Execute pass' exec func 
+			// (pass is responsible for binding a pipeline, descriptor sets, and issuing draw/dispatch commands)
+			FrameGraphPassNode& passNode = m_Passes[pass.PassIndex];
+			FrameGraphContext passContext(*this, commandBuffer, pass.PassIndex);
+			(*passNode.Pass)(passContext);	// Execute the pass' execute function with the pass context
+
+			// End rendering
+			commandBuffer.endRendering();
+		}
+
+		// Perform final barriers for imported images
+		if (!m_CompiledGraph.FinalBarriers.empty())
+		{
+			std::vector<vk::ImageMemoryBarrier2> finalBarriers;
+			finalBarriers.resize(m_CompiledGraph.FinalBarriers.size());
+			for (size_t i = 0; i < m_CompiledGraph.FinalBarriers.size(); ++i)
+			{
+				const FGBarrier& barrier = m_CompiledGraph.FinalBarriers[i];
+				const FGTextureEntry& texture = m_Textures[barrier.Texture.Index];
+				finalBarriers[i] = MakeImageBarrier(
+					texture.Image,
+					barrier.FromState,
+					barrier.ToState,
+					{
+						.aspectMask = IsDepthFormat(texture.Spec.Format) ? vk::ImageAspectFlagBits::eDepth : vk::ImageAspectFlagBits::eColor,
+						.levelCount = 1,
+						.layerCount = 1
+					}
+				);
+			}
+
+			commandBuffer.pipelineBarrier2({ .imageMemoryBarrierCount = static_cast<uint32_t>(finalBarriers.size()), .pImageMemoryBarriers = finalBarriers.data() });
+		}
 	}
 
 	FGTextureHandle FrameGraph::ImportSwapChainImage(SwapChainImage& image)

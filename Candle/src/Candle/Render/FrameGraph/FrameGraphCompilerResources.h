@@ -24,6 +24,7 @@ namespace Candle {
 	struct FGCompiledPass
 	{
 		std::string_view Name;
+		uint32_t PassIndex;	// TODO: May not need but keeping till culling is implemented
 		uint32_t BarrierStartIndex, BarrierCount;
 		uint32_t AttachmentStartIndex, AttachmentCount;	// Colors first then depth as last
 		bool HasDepthAttachment{ false };
