@@ -17,6 +17,7 @@
 #include <cstddef>
 #include <format>
 #include <span>
+#include <utility>
 #include <vector>
 
 using namespace Candle;
@@ -252,6 +253,37 @@ CDL_TEST_CASE(TexturePool, SampledLayoutIsGeneralOnlyForStorageTargets, Gpu)
 		CDL_EXPECT_EQ(gpu.Pool.GetTextureInfo(texture).SampledLayout, vk::ImageLayout::eShaderReadOnlyOptimal);
 		CDL_EXPECT_EQ(gpu.Pool.GetTextureInfo(target).SampledLayout, vk::ImageLayout::eShaderReadOnlyOptimal);
 		CDL_EXPECT_EQ(gpu.Pool.GetTextureInfo(storage).SampledLayout, vk::ImageLayout::eGeneral);
+	}
+	ExpectNoVulkanDebugMessages(logs);
+}
+
+// The frame graph imports pool textures as already in their sampled layout. At submit, validation checks the old layout of a
+// barrier that changes layout against the image's real one, so each target moves out and this fails if it started in Undefined.
+CDL_TEST_CASE(TexturePool, RenderTargetStartsInItsSampledLayout, Gpu)
+{
+	LoggerFixture logs(LogLevel::Warn, kRenderChannelMask);
+	{
+		TestTextures gpu;
+		const GPUTextureHandle target = CreateRenderTarget(gpu.Pool, { 1, 1 });
+		const GPUTextureHandle storage = gpu.Pool.CreateRenderTarget({
+			.Extent = { 1, 1 }, .Format = kRenderTargetFormat, .Usage = vk::ImageUsageFlagBits::eStorage | vk::ImageUsageFlagBits::eSampled });
+
+		TestCommands commands(gpu.Device);
+		commands.Buffer.begin({ .flags = vk::CommandBufferUsageFlagBits::eOneTimeSubmit });
+		const std::pair<GPUTextureHandle, vk::ImageLayout> moves[] = {
+			{ target, vk::ImageLayout::eGeneral },
+			{ storage, vk::ImageLayout::eShaderReadOnlyOptimal } };
+		for (const auto& [handle, layout] : moves)
+		{
+			const TextureInfo info = gpu.Pool.GetTextureInfo(handle);
+			ImageState moved = SampledState(info);
+			moved.Layout = layout;
+
+			const vk::ImageMemoryBarrier2 barrier = MakeImageBarrier(info.Image, SampledState(info), moved, kColorSubresourceRange);
+			commands.Buffer.pipelineBarrier2({ .imageMemoryBarrierCount = 1, .pImageMemoryBarriers = &barrier });
+		}
+		commands.Buffer.end();
+		SubmitAndWait(gpu.Device, commands.Buffer);
 	}
 	ExpectNoVulkanDebugMessages(logs);
 }

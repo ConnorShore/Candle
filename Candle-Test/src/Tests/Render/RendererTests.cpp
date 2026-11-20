@@ -768,8 +768,8 @@ CDL_TEST_CASE(Renderer, ReplacedDepthImageIsFreedOnceItsLastFrameRetires, Gpu)
 		packet.OutputTarget = test.CreateOutputTarget(kGrownExtent);
 		const uint32_t before = LiveAllocations(test.Allocator);
 
-		// Every submit so far has been waited on, so the GPU reaches this with the next one: the frame below
-		const uint64_t lastUse = test.Device.GetCompletedTimelineValue(QueueType::Graphics) + 1;
+		// The GPU reaches this with the next submit: the frame below
+		const uint64_t lastUse = test.Device.GetLastSubmittedTimelineValue(QueueType::Graphics) + 1;
 		test.SceneRenderer.MatchDepthToOutput(kGrownExtent, lastUse);
 		CDL_EXPECT_EQ(LiveAllocations(test.Allocator), before + 1u);	// The new depth image, and the old one held
 

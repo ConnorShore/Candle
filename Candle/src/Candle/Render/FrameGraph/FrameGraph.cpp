@@ -20,6 +20,10 @@ namespace Candle {
 		// Presentation reads it outside our command stream, so the present semaphore does the waiting, as in OldRender
 		constexpr ImageState kPresentState{ .Layout = vk::ImageLayout::ePresentSrcKHR, .Access = vk::AccessFlagBits2::eNone };
 
+		constexpr vk::AccessFlags2 kWriteAccesses = vk::AccessFlagBits2::eShaderWrite | vk::AccessFlagBits2::eShaderStorageWrite
+			| vk::AccessFlagBits2::eColorAttachmentWrite | vk::AccessFlagBits2::eDepthStencilAttachmentWrite
+			| vk::AccessFlagBits2::eTransferWrite | vk::AccessFlagBits2::eHostWrite | vk::AccessFlagBits2::eMemoryWrite;
+
 		vk::AttachmentLoadOp ToAttachmentLoadOp(FGLoad load)
 		{
 			switch (load)
@@ -161,9 +165,11 @@ namespace Candle {
 				uint32_t textureIndex = textureAccess.Handle.Index;
 				FGTextureEntry& texture = m_Textures[textureIndex];
 				FGUsageInfo usageInfo = GetUsageInfo(textureAccess.Usage);
+				if (usageInfo.ImageUsage & vk::ImageUsageFlagBits::eSampled)
+					usageInfo.State.Layout = texture.SampledLayout;	// The layout its bindless descriptor was written with
 
-				// Create a barrier for this texture access if necessary (can skip if it's a read and the texture is already in the correct layout)
-				bool canSkipBarrier = (!textureAccess.Write && texture.FinalState.Layout == usageInfo.State.Layout);
+				// Create a barrier for this texture access if necessary (can skip if it's a read, the texture is already in the correct layout and nothing has written it since its last barrier)
+				bool canSkipBarrier = (!textureAccess.Write && !(texture.FinalState.Access & kWriteAccesses) && texture.FinalState.Layout == usageInfo.State.Layout);
 				if (canSkipBarrier)
 				{
 					// If the texture is already in the correct layout for a read, we can skip creating a barrier, 
@@ -231,7 +237,8 @@ namespace Candle {
 				.BarrierCount = barrierCount,
 				.AttachmentStartIndex = attachmentStartIndex,
 				.AttachmentCount = attachmentCount,
-				.HasDepthAttachment = depthAttachmentIndex >= 0
+				.HasDepthAttachment = depthAttachmentIndex >= 0,
+				.IsComputePass = passNode.IsComputePass
 			});
 		}
 
@@ -275,7 +282,7 @@ namespace Candle {
 						barrier.FromState,
 						barrier.ToState,
 						{
-							.aspectMask = IsDepthFormat(texture.Spec.Format) ? vk::ImageAspectFlagBits::eDepth : vk::ImageAspectFlagBits::eColor,
+							.aspectMask = IsDepthFormat(texture.Desc.Format) ? vk::ImageAspectFlagBits::eDepth : vk::ImageAspectFlagBits::eColor,
 							.levelCount = 1,
 							.layerCount = 1
 						}	// TODO: Handle and support subresources (CAN-37)
@@ -334,12 +341,17 @@ namespace Candle {
 
 			// Begin rendering
 			GPUDebugScope passDebugInfo(renderDevice, commandBuffer, std::string(pass.Name).c_str());
-			commandBuffer.beginRendering(renderingInfo);
 
-			// Set viewport, scissor, depth test
-			commandBuffer.setViewport(0, vk::Viewport(0.0f, static_cast<float>(m_OutputExtent.y), static_cast<float>(m_OutputExtent.x), -static_cast<float>(m_OutputExtent.y), 0.0f, 1.0f));
-			commandBuffer.setScissor(0, vk::Rect2D(vk::Offset2D{ 0, 0 }, vk::Extent2D{ m_OutputExtent.x, m_OutputExtent.y }));
-			commandBuffer.setDepthTestEnable(pass.HasDepthAttachment);
+			// TODO: Eventually remove this and use the pipeline type to determine if it's a compute pass
+			if (!pass.IsComputePass)
+			{
+				commandBuffer.beginRendering(renderingInfo);
+
+				// Set viewport, scissor, depth test
+				commandBuffer.setViewport(0, vk::Viewport(0.0f, static_cast<float>(m_OutputExtent.y), static_cast<float>(m_OutputExtent.x), -static_cast<float>(m_OutputExtent.y), 0.0f, 1.0f));
+				commandBuffer.setScissor(0, vk::Rect2D(vk::Offset2D{ 0, 0 }, vk::Extent2D{ m_OutputExtent.x, m_OutputExtent.y }));
+				commandBuffer.setDepthTestEnable(pass.HasDepthAttachment);
+			}
 
 			// Execute pass' exec func 
 			// (pass is responsible for binding a pipeline, descriptor sets, and issuing draw/dispatch commands)
@@ -348,7 +360,8 @@ namespace Candle {
 			(*passNode.Pass)(passContext);	// Execute the pass' execute function with the pass context
 
 			// End rendering
-			commandBuffer.endRendering();
+			if (!pass.IsComputePass)
+				commandBuffer.endRendering();
 		}
 
 		// Perform final barriers for imported images
@@ -403,6 +416,7 @@ namespace Candle {
 			.Image = info.Image,
 			.ImageView = info.ImageView,
 			.BindlessIndex = info.Index,
+			.SampledLayout = info.SampledLayout,
 			// Earlier reads only have to finish before a write, so no access; later reads have to see the writes
 			.InitialState = { .Layout = info.SampledLayout, .Access = vk::AccessFlagBits2::eNone, .Stage = kSampledStages },
 			.FinalState = { .Layout = info.SampledLayout, .Access = vk::AccessFlagBits2::eShaderSampledRead, .Stage = kSampledStages }

@@ -163,6 +163,23 @@ namespace Candle {
 		m_Stats.TotalBytes += totalSize;
 	}
 
+	void GPUUploader::TransitionImage(vk::Image image, vk::ImageLayout layout, vk::PipelineStageFlags2 dstStages, vk::AccessFlags2 dstAccess)
+	{
+		CDL_CORE_ASSERT(Platform::IsMainThread(), "GPUUploader owns its command pool, so it is main thread only");
+
+		WaitForLastUpload();
+		m_CommandPool.reset();
+		m_CommandBuffer.begin({ .flags = vk::CommandBufferUsageFlagBits::eOneTimeSubmit });
+
+		const vk::ImageMemoryBarrier2 barrier = MakeImageBarrier(image, {}, { .Layout = layout, .Access = dstAccess, .Stage = dstStages },
+			{ .aspectMask = vk::ImageAspectFlagBits::eColor, .levelCount = 1, .layerCount = 1 });
+		m_CommandBuffer.pipelineBarrier2({ .imageMemoryBarrierCount = 1, .pImageMemoryBarriers = &barrier });
+		m_CommandBuffer.end();
+
+		vk::CommandBufferSubmitInfo commandBufferInfo{ .commandBuffer = *m_CommandBuffer };
+		m_LastUploadValue = m_RenderDevice.Submit(QueueType::Graphics, { .CommandBuffers = { &commandBufferInfo, 1 } });
+	}
+
 	void GPUUploader::FreeCompletedStagingBuffers()
 	{
 		CDL_CORE_ASSERT(Platform::IsMainThread(), "GPUUploader is main thread only");

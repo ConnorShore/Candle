@@ -77,7 +77,7 @@ CDL_TEST_CASE(FrameGraph, AddPassRunsSetupAtOnceAndReturnsItsData, Gpu)
 		test.Graph.Reset({ 4, 4 });
 
 		bool setupRan = false;
-		const ValueData& data = test.Graph.AddPass<ValueData>("Pass",
+		const ValueData& data = test.Graph.AddRasterPass<ValueData>("Pass",
 			[&setupRan](FrameGraphBuilder&, ValueData& passData) { setupRan = true; passData.Value = 7; }, kNoExecute);
 
 		CDL_EXPECT(setupRan);
@@ -94,11 +94,11 @@ CDL_TEST_CASE(FrameGraph, PassDataStaysValidAsMorePassesAreAdded, Gpu)
 		TestFrameGraph test;
 		test.Graph.Reset({ 4, 4 });
 
-		const ValueData& first = test.Graph.AddPass<ValueData>("First",
+		const ValueData& first = test.Graph.AddRasterPass<ValueData>("First",
 			[](FrameGraphBuilder&, ValueData& passData) { passData.Value = 1; }, kNoExecute);
 		for (uint32_t i = 0; i < 100; ++i)
 		{
-			test.Graph.AddPass<ValueData>("Later",
+			test.Graph.AddRasterPass<ValueData>("Later",
 				[i](FrameGraphBuilder&, ValueData& passData) { passData.Value = i + 2; }, kNoExecute);
 		}
 
@@ -117,12 +117,12 @@ CDL_TEST_CASE(FrameGraph, ResetFreesTheArenaAndTheFramesTextures, Gpu)
 		const GPUTextureHandle second = test.Pool.CreateRenderTarget({ .Extent = { 4, 4 }, .Format = kFormat, .DebugName = "Second Target" });
 
 		test.Graph.Reset({ 4, 4 });
-		const ValueData* lastFrame = &test.Graph.AddPass<ValueData>("Pass", kNoSetup, kNoExecute);
+		const ValueData* lastFrame = &test.Graph.AddRasterPass<ValueData>("Pass", kNoSetup, kNoExecute);
 		test.Graph.ImportTexture("First", first);
 		test.Graph.ImportTexture("Second", second);
 
 		test.Graph.Reset({ 4, 4 });
-		const ValueData* thisFrame = &test.Graph.AddPass<ValueData>("Pass", kNoSetup, kNoExecute);
+		const ValueData* thisFrame = &test.Graph.AddRasterPass<ValueData>("Pass", kNoSetup, kNoExecute);
 		const FGTextureHandle imported = test.Graph.ImportTexture("Second", second);
 
 		CDL_EXPECT(thisFrame == lastFrame);

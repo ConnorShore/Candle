@@ -48,10 +48,17 @@ namespace {
 		FrameGraph Graph{ { .Allocator = Allocator, .BindlessTable = Bindless, .TexturePool = Pool } };
 
 		// A fresh pool render target imported into this frame. name must outlive the frame, e.g. a string literal.
-		FGTextureHandle ImportTarget(std::string_view name)
+		FGTextureHandle ImportTarget(std::string_view name,
+			vk::ImageUsageFlags usage = vk::ImageUsageFlagBits::eColorAttachment | vk::ImageUsageFlagBits::eSampled)
 		{
-			const GPUTextureHandle target = Pool.CreateRenderTarget({ .Extent = kOutputExtent, .Format = kColorFormat, .DebugName = std::string(name) });
+			const GPUTextureHandle target = Pool.CreateRenderTarget({ .Extent = kOutputExtent, .Format = kColorFormat, .Usage = usage, .DebugName = std::string(name) });
 			return Graph.ImportTexture(name, target);
+		}
+
+		// The pool keeps a storage target in General, and samples it there too
+		FGTextureHandle ImportStorageTarget(std::string_view name)
+		{
+			return ImportTarget(name, vk::ImageUsageFlagBits::eStorage | vk::ImageUsageFlagBits::eSampled);
 		}
 	};
 
@@ -82,7 +89,7 @@ namespace {
 	template<typename SetupFunc>
 	void DeclarePass(FrameGraph& graph, std::string_view name, SetupFunc setup)
 	{
-		graph.AddPass(name, [&setup](FrameGraphBuilder& builder, FGNoData&) { setup(builder); }, kNoExecute);
+		graph.AddRasterPass(name, [&setup](FrameGraphBuilder& builder, FGNoData&) { setup(builder); }, kNoExecute);
 	}
 
 	// One frame with a single pass clearing an output-sized transient, for tests that span frames
@@ -652,6 +659,73 @@ CDL_TEST_CASE(FrameGraphCompile, WriteAfterSeveralReadsWaitsForEveryOne, Gpu)
 		CDL_CHECK(barrier);
 		ExpectWaitsFor(barrier->FromState, {}, vk::PipelineStageFlagBits2::eFragmentShader | vk::PipelineStageFlagBits2::eComputeShader,
 			"The redraw's barrier source");
+	}
+	ExpectNoVulkanDebugMessages(logs);
+}
+
+// A shader samples it through a descriptor written with General, and the image has to be in that layout when it does
+CDL_TEST_CASE(FrameGraphCompile, SampledReadUsesTheLayoutItsDescriptorWasWrittenWith, Gpu)
+{
+	LoggerFixture logs(LogLevel::Warn, kRenderChannelMask);
+	{
+		TestFrameGraph test;
+		NotePlanOnFailure dump(test.Graph);
+		test.Graph.Reset(kOutputExtent);
+
+		const FGTextureHandle storage = test.ImportStorageTarget("Storage");
+		DeclarePass(test.Graph, "Compute", [&](FrameGraphBuilder& builder) { builder.WriteTexture(storage, FGUsage::StorageCompute); });
+		DeclarePass(test.Graph, "Scene", [&](FrameGraphBuilder& builder) { builder.ReadTexture(storage, FGUsage::SampledFragment); });
+		test.Graph.Compile(1);
+
+		const FGBarrier* barrier = FindBarrier(BarriersOf(test.Graph.GetCompiledGraph(), 1), storage);
+		CDL_CHECK(barrier);
+		CDL_EXPECT_EQ(barrier->ToState.Layout, vk::ImageLayout::eGeneral);
+	}
+	ExpectNoVulkanDebugMessages(logs);
+}
+
+// The cache writes every transient's descriptor with ShaderReadOnly
+CDL_TEST_CASE(FrameGraphCompile, SampledReadOfATransientIsInShaderReadOnly, Gpu)
+{
+	LoggerFixture logs(LogLevel::Warn, kRenderChannelMask);
+	{
+		TestFrameGraph test;
+		NotePlanOnFailure dump(test.Graph);
+		test.Graph.Reset(kOutputExtent);
+
+		FGTextureHandle transient;
+		DeclarePass(test.Graph, "Draw", [&](FrameGraphBuilder& builder)
+			{
+				transient = builder.CreateTexture("Transient", OutputSized(kColorFormat));
+				builder.ColorAttachment(transient, 0, FGLoad::Clear, kClearColor);
+			});
+		DeclarePass(test.Graph, "Sample", [&](FrameGraphBuilder& builder) { builder.ReadTexture(transient, FGUsage::SampledFragment); });
+		test.Graph.Compile(1);
+
+		const FGBarrier* barrier = FindBarrier(BarriersOf(test.Graph.GetCompiledGraph(), 1), transient);
+		CDL_CHECK(barrier);
+		CDL_EXPECT_EQ(barrier->ToState.Layout, vk::ImageLayout::eShaderReadOnlyOptimal);
+	}
+	ExpectNoVulkanDebugMessages(logs);
+}
+
+// Nothing has to change layout, but skipping the barrier would let the read run before the compute writes land
+CDL_TEST_CASE(FrameGraphCompile, ReadAfterAWriteInTheSameLayoutStillWaits, Gpu)
+{
+	LoggerFixture logs(LogLevel::Warn, kRenderChannelMask);
+	{
+		TestFrameGraph test;
+		NotePlanOnFailure dump(test.Graph);
+		test.Graph.Reset(kOutputExtent);
+
+		const FGTextureHandle storage = test.ImportStorageTarget("Storage");
+		DeclarePass(test.Graph, "Compute", [&](FrameGraphBuilder& builder) { builder.WriteTexture(storage, FGUsage::StorageCompute); });
+		DeclarePass(test.Graph, "Fragment", [&](FrameGraphBuilder& builder) { builder.ReadTexture(storage, FGUsage::StorageFragment); });
+		test.Graph.Compile(1);
+
+		const FGBarrier* barrier = FindBarrier(BarriersOf(test.Graph.GetCompiledGraph(), 1), storage);
+		CDL_CHECK(barrier);
+		ExpectWaitsFor(barrier->FromState, vk::AccessFlagBits2::eShaderStorageWrite, vk::PipelineStageFlagBits2::eComputeShader, "The read's barrier source");
 	}
 	ExpectNoVulkanDebugMessages(logs);
 }

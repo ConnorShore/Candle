@@ -290,7 +290,7 @@ namespace Candle {
 		const FGTextureHandle computeTex = m_FrameGraph.ImportTexture("ComputeTex", m_ComputeTex);
 
 		// Execute runs before Render returns, so the passes may capture its locals
-		m_FrameGraph.AddPass("ComputePass",
+		m_FrameGraph.AddComputePass("ComputePass",
 			[&](FrameGraphBuilder& builder, FGNoData&)
 			{
 				builder.WriteTexture(computeTex, FGUsage::StorageCompute);
@@ -327,7 +327,7 @@ namespace Candle {
 				commandBuffer.dispatch((texture.Desc.Extent.x + groupSize.X - 1) / groupSize.X, (texture.Desc.Extent.y + groupSize.Y - 1) / groupSize.Y, 1);
 			});
 
-		m_FrameGraph.AddPass("TrianglePass",
+		m_FrameGraph.AddRasterPass("TrianglePass",
 			[&](FrameGraphBuilder& builder, FGNoData&)
 			{
 				const FGTextureHandle depth = builder.CreateTexture("Depth", { .Size = { .Mode = FGSizeMode::RelativeToOutput }, .Format = m_DepthFormat });

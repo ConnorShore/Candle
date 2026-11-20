@@ -75,8 +75,8 @@ namespace Candle {
 		// Also writes the texture into the bindless table at its handle's index.
 		GPUTextureHandle CreateTexture(TextureCreateSpec spec);
 
-		// A texture the renderer draws or dispatches into and shaders then sample. Nothing is uploaded, so it must not be
-		// sampled before a frame renders into it. Published at its handle's slot of each binding its usage allows.
+		// A texture the renderer draws or dispatches into and shaders then sample. Nothing is uploaded, so its contents are
+		// undefined until a frame renders into it, but it starts in its sampled layout. Published at its handle's slot of each binding its usage allows.
 		// Released like any other texture.
 		GPUTextureHandle CreateRenderTarget(RenderTargetCreateSpec spec);
 		void ReleaseTexture(GPUTextureHandle handle);

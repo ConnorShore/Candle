@@ -48,6 +48,7 @@ namespace Candle {
 		vk::Image Image{ nullptr };
 		vk::ImageView ImageView{ nullptr };
 		uint32_t BindlessIndex{ std::numeric_limits<uint32_t>::max() };	// None for the swapchain
+		vk::ImageLayout SampledLayout{ vk::ImageLayout::eShaderReadOnlyOptimal };
 		ImageState InitialState, FinalState;
 		uint32_t CacheIndex{ std::numeric_limits<uint32_t>::max() };	// Transients only
 	};
@@ -72,26 +73,15 @@ namespace Candle {
 		void Execute(const RenderDevice& renderDevice, vk::raii::CommandBuffer& commandBuffer);
 
 		template<typename PassData = FGNoData, typename SetupFunc, typename ExecuteFunc>
-		const PassData& AddPass(std::string_view name, SetupFunc setup, ExecuteFunc execute)
+		const PassData& AddRasterPass(std::string_view name, SetupFunc setup, ExecuteFunc execute)
 		{
-			CDL_STATIC_ASSERT(std::is_trivially_destructible_v<PassData>, "PassData lives in the frame arena, which never runs destructors");
-			CDL_STATIC_ASSERT(std::is_trivially_destructible_v<ExecuteFunc>,
-				"Execute's captures live in the frame arena, which never runs destructors; capture handles and pointers, not containers");
+			return AddPass<PassData>(name, setup, execute, false);
+		}
 
-			using Pass = FrameGraphPass<PassData, ExecuteFunc>;
-			Pass* pass = m_FrameArena.New<Pass>(std::move(execute));
-			FrameGraphPassNode node(name, pass);
-
-			// Add an empty texture access list for this pass, which will be filled by the builder. The builder keeps a reference to it, so it must stay valid until Reset.
-			m_TextureAccesses.push_back({});
-
-			FrameGraphBuilder builder(*this, static_cast<uint32_t>(m_Passes.size()));	// TODO: Use concepts to enforce that the setup function takes a FrameGraphBuilder& and PassData& as parameters
-			setup(builder, pass->Data);
-
-			m_Passes.push_back(std::move(node));
-
-			// Arena memory never moves, unlike m_Passes, so this stays valid until Reset
-			return pass->Data;
+		template<typename PassData = FGNoData, typename SetupFunc, typename ExecuteFunc>
+		const PassData& AddComputePass(std::string_view name, SetupFunc setup, ExecuteFunc execute)
+		{
+			return AddPass<PassData>(name, setup, execute, true);
 		}
 
 		FGTextureHandle ImportSwapChainImage(SwapChainImage& image);
@@ -109,6 +99,29 @@ namespace Candle {
 	private:
 		friend class FrameGraphBuilder;
 		friend class FrameGraphContext;
+
+		template<typename PassData = FGNoData, typename SetupFunc, typename ExecuteFunc>
+		const PassData& AddPass(std::string_view name, SetupFunc setup, ExecuteFunc execute, bool IsCompute = false)
+		{
+			CDL_STATIC_ASSERT(std::is_trivially_destructible_v<PassData>, "PassData lives in the frame arena, which never runs destructors");
+			CDL_STATIC_ASSERT(std::is_trivially_destructible_v<ExecuteFunc>,
+				"Execute's captures live in the frame arena, which never runs destructors; capture handles and pointers, not containers");
+
+			using Pass = FrameGraphPass<PassData, ExecuteFunc>;
+			Pass* pass = m_FrameArena.New<Pass>(std::move(execute));
+			FrameGraphPassNode node(name, pass, IsCompute);
+
+			// Add an empty texture access list for this pass, which will be filled by the builder. The builder keeps a reference to it, so it must stay valid until Reset.
+			m_TextureAccesses.push_back({});
+
+			FrameGraphBuilder builder(*this, static_cast<uint32_t>(m_Passes.size()));	// TODO: Use concepts to enforce that the setup function takes a FrameGraphBuilder& and PassData& as parameters
+			setup(builder, pass->Data);
+
+			m_Passes.push_back(std::move(node));
+
+			// Arena memory never moves, unlike m_Passes, so this stays valid until Reset
+			return pass->Data;
+		}
 
 	private:
 		TexturePool& m_TexturePool;

@@ -66,6 +66,7 @@ CDL_TEST_CASE(BindlessTable, CreatesWithoutValidationMessages, Gpu)
 }
 
 // Validation checks each write against the binding's descriptor count, so the last element proves it is kMaxTextures long.
+// The frame graph's range ends the binding, so only its writes reach that element.
 CDL_TEST_CASE(BindlessTable, WritesTheFirstAndLastTextureElements, Gpu)
 {
 	LoggerFixture logs(LogLevel::Warn, kRenderChannelMask);
@@ -75,7 +76,7 @@ CDL_TEST_CASE(BindlessTable, WritesTheFirstAndLastTextureElements, Gpu)
 		const vk::ImageView view = gpu.Pool.GetTextureInfo(texture).ImageView;
 
 		gpu.Bindless.WriteTexture(0, view);
-		gpu.Bindless.WriteTexture(kMaxTextures - 1, view);
+		CDL_EXPECT_EQ(gpu.Bindless.WriteFrameGraphTexture(kMaxFrameGraphTextures - 1, view), kMaxTextures - 1);
 	}
 	ExpectNoVulkanDebugMessages(logs);
 }
@@ -91,7 +92,7 @@ CDL_TEST_CASE(BindlessTable, WritesTheFirstAndLastStorageImageElements, Gpu)
 		const vk::ImageView view = gpu.Pool.GetTextureInfo(target).ImageView;
 
 		gpu.Bindless.WriteStorageImage(0, view);
-		gpu.Bindless.WriteStorageImage(kMaxTextures - 1, view);
+		CDL_EXPECT_EQ(gpu.Bindless.WriteFrameGraphStorageImage(kMaxFrameGraphTextures - 1, view), kMaxTextures - 1);
 	}
 	ExpectNoVulkanDebugMessages(logs);
 }

@@ -31,12 +31,13 @@ namespace Candle {
 
 	struct FrameGraphPassNode
 	{
-		FrameGraphPassNode(std::string_view name, FrameGraphPassConcept* pass)
-			: Name(name), Pass(pass) {
+		FrameGraphPassNode(std::string_view name, FrameGraphPassConcept* pass, bool IsCompute)
+			: Name(name), Pass(pass), IsComputePass(IsCompute) {
 		}
 
 		std::string Name;
 		FrameGraphPassConcept* Pass;	// Owned by the frame arena, valid until Reset
+		bool IsComputePass{ false };	// TODO: Eventually remove this and use the pipeline type to determine if it's a compute pass
 	};
 
 }

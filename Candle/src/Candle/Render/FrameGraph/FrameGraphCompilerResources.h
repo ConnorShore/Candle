@@ -28,6 +28,7 @@ namespace Candle {
 		uint32_t BarrierStartIndex, BarrierCount;
 		uint32_t AttachmentStartIndex, AttachmentCount;	// Colors first then depth as last
 		bool HasDepthAttachment{ false };
+		bool IsComputePass{ false };	// TODO: Eventually remove this and use the pipeline type to determine if it's a compute pass
 	};
 
 	struct FGCompiledGraph

@@ -16,6 +16,9 @@ namespace Candle {
 
 		constexpr uint32_t kMaxPoolTextures = kMaxTextures - kMaxFrameGraphTextures;
 
+		constexpr vk::PipelineStageFlags2 kSampledStages = vk::PipelineStageFlagBits2::eVertexShader
+			| vk::PipelineStageFlagBits2::eComputeShader | vk::PipelineStageFlagBits2::eFragmentShader;
+
 		constexpr DefaultTexel GetDefaultTexel(DefaultTexture texture)
 		{
 			switch (texture)
@@ -70,9 +73,7 @@ namespace Candle {
 			.Extent = spec.Extent
 		};
 
-		m_Uploader.UploadImage(uploadSpec,
-			vk::PipelineStageFlagBits2::eVertexShader | vk::PipelineStageFlagBits2::eComputeShader | vk::PipelineStageFlagBits2::eFragmentShader,
-			vk::AccessFlagBits2::eShaderSampledRead);
+		m_Uploader.UploadImage(uploadSpec, kSampledStages, vk::AccessFlagBits2::eShaderSampledRead);
 
 		vk::ImageView view = image.GetImageView();
 		GPUTextureHandle handle = m_Textures.Insert(TextureEntry{ .Image = std::move(image) });
@@ -87,7 +88,6 @@ namespace Candle {
 	{
 		CDL_CORE_ASSERT(spec.Extent.x > 0 && spec.Extent.y > 0, "A render target must have an area > 0");
 
-		// No upload: the renderer transitions it out of Undefined, since each frame's clear replaces the contents anyway
 		GPUImage image = m_Allocator.CreateImage(GPUImageSpec{
 			.Extent = spec.Extent,
 			.Format = spec.Format,
@@ -98,6 +98,9 @@ namespace Candle {
 		// A storage image has to be in General for its writes, so it's sampled there too rather than moving every frame
 		const bool isStorage = static_cast<bool>(spec.Usage & vk::ImageUsageFlagBits::eStorage);
 		const vk::ImageLayout sampledLayout = isStorage ? vk::ImageLayout::eGeneral : vk::ImageLayout::eShaderReadOnlyOptimal;
+
+		// Nothing to upload, but the frame graph imports every pool texture as already in its sampled layout
+		m_Uploader.TransitionImage(image.GetImage(), sampledLayout, kSampledStages, vk::AccessFlagBits2::eShaderSampledRead);
 
 		vk::ImageView view = image.GetImageView();
 		GPUTextureHandle handle = m_Textures.Insert(TextureEntry{ .Image = std::move(image), .SampledLayout = sampledLayout });
