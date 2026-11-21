@@ -68,8 +68,21 @@ namespace Candle {
 			vk::Extent2D Extent;
 		};
 
+		// Eventually will be in a SceneModule that holds scene render passes
+		struct ScenePassData
+		{
+			FGTextureHandle Color;
+			FGTextureHandle Depth;
+		};
+
 	private:
 		void CreatePipeline(const RenderPipeline& pipeline); // builds a Pipeline from the description and stores it
+
+		// Each adds one pass to m_FrameGraph. Execute runs before Render returns, so a pass may keep references to Render's arguments.
+		void AddTestComputePass(FGTextureHandle computeTex, const GPU::GlobalPushConstants& global);
+		const ScenePassData& AddScenePass(const FramePacket& packet, FGTextureHandle target, FGTextureHandle computeTex, const GPU::GlobalPushConstants& global);
+		void AddDebugDrawPass(const FramePacket& packet, FrameContext& frame, const ScenePassData& scene, const GPU::GlobalPushConstants& global);
+		void AddGuiPass(const FramePacket& packet, FrameContext& frame, FGTextureHandle swapChain, FGTextureHandle sceneColor, const GPU::GlobalPushConstants& global);
 
 		// TODO: Eventaully will be part of render graph; for now, the Renderer owns the depth target and does the passes itself
 		void RenderTrianglePipeline(const FramePacket& packet, FrameContext& frame, const SceneTarget& target, const GPU::GlobalPushConstants globalPCs);
@@ -96,7 +109,6 @@ namespace Candle {
 		glm::uvec2 m_DepthExtent;
 		glm::vec2 m_LineWidthRange;
 		DeletionQueue m_RetiredImages;	// Depth images replaced by MatchDepthToOutput, held until the frames using them retire
-		//std::vector<Pipeline> m_Pipelines;
 
 		// Temporary till render graph is implemented
 		GPUPipelineHandle m_TrianglePipeline, m_DebugDrawPipeline, m_GuiPipeline;

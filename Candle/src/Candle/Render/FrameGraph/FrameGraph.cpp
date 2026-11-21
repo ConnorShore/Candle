@@ -296,12 +296,17 @@ namespace Candle {
 			vk::RenderingAttachmentInfo depthAttachment;
 			std::vector<vk::RenderingAttachmentInfo> colorAttachments;
 			colorAttachments.reserve(pass.AttachmentCount - (pass.HasDepthAttachment ? 1 : 0));
+			vk::Extent2D renderExtent{ 0, 0 };
 
 			for (uint32_t i = 0; i < pass.AttachmentCount; ++i)
 			{
 				uint32_t attachmentIndex = pass.AttachmentStartIndex + i;
 				const FGCompiledAttachment& compiledAttachment = m_CompiledGraph.Attachments[attachmentIndex];
 				const FGTextureEntry& texture = m_Textures[compiledAttachment.Texture.Index];
+
+				const vk::Extent2D extent{ texture.Desc.Extent.x, texture.Desc.Extent.y };
+				CDL_CORE_ASSERT(i == 0 || extent == renderExtent, "A pass's attachments share one render area, so they must all be the same size");
+				renderExtent = extent;
 
 				if (pass.HasDepthAttachment && i == pass.AttachmentCount - 1)
 				{
@@ -331,7 +336,7 @@ namespace Candle {
 			vk::RenderingInfo renderingInfo{
 				.renderArea = { 
 					.offset = { 0, 0 }, 
-					.extent = vk::Extent2D{ m_OutputExtent.x, m_OutputExtent.y }
+					.extent = renderExtent
 				},
 				.layerCount = 1,
 				.colorAttachmentCount = static_cast<uint32_t>(colorAttachments.size()),
@@ -348,8 +353,8 @@ namespace Candle {
 				commandBuffer.beginRendering(renderingInfo);
 
 				// Set viewport, scissor, depth test
-				commandBuffer.setViewport(0, vk::Viewport(0.0f, static_cast<float>(m_OutputExtent.y), static_cast<float>(m_OutputExtent.x), -static_cast<float>(m_OutputExtent.y), 0.0f, 1.0f));
-				commandBuffer.setScissor(0, vk::Rect2D(vk::Offset2D{ 0, 0 }, vk::Extent2D{ m_OutputExtent.x, m_OutputExtent.y }));
+				commandBuffer.setViewport(0, vk::Viewport(0.0f, static_cast<float>(renderExtent.height), static_cast<float>(renderExtent.width), -static_cast<float>(renderExtent.height), 0.0f, 1.0f));
+				commandBuffer.setScissor(0, vk::Rect2D(vk::Offset2D{ 0, 0 }, renderExtent));
 				commandBuffer.setDepthTestEnable(pass.HasDepthAttachment);
 			}
 

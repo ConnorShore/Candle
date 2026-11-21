@@ -32,7 +32,7 @@ namespace Candle {
 		// A float time steps ~0.24 ms at an hour; wrapping keeps shader animation smooth for one jump per period
 		constexpr double kShaderTimeWrapSeconds = 3600.0;
 
-		// Set to false to draw the frame by hand. The graph has no debug draw or GUI passes yet and can't draw into an output target.
+		// Set to false to draw the frame by hand, for as long as OldRender is around
 		constexpr bool kRenderWithFrameGraph = true;
 
 		constexpr vk::ImageSubresourceRange kColorRange{ .aspectMask = vk::ImageAspectFlagBits::eColor, .levelCount = 1, .layerCount = 1 };
@@ -183,73 +183,9 @@ namespace Candle {
 		m_PipelineStore.SaveCache();
 	}
 
-	// TODO: Would move to its own "Module" class (i.e. SceneModule)
-	//struct SceneOutput
-	//{
-	//	FGTextureHandle Target;
-	//	FGTextureHandle Depth;
-	//};
-
-	////auto m_DepthFormat = FindDepth
-
-	//SceneOutput AddPasses(FrameGraph& frameGraph, FGTextureHandle colorTex, FGTextureHandle computeTex)
-	//{
-	//	struct PassData
-	//	{
-	//		FGTextureHandle Color;
-	//		FGTextureHandle Depth;
-	//		FGTextureHandle ComputeTex;
-	//	};
-	//	frameGraph.AddPass<PassData>("TrianglePass",
-	//		[&](FrameGraphBuilder& builder, PassData& data)
-	//		{
-	//			data.Color = colorTex;
-	//			data.Depth = builder.CreateTexture("Depth", { .Size = FGSize{ .Mode = FGSizeMode::RelativeToOutput, .Scale = 1.0f }, .Format = m_DepthFormat });
-	//			data.ComputeTex = computeTex;
-
-	//			builder.ColorAttachment(data.Color, 0, FGLoad::Clear, { 0.0f, 0.0f, 0.0f, 1.0f });
-	//			builder.DepthAttachment(data.Depth, FGLoad::Clear);
-	//			builder.Read(data.ComputeTex, FGUsage::SampledFragment);
-	//		},
-	//		[this](FGNoData& data, FrameGraphContext& ctx)
-	//		{
-	//			ctx.BindPipeline(m_TrianglePipeline);
-	//			for (const DrawItem& item : ctx.GetPacket().DrawItems)
-	//			{
-	//				// The GPU doesn't bounds-check a read through a device address, so skip a bad index in every config
-	//				if (item.TransformIndex >= packet.TransformData.size())
-	//				{
-	//					CDL_CORE_ASSERT(false, "DrawItem's TransformIndex is past the packet's TransformData");
-	//					continue;
-	//				}
-
-	//				MeshDrawInfo drawInfo = m_GeometryPool.GetMeshInfo(item.Mesh);
-	//				TextureInfo textureInfo = m_TexturePool.GetTextureInfo(item.Texture);
-
-	//				GPU::MeshDrawPushConstants pushConstants{
-	//					.Global = globalPCs,
-	//					.Vertices = drawInfo.VerticesAddr,
-	//					.TextureIndex = textureInfo.Index,
-	//					.SamplerIndex = static_cast<uint32_t>(item.Sampler),
-	//					.TransformIndex = item.TransformIndex,
-	//					.ComputeTextureIndex = computeTextureIndex
-	//				};
-
-	//				//ApplyPushConstants(*frame.CommandBuffer, m_PipelineStore.GetGlobalLayout(), pushConstants);
-	//				ctx.PushConstants(pushConstants);
-	//				ctx.GetCommandBuffer().bindIndexBuffer(drawInfo.Indices, 0, vk::IndexType::eUint32);
-	//				ctx.GetCommandBuffer().drawIndexed(drawInfo.IndexCount, 1, 0, 0, 0);
-	//			}
-	//		});
-	//}
-
-	//
-
-	
-
 	void Renderer::Render(const FramePacket& packet, FrameContext& frame, SwapChainImage& target)
 	{
-		if (!kRenderWithFrameGraph || !m_RenderToSwapChain)
+		if (!kRenderWithFrameGraph)
 		{
 			OldRender(packet, frame, target);
 			return;
@@ -284,12 +220,35 @@ namespace Candle {
 			.Frame = frame.FrameData.GetDeviceAddress()
 		};
 
-		m_FrameGraph.Reset(target.GetDesc().Extent);
+		const glm::uvec2 sceneExtent = m_RenderToSwapChain ? target.GetDesc().Extent : m_TexturePool.GetTextureInfo(packet.OutputTarget).Desc.Extent;
+		m_FrameGraph.Reset(sceneExtent);
 
-		const FGTextureHandle backBuffer = m_FrameGraph.ImportSwapChainImage(target);
+		const FGTextureHandle swapChainHandle = m_FrameGraph.ImportSwapChainImage(target);
+		const FGTextureHandle sceneColor = m_RenderToSwapChain ? swapChainHandle : m_FrameGraph.ImportTexture("OutputTarget", packet.OutputTarget);
 		const FGTextureHandle computeTex = m_FrameGraph.ImportTexture("ComputeTex", m_ComputeTex);
 
-		// Execute runs before Render returns, so the passes may capture its locals
+		AddTestComputePass(computeTex, global);
+		const ScenePassData& sceneData = AddScenePass(packet, sceneColor, computeTex, global);
+		AddDebugDrawPass(packet, frame, sceneData, global);
+		AddGuiPass(packet, frame, swapChainHandle, sceneData.Color, global);
+
+		// The cache only needs this to grow every frame. It's a lower bound on what this frame's submit returns, so evicting by it would be early
+		m_FrameGraph.Compile(m_RenderDevice.GetLastSubmittedTimelineValue(QueueType::Graphics) + 1);
+
+		frame.CommandBuffer.begin({ .flags = vk::CommandBufferUsageFlagBits::eOneTimeSubmit });
+		m_BindlessTable.BindSet(*frame.CommandBuffer, vk::PipelineBindPoint::eGraphics, m_PipelineStore.GetGlobalLayout());
+		m_BindlessTable.BindSet(*frame.CommandBuffer, vk::PipelineBindPoint::eCompute, m_PipelineStore.GetGlobalLayout());
+
+		m_FrameGraph.Execute(m_RenderDevice, frame.CommandBuffer);
+
+		frame.CommandBuffer.end();
+
+		// The final barrier left it ready to present; anything reading the tracked state before the next acquire, like a test's readback, expects that
+		target.SetState(m_FrameGraph.GetTexture(swapChainHandle).FinalState);
+	}
+
+	void Renderer::AddTestComputePass(FGTextureHandle computeTex, const GPU::GlobalPushConstants& global)
+	{
 		m_FrameGraph.AddComputePass("ComputePass",
 			[&](FrameGraphBuilder& builder, FGNoData&)
 			{
@@ -322,20 +281,23 @@ namespace Candle {
 				};
 				ApplyPushConstants(commandBuffer, m_PipelineStore.GetGlobalLayout(), pushConstants);
 
-				// dispatch takes a group count, rounded up so the groups cover the whole texture
 				const LocalGroupSize& groupSize = entryPoint->LocalSize;
 				commandBuffer.dispatch((texture.Desc.Extent.x + groupSize.X - 1) / groupSize.X, (texture.Desc.Extent.y + groupSize.Y - 1) / groupSize.Y, 1);
 			});
+	}
 
-		m_FrameGraph.AddRasterPass("TrianglePass",
-			[&](FrameGraphBuilder& builder, FGNoData&)
+	const Renderer::ScenePassData& Renderer::AddScenePass(const FramePacket& packet, FGTextureHandle target, FGTextureHandle computeTex, const GPU::GlobalPushConstants& global)
+	{
+		return m_FrameGraph.AddRasterPass<ScenePassData>("TrianglePass",
+			[&](FrameGraphBuilder& builder, ScenePassData& data)
 			{
-				const FGTextureHandle depth = builder.CreateTexture("Depth", { .Size = { .Mode = FGSizeMode::RelativeToOutput }, .Format = m_DepthFormat });
-				builder.ColorAttachment(backBuffer, 0, FGLoad::Clear, vk::ClearColorValue(0.0f, 0.0f, 0.0f, 1.0f));
-				builder.DepthAttachment(depth, FGLoad::Clear);
+				data.Color = target;
+				data.Depth = builder.CreateTexture("Depth", { .Size = { .Mode = FGSizeMode::RelativeToOutput }, .Format = m_DepthFormat });
+				builder.ColorAttachment(data.Color, 0, FGLoad::Clear, vk::ClearColorValue(0.0f, 0.0f, 0.0f, 1.0f));
+				builder.DepthAttachment(data.Depth, FGLoad::Clear);
 				builder.ReadTexture(computeTex, FGUsage::SampledFragment);
 			},
-			[this, &packet, computeTex, global](const FGNoData&, FrameGraphContext& ctx)
+			[this, &packet, computeTex, global](const ScenePassData&, FrameGraphContext& ctx)
 			{
 				vk::Pipeline trianglePipeline = m_PipelineStore.TryGetPipeline(m_TrianglePipeline);
 				if (!trianglePipeline)
@@ -355,7 +317,6 @@ namespace Candle {
 				const uint32_t computeTextureIndex = ctx.GetTexture(computeTex).BindlessIndex;
 				for (const DrawItem& item : packet.DrawItems)
 				{
-					// The GPU doesn't bounds-check a read through a device address, so skip a bad index in every config
 					if (item.TransformIndex >= packet.TransformData.size())
 					{
 						CDL_CORE_ASSERT(false, "DrawItem's TransformIndex is past the packet's TransformData");
@@ -379,20 +340,153 @@ namespace Candle {
 					commandBuffer.drawIndexed(drawInfo.IndexCount, 1, 0, 0, 0);
 				}
 			});
+	}
 
-		// The cache only needs this to grow every frame. It's a lower bound on what this frame's submit returns, so evicting by it would be early
-		m_FrameGraph.Compile(m_RenderDevice.GetLastSubmittedTimelineValue(QueueType::Graphics) + 1);
+	void Renderer::AddDebugDrawPass(const FramePacket& packet, FrameContext& frame, const ScenePassData& sceneData, const GPU::GlobalPushConstants& global)
+	{
+		if (packet.DebugDraw.Vertices.empty())
+			return;
 
-		frame.CommandBuffer.begin({ .flags = vk::CommandBufferUsageFlagBits::eOneTimeSubmit });
-		m_BindlessTable.BindSet(*frame.CommandBuffer, vk::PipelineBindPoint::eGraphics, m_PipelineStore.GetGlobalLayout());
-		m_BindlessTable.BindSet(*frame.CommandBuffer, vk::PipelineBindPoint::eCompute, m_PipelineStore.GetGlobalLayout());
+		m_FrameGraph.AddRasterPass("DebugDrawPass",
+			[&](FrameGraphBuilder& builder, FGNoData&)
+			{
+				builder.ColorAttachment(sceneData.Color, 0, FGLoad::Load, {});
+				builder.DepthAttachment(sceneData.Depth, FGLoad::Load);
+			},
+			[this, &packet, &frame, global](const FGNoData&, FrameGraphContext& ctx)
+			{
+				vk::Pipeline debugDrawPipeline = m_PipelineStore.TryGetPipeline(m_DebugDrawPipeline);
+				if (!debugDrawPipeline)
+				{
+					CDL_CORE_ASSERT(false, "Debug draw pipeline is not ready");
+					return;
+				}
 
-		m_FrameGraph.Execute(m_RenderDevice, frame.CommandBuffer);
+				const DebugDrawData& debugDraw = packet.DebugDraw;
+				EnsureCapacity(frame.DebugDrawVertices, debugDraw.Vertices.size() * sizeof(GPU::DebugDrawVertex), vk::BufferUsageFlagBits::eShaderDeviceAddress, "DebugDrawVertices");
+				frame.DebugDrawVertices.Write(std::as_bytes(std::span(debugDraw.Vertices)));
 
-		frame.CommandBuffer.end();
+				vk::CommandBuffer commandBuffer = ctx.GetCommandBuffer();
+				commandBuffer.bindPipeline(vk::PipelineBindPoint::eGraphics, debugDrawPipeline);
 
-		// The final barrier left it ready to present; anything reading the tracked state before the next acquire, like a test's readback, expects that
-		target.SetState(m_FrameGraph.GetTexture(backBuffer).FinalState);
+				const vk::Extent2D extent = ctx.GetRenderExtent();
+				commandBuffer.setViewport(0, vk::Viewport(0.0f, static_cast<float>(extent.height), static_cast<float>(extent.width), -static_cast<float>(extent.height), 0.0f, 1.0f));
+				commandBuffer.setScissor(0, vk::Rect2D(vk::Offset2D(0, 0), extent));
+
+				const vk::DeviceAddress vertexBase = frame.DebugDrawVertices.GetDeviceAddress();
+				std::optional<DebugDrawBucket> currentBucket;
+				for (const DebugDrawBatch& batch : debugDraw.Batches)
+				{
+					if (batch.Bucket != currentBucket)
+					{
+						bool depthEnabled;
+						switch (batch.Bucket)
+						{
+						case DebugDrawBucket::WorldDepthTested:
+							depthEnabled = true;
+							break;
+						case DebugDrawBucket::WorldNoDepth:
+						case DebugDrawBucket::Screen:
+							depthEnabled = false;
+							break;
+						default:
+							CDL_CORE_ASSERT(false, "Unhandled bucket type");
+							continue;
+						}
+
+						commandBuffer.setDepthTestEnable(depthEnabled);
+						currentBucket = batch.Bucket;
+
+						// TODO: Some way to use world ViewProj matrix or a screen space matrix
+					}
+
+					commandBuffer.setLineWidth(std::clamp(batch.LineWidth, m_LineWidthRange.x, m_LineWidthRange.y));
+
+					const GPU::DebugDrawPushConstants pushConstants{
+						.Global = global,
+						.Vertices = vertexBase + (batch.FirstVertex * sizeof(GPU::DebugDrawVertex))
+					};
+
+					ApplyPushConstants(commandBuffer, m_PipelineStore.GetGlobalLayout(), pushConstants);
+					commandBuffer.draw(batch.VertexCount, 1, 0, 0);
+				}
+			});
+	}
+
+	void Renderer::AddGuiPass(const FramePacket& packet, FrameContext& frame, FGTextureHandle swapChain, FGTextureHandle sceneColor, const GPU::GlobalPushConstants& global)
+	{
+		const bool drawsOverScene = sceneColor == swapChain;
+
+		// The scene pass has already cleared the target, so with nothing to draw this pass has nothing to do
+		if (packet.GuiDrawData.Commands.empty() && drawsOverScene)
+			return;
+
+		m_FrameGraph.AddRasterPass("GuiPass",
+			[&](FrameGraphBuilder& builder, FGNoData&)
+			{
+				// The scene window samples the output target through its bindless slot, which the graph can't see
+				if (!drawsOverScene)
+					builder.ReadTexture(sceneColor, FGUsage::SampledFragment);
+
+				builder.ColorAttachment(swapChain, 0, drawsOverScene ? FGLoad::Load : FGLoad::Clear, vk::ClearColorValue(0.0f, 0.0f, 0.0f, 1.0f));
+			},
+			[this, &packet, &frame, global](const FGNoData&, FrameGraphContext& ctx)
+			{
+				const GuiDrawData& gui = packet.GuiDrawData;
+				if (gui.Commands.empty())
+					return;
+
+				vk::Pipeline guiPipeline = m_PipelineStore.TryGetPipeline(m_GuiPipeline);
+				if (!guiPipeline)
+				{
+					CDL_CORE_ASSERT(false, "GUI pipeline is not ready");
+					return;
+				}
+
+				EnsureCapacity(frame.GuiVertices, gui.Vertices.size() * sizeof(Candle::GPU::GuiVertex), vk::BufferUsageFlagBits::eShaderDeviceAddress, "GuiVertices");
+				EnsureCapacity(frame.GuiIndices, gui.Indices.size() * sizeof(GuiIndex), vk::BufferUsageFlagBits::eIndexBuffer, "GuiIndices");
+				frame.GuiVertices.Write(std::as_bytes(std::span(gui.Vertices)));
+				frame.GuiIndices.Write(std::as_bytes(std::span(gui.Indices)));
+
+				vk::CommandBuffer commandBuffer = ctx.GetCommandBuffer();
+				commandBuffer.bindPipeline(vk::PipelineBindPoint::eGraphics, guiPipeline);
+
+				const vk::Extent2D extent = ctx.GetRenderExtent();
+				commandBuffer.setViewport(0, vk::Viewport(0.0f, 0.0f, static_cast<float>(extent.width), static_cast<float>(extent.height), 0.0f, 1.0f));
+				commandBuffer.setDepthTestEnable(false);
+
+				const glm::vec2 scale = 2.0f / gui.DisplaySize;
+				const glm::vec2 translate = -1.0f - gui.DisplayPos * scale;
+
+				commandBuffer.bindIndexBuffer(frame.GuiIndices.GetBuffer(), 0, vk::IndexType::eUint16);
+				const vk::DeviceAddress vertexBase = frame.GuiVertices.GetDeviceAddress();
+
+				const uint32_t samplerIndex = static_cast<uint32_t>(SamplerType::LinearClamp);
+				for (const GuiDrawCommand& cmd : gui.Commands)
+				{
+					const glm::vec2 clipMin = glm::max(glm::vec2(cmd.ClipRect.x, cmd.ClipRect.y), glm::vec2(0.0f));
+					const glm::vec2 clipMax = glm::min(glm::vec2(cmd.ClipRect.z, cmd.ClipRect.w), glm::vec2(extent.width, extent.height));
+					if (clipMax.x <= clipMin.x || clipMax.y <= clipMin.y)
+						continue;
+
+					commandBuffer.setScissor(0, vk::Rect2D(
+						vk::Offset2D(static_cast<int32_t>(clipMin.x), static_cast<int32_t>(clipMin.y)),
+						vk::Extent2D(static_cast<uint32_t>(clipMax.x - clipMin.x), static_cast<uint32_t>(clipMax.y - clipMin.y))));
+
+					const GPU::GuiDrawPushConstants pushConstants{
+						.Global = global,
+						.Vertices = vertexBase + cmd.VertexOffset * sizeof(Candle::GPU::GuiVertex),
+						.Scale = scale,
+						.Translate = translate,
+						.TextureIndex = m_TexturePool.GetTextureInfo(cmd.Texture).Index,
+						.SamplerIndex = samplerIndex
+					};
+
+					ApplyPushConstants(commandBuffer, m_PipelineStore.GetGlobalLayout(), pushConstants);
+					commandBuffer.drawIndexed(cmd.IndexCount, 1, cmd.IndexOffset, 0, 0);
+				}
+			}
+		);
 	}
 
 	void Renderer::OldRender(const FramePacket& packet, FrameContext& frame, SwapChainImage& target)
