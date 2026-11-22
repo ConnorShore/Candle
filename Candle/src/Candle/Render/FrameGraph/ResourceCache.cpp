@@ -56,7 +56,6 @@ namespace Candle {
 			}
 		}
 
-		// TODO NOW: See if race condition can happen with bindless table insert
 		uint32_t cacheSize = static_cast<uint32_t>(m_Cache.size());
 
 		// Create the image and write it to the bindless table
@@ -68,7 +67,13 @@ namespace Candle {
 			.Flags{ VMA_ALLOCATION_CREATE_DEDICATED_MEMORY_BIT },
 			.DebugName{ std::format("FrameGraph Transient Texture {}", m_Cache.size()) }
 		});
-		uint32_t outIndex = m_BindlessTable.WriteFrameGraphTexture(static_cast<uint32_t>(m_Cache.size()), image.GetImageView());
+
+		// Write the image to the bindless table and get its index
+		uint32_t outIndex = std::numeric_limits<uint32_t>::max();	// Invalid to start
+		if (key.Usage & vk::ImageUsageFlagBits::eSampled)
+			outIndex = m_BindlessTable.WriteFrameGraphTexture(cacheSize, image.GetImageView());
+		if (key.Usage & vk::ImageUsageFlagBits::eStorage)
+			outIndex = m_BindlessTable.WriteFrameGraphStorageImage(cacheSize, image.GetImageView());
 
 		// Create a new texture in the resource cache
 		CacheEntry& newEntry = m_Cache.emplace_back(CacheEntry{

@@ -64,7 +64,7 @@ namespace Candle {
 			.Desc = {
 				.Extent = ResolveSize(spec.Size, m_Graph.m_OutputExtent),
 				.Format = spec.Format,
-				.Usage = vk::ImageUsageFlagBits::eSampled | (isDepthFormat ? vk::ImageUsageFlagBits::eDepthStencilAttachment : vk::ImageUsageFlagBits::eColorAttachment),
+				.Usage = {},	// Will be built out during compilation by walking the texture accesses for each pass
 				.MipLevels = 1
 			},
 			.Imported = false,

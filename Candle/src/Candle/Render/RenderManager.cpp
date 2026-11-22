@@ -222,8 +222,6 @@ namespace Candle {
 			uint64_t lastUseValue = 0;
 			for (const FrameContext& context : m_FrameContexts)
 				lastUseValue = std::max(lastUseValue, context.RetireValue);
-
-			m_Renderer.MatchDepthToOutput(m_TexturePool.GetTextureInfo(packet->OutputTarget).Desc.Extent, lastUseValue);
 		}
 
 		// Record command buffers for rendering
@@ -307,9 +305,6 @@ namespace Candle {
 
 		// The reported extent, not Window::GetSize(): Window is main thread only, and this will run on the render thread
 		m_SwapChain.Recreate(surfaceExtent);
-
-		// The swapchain's real extent, not surfaceExtent: the surface may override the request, and a stale packet's size is one
-		m_Renderer.RecreateTargets(m_SwapChain.GetExtent(), m_GPUAllocator);
 	}
 
 }

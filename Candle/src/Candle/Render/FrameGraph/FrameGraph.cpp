@@ -383,7 +383,7 @@ namespace Candle {
 					barrier.FromState,
 					barrier.ToState,
 					{
-						.aspectMask = IsDepthFormat(texture.Spec.Format) ? vk::ImageAspectFlagBits::eDepth : vk::ImageAspectFlagBits::eColor,
+						.aspectMask = IsDepthFormat(texture.Desc.Format) ? vk::ImageAspectFlagBits::eDepth : vk::ImageAspectFlagBits::eColor,
 						.levelCount = 1,
 						.layerCount = 1
 					}
