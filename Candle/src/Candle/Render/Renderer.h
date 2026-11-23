@@ -57,6 +57,7 @@ namespace Candle {
 		{
 			FGTextureHandle Color;
 			FGTextureHandle Depth;
+			FGTextureHandle ComputeInput;
 		};
 
 		struct ComputePassData
@@ -64,13 +65,26 @@ namespace Candle {
 			FGTextureHandle Output;
 		};
 
+		struct DebugDrawPassData
+		{
+			FGTextureHandle Color;
+			FGTextureHandle Depth;
+		};
+
+		struct GuiPassData
+		{
+			FGTextureHandle Color;
+		};
+
 	private:
 		void CreatePipeline(const RenderPipeline& pipeline); // builds a Pipeline from the description and stores it
 
+		// TODO: Passing in pass data to methods for now, will come from blackboard in the future
+		//  and frame packaet, frame, push constants will come from a struct to be given to modules
 		const ComputePassData& AddTestComputePass(const GPU::GlobalPushConstants& global);
-		const ScenePassData& AddScenePass(const FramePacket& packet, FGTextureHandle target, FGTextureHandle computeTex, const GPU::GlobalPushConstants& global);
-		void AddDebugDrawPass(const FramePacket& packet, FrameContext& frame, const ScenePassData& scene, const GPU::GlobalPushConstants& global);
-		void AddGuiPass(const FramePacket& packet, FrameContext& frame, FGTextureHandle swapChain, FGTextureHandle sceneColor, const GPU::GlobalPushConstants& global);
+		const ScenePassData& AddScenePass(const FramePacket& packet, FGTextureHandle target, const ComputePassData& computeData, const GPU::GlobalPushConstants& global);
+		DebugDrawPassData AddDebugDrawPass(const FramePacket& packet, FrameContext& frame, const ScenePassData& scene, const GPU::GlobalPushConstants& global);
+		GuiPassData AddGuiPass(const FramePacket& packet, FrameContext& frame, FGTextureHandle swapChain, FGTextureHandle sceneColor, const GPU::GlobalPushConstants& global);
 
 		void EnsureCapacity(GPUBuffer& buffer, size_t size, vk::BufferUsageFlags usage, std::string_view name);
 	private:

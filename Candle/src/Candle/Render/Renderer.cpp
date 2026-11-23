@@ -207,9 +207,10 @@ namespace Candle {
 		const FGTextureHandle sceneColor = m_RenderToSwapChain ? swapChainHandle : m_FrameGraph.ImportTexture("OutputTarget", packet.OutputTarget);
 
 		const ComputePassData& computeData = AddTestComputePass(global);
-		const ScenePassData& sceneData = AddScenePass(packet, sceneColor, computeData.Output, global);
-		AddDebugDrawPass(packet, frame, sceneData, global);
-		AddGuiPass(packet, frame, swapChainHandle, sceneData.Color, global);
+		const ScenePassData& sceneData = AddScenePass(packet, sceneColor, computeData, global);
+		const DebugDrawPassData& debugDrawData = AddDebugDrawPass(packet, frame, sceneData, global);
+		const GuiPassData& guiData = AddGuiPass(packet, frame, swapChainHandle, debugDrawData.Color, global);
+		//const GuiPassData& guiData = AddGuiPass(packet, frame, swapChainHandle, sceneData.Color, global);  // Use this to test usage of stale handles 
 
 		m_FrameGraph.Compile(packet.FrameIndex);
 		m_FrameGraph.EvictUnusedResources(packet.FrameIndex,
@@ -233,8 +234,8 @@ namespace Candle {
 		return m_FrameGraph.AddComputePass<ComputePassData>("ComputePass",
 			[&](FrameGraphBuilder& builder, ComputePassData& data)
 			{
-				data.Output = builder.CreateTexture("ComputeOutput", { .Size = { .Mode = FGSizeMode::Absolute, .Extent = { 64, 64 } }, .Format = vk::Format::eR8G8B8A8Unorm });
-				builder.WriteTexture(data.Output, FGUsage::StorageCompute);
+				FGTextureHandle output = builder.CreateTexture("ComputeOutput", { .Size = { .Mode = FGSizeMode::Absolute, .Extent = { 64, 64 } }, .Format = vk::Format::eR8G8B8A8Unorm });
+				data.Output = builder.WriteTexture(output, FGUsage::StorageCompute);
 			},
 			[this, global](const ComputePassData& data, FrameGraphContext& ctx)
 			{
@@ -268,18 +269,19 @@ namespace Candle {
 			});
 	}
 
-	const Renderer::ScenePassData& Renderer::AddScenePass(const FramePacket& packet, FGTextureHandle target, FGTextureHandle computeTex, const GPU::GlobalPushConstants& global)
+	const Renderer::ScenePassData& Renderer::AddScenePass(const FramePacket& packet, FGTextureHandle target, const ComputePassData& computeData, const GPU::GlobalPushConstants& global)
 	{
 		return m_FrameGraph.AddRasterPass<ScenePassData>("TrianglePass",
 			[&](FrameGraphBuilder& builder, ScenePassData& data)
 			{
-				data.Color = target;
-				data.Depth = builder.CreateTexture("Depth", { .Size = { .Mode = FGSizeMode::RelativeToOutput }, .Format = m_DepthFormat });
-				builder.ColorAttachment(data.Color, 0, FGLoad::Clear, vk::ClearColorValue(0.0f, 0.0f, 0.0f, 1.0f));
-				builder.DepthAttachment(data.Depth, FGLoad::Clear);
-				builder.ReadTexture(computeTex, FGUsage::SampledFragment);
+				FGTextureHandle depth = builder.CreateTexture("Depth", { .Size = { .Mode = FGSizeMode::RelativeToOutput }, .Format = m_DepthFormat });
+				data.ComputeInput = computeData.Output; // TODO NOW: Will come from blackboard eventually
+
+				data.Color = builder.ColorAttachment(target, FGLoad::Clear, vk::ClearColorValue(0.0f, 0.0f, 0.0f, 1.0f));
+				data.Depth = builder.DepthAttachment(depth, FGLoad::Clear);
+				builder.ReadTexture(data.ComputeInput, FGUsage::SampledFragment);
 			},
-			[this, &packet, computeTex, global](const ScenePassData&, FrameGraphContext& ctx)
+			[this, &packet, global](const ScenePassData& data, FrameGraphContext& ctx)
 			{
 				vk::Pipeline trianglePipeline = m_PipelineStore.TryGetPipeline(m_TrianglePipeline);
 				if (!trianglePipeline)
@@ -296,7 +298,7 @@ namespace Candle {
 				commandBuffer.setScissor(0, vk::Rect2D(vk::Offset2D(0, 0), extent));
 				commandBuffer.setDepthTestEnable(true);
 
-				const uint32_t computeTextureIndex = ctx.GetTexture(computeTex).BindlessIndex;
+				const uint32_t computeTextureIndex = ctx.GetTexture(data.ComputeInput).BindlessIndex;
 				for (const DrawItem& item : packet.DrawItems)
 				{
 					if (item.TransformIndex >= packet.TransformData.size())
@@ -324,18 +326,18 @@ namespace Candle {
 			});
 	}
 
-	void Renderer::AddDebugDrawPass(const FramePacket& packet, FrameContext& frame, const ScenePassData& sceneData, const GPU::GlobalPushConstants& global)
+	Renderer::DebugDrawPassData Renderer::AddDebugDrawPass(const FramePacket& packet, FrameContext& frame, const ScenePassData& sceneData, const GPU::GlobalPushConstants& global)
 	{
 		if (packet.DebugDraw.Vertices.empty())
-			return;
+			return { .Color = sceneData.Color, .Depth = sceneData.Depth };
 
-		m_FrameGraph.AddRasterPass("DebugDrawPass",
-			[&](FrameGraphBuilder& builder, FGNoData&)
+		return m_FrameGraph.AddRasterPass<DebugDrawPassData>("DebugDrawPass",
+			[&](FrameGraphBuilder& builder, DebugDrawPassData& data)
 			{
-				builder.ColorAttachment(sceneData.Color, 0, FGLoad::Load, {});
-				builder.DepthAttachment(sceneData.Depth, FGLoad::Load);
+				data.Color = builder.ColorAttachment(sceneData.Color, FGLoad::Load, {});
+				data.Depth = builder.DepthAttachment(sceneData.Depth, FGLoad::Load);
 			},
-			[this, &packet, &frame, global](const FGNoData&, FrameGraphContext& ctx)
+			[this, &packet, &frame, global](const DebugDrawPassData& data, FrameGraphContext& ctx)
 			{
 				vk::Pipeline debugDrawPipeline = m_PipelineStore.TryGetPipeline(m_DebugDrawPipeline);
 				if (!debugDrawPipeline)
@@ -395,24 +397,26 @@ namespace Candle {
 			});
 	}
 
-	void Renderer::AddGuiPass(const FramePacket& packet, FrameContext& frame, FGTextureHandle swapChain, FGTextureHandle sceneColor, const GPU::GlobalPushConstants& global)
+	Renderer::GuiPassData Renderer::AddGuiPass(const FramePacket& packet, FrameContext& frame, FGTextureHandle swapChain, FGTextureHandle sceneColor, const GPU::GlobalPushConstants& global)
 	{
-		const bool drawsOverScene = sceneColor == swapChain;
+		const bool drawsOverScene = sceneColor.IsSameResource(swapChain);
 
 		// The scene pass has already cleared the target, so with nothing to draw this pass has nothing to do
 		if (packet.GuiDrawData.Commands.empty() && drawsOverScene)
-			return;
+			return { .Color = sceneColor };
 
-		m_FrameGraph.AddRasterPass("GuiPass",
-			[&](FrameGraphBuilder& builder, FGNoData&)
+		return m_FrameGraph.AddRasterPass<GuiPassData>("GuiPass",
+			[&](FrameGraphBuilder& builder, GuiPassData& data)
 			{
 				// The scene window samples the output target through its bindless slot, which the graph can't see
 				if (!drawsOverScene)
 					builder.ReadTexture(sceneColor, FGUsage::SampledFragment);
 
-				builder.ColorAttachment(swapChain, 0, drawsOverScene ? FGLoad::Load : FGLoad::Clear, vk::ClearColorValue(0.0f, 0.0f, 0.0f, 1.0f));
+				// When drawing over the scene, sceneColor is the same image as swapChain but carries the latest version
+				FGTextureHandle target = drawsOverScene ? sceneColor : swapChain;
+				data.Color = builder.ColorAttachment(target, drawsOverScene ? FGLoad::Load : FGLoad::Clear, vk::ClearColorValue(0.0f, 0.0f, 0.0f, 1.0f));
 			},
-			[this, &packet, &frame, global](const FGNoData&, FrameGraphContext& ctx)
+			[this, &packet, &frame, global](const GuiPassData& data, FrameGraphContext& ctx)
 			{
 				const GuiDrawData& gui = packet.GuiDrawData;
 				if (gui.Commands.empty())

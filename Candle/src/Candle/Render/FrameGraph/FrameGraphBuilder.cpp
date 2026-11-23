@@ -67,15 +67,19 @@ namespace Candle {
 				.Usage = {},	// Will be built out during compilation by walking the texture accesses for each pass
 				.MipLevels = 1
 			},
-			.Imported = false,
+			.Imported = false,	
 			.InitialState = initialState,
 			.FinalState = initialState	// Will be updated during compilation to the last pass's final state
 			});
-		return { static_cast<uint32_t>(m_Graph.m_Textures.size() - 1) };
+		return { .Index = static_cast<uint32_t>(m_Graph.m_Textures.size() - 1), .Version = 0 };
 	}
 
 	void FrameGraphBuilder::ReadTexture(FGTextureHandle texture, FGUsage usage)
 	{
+		FGTextureEntry& textureEntry = m_Graph.m_Textures[texture.Index];
+		CDL_CORE_ASSERT(textureEntry.Imported || texture.Version > 0, "Cannot read from a texture that has not been written to");
+		CDL_CORE_ASSERT(texture.Version == textureEntry.LatestVersion, "Reading from a stale handle");
+
 		// Add an entry to the pass's texture access list, which the graph will use to insert barriers and track usage
 		FGTextureAccessEntry accessEntry{
 			.Handle = texture,
@@ -85,8 +89,10 @@ namespace Candle {
 		m_Graph.m_TextureAccesses[m_PassIndex].push_back(accessEntry);
 	}
 
-	void FrameGraphBuilder::WriteTexture(FGTextureHandle texture, FGUsage usage)
+	FGTextureHandle FrameGraphBuilder::WriteTexture(FGTextureHandle texture, FGUsage usage)
 	{
+		CDL_CORE_ASSERT(texture.Index < m_Graph.m_Textures.size(), "FGTextureHandle is not from this frame");
+
 		// Add an entry to the pass's texture access list, which the graph will use to insert barriers and track usage
 		FGTextureAccessEntry accessEntry{
 			.Handle = texture,
@@ -94,10 +100,13 @@ namespace Candle {
 			.Write = true
 		};
 		m_Graph.m_TextureAccesses[m_PassIndex].push_back(accessEntry);
+		return { .Index = texture.Index, .Version = IncrementHandleVersion(texture) };
 	}
 
-	void FrameGraphBuilder::ColorAttachment(FGTextureHandle texture, uint8_t binding, FGLoad loadOp, vk::ClearColorValue clearColor)
+	FGTextureHandle FrameGraphBuilder::ColorAttachment(FGTextureHandle texture, FGLoad loadOp, vk::ClearColorValue clearColor)
 	{
+		CDL_CORE_ASSERT(texture.Version == m_Graph.m_Textures[texture.Index].LatestVersion, "Using a stale texture handle for a color attachment");
+
 		// Add an entry to the pass's texture access list, which the graph will use to insert barriers and track usage
 		FGTextureAccessEntry accessEntry{
 			.Handle = texture,
@@ -107,13 +116,13 @@ namespace Candle {
 			.ClearVlaue = clearColor
 		};
 		m_Graph.m_TextureAccesses[m_PassIndex].push_back(accessEntry);
-
-		// TODO: May not need binding here but will see once the graph is executing passes and binding attachments
-		//  For now assuming binding gets set by order of specification in pass
+		return { .Index = texture.Index, .Version = IncrementHandleVersion(texture) };
 	}
 
-	void FrameGraphBuilder::DepthAttachment(FGTextureHandle texture, FGLoad loadOp)
+	FGTextureHandle FrameGraphBuilder::DepthAttachment(FGTextureHandle texture, FGLoad loadOp)
 	{
+		CDL_CORE_ASSERT(texture.Version == m_Graph.m_Textures[texture.Index].LatestVersion, "Using a stale texture handle for a depth attachment");
+
 		FGTextureAccessEntry accessEntry{
 			.Handle = texture,
 			.Usage = FGUsage::DepthAttachment,
@@ -122,6 +131,12 @@ namespace Candle {
 			.ClearVlaue = vk::ClearDepthStencilValue(1.0f, 0)	// TODO: Depth clear value should be specified by the pass, but for now just using a default
 		};
 		m_Graph.m_TextureAccesses[m_PassIndex].push_back(accessEntry);
+		return { .Index = texture.Index, .Version = IncrementHandleVersion(texture) };
+	}
+
+	uint32_t FrameGraphBuilder::IncrementHandleVersion(FGTextureHandle handle)
+	{
+		return m_Graph.m_Textures[handle.Index].LatestVersion = ++handle.Version;
 	}
 
 }

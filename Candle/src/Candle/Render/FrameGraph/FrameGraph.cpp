@@ -411,7 +411,7 @@ namespace Candle {
 			.InitialState = image.GetState(),	// Acquire leaves it at the semaphore's wait stage, so the first barrier chains with the wait
 			.FinalState = kPresentState
 		});
-		return { static_cast<uint32_t>(m_Textures.size() - 1) };
+		return { .Index = static_cast<uint32_t>(m_Textures.size() - 1), .Version = 0 };
 	}
 
 	FGTextureHandle FrameGraph::ImportTexture(std::string_view name, GPUTextureHandle texture)
@@ -432,7 +432,7 @@ namespace Candle {
 			.InitialState = { .Layout = info.SampledLayout, .Access = vk::AccessFlagBits2::eNone, .Stage = kSampledStages },
 			.FinalState = { .Layout = info.SampledLayout, .Access = vk::AccessFlagBits2::eShaderSampledRead, .Stage = kSampledStages }
 		});
-		return { static_cast<uint32_t>(m_Textures.size() - 1) };
+		return { .Index = static_cast<uint32_t>(m_Textures.size() - 1), .Version = 0 };
 	}
 
 }

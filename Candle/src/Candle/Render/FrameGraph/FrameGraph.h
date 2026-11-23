@@ -51,6 +51,7 @@ namespace Candle {
 		vk::ImageLayout SampledLayout{ vk::ImageLayout::eShaderReadOnlyOptimal };
 		ImageState InitialState, FinalState;
 		uint32_t CacheIndex{ std::numeric_limits<uint32_t>::max() };	// Transients only
+		uint32_t LatestVersion{ 0 };	// Incremented every time a transient is created, so handles to old resources can be detected
 	};
 
 	struct FGTextureAccessEntry

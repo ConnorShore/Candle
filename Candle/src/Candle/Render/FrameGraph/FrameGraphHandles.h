@@ -8,9 +8,11 @@ namespace Candle {
 	struct FGResourceHandle
 	{
 		uint32_t Index{ std::numeric_limits<uint32_t>::max() };	// Into this frame's entries; meaningless after Reset
+		uint32_t Version{ 0 };	// Incremented every time a resource is created, so handles to old resources can be detected
 
 		inline bool IsValid() const { return Index != std::numeric_limits<uint32_t>::max(); }
-		bool operator==(const FGResourceHandle&) const = default;
+		inline bool IsSameResource(const FGResourceHandle& other) const { return Index == other.Index; }
+		bool operator==(const FGResourceHandle& other) const { return IsSameResource(other) && Version == other.Version; }
 	};
 
 	struct FGTextureTag {};
