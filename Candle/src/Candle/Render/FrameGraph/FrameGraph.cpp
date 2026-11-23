@@ -82,7 +82,7 @@ namespace Candle {
 		m_ResetBeforeCompile = true;
 	}
 
-	void FrameGraph::Compile(uint64_t currentTimelineVal)
+	void FrameGraph::Compile(uint64_t frameIndex)
 	{
 		CDL_CORE_ASSERT(m_ResetBeforeCompile, "FrameGraph must be reset before compiling");
 		m_ResetBeforeCompile = false;	// Reset the flag for next frame
@@ -114,7 +114,7 @@ namespace Candle {
 				.Extent{ vk::Extent2D(texture.Desc.Extent.x, texture.Desc.Extent.y) },
 				.Usage{ texture.Desc.Usage }
 			};
-			CacheImportResult cacheResult = m_ResourceCache.CreateOrGetTexture(key, currentTimelineVal);
+			CacheImportResult cacheResult = m_ResourceCache.CreateOrGetTexture(key, frameIndex);
 
 			// Assign the cache and bindless table entries to the texture
 			texture.Image = cacheResult.Image;
@@ -259,6 +259,12 @@ namespace Candle {
 		}
 
 		// TODO: Need to handle pass culling
+	}
+
+	void FrameGraph::EvictUnusedResources(uint64_t frameIndex, uint64_t lastSubmittedValue, uint64_t completedValue)
+	{
+		CDL_CORE_ASSERT(!m_ResetBeforeCompile, "FrameGraph must be compiled before evicting, or this frame's transients look unused");
+		m_ResourceCache.EvictUnusedEntries(frameIndex, lastSubmittedValue, completedValue);
 	}
 
 	void FrameGraph::Execute(const RenderDevice& renderDevice, vk::raii::CommandBuffer& commandBuffer)

@@ -21,6 +21,7 @@ namespace Candle {
 	//   render thread binds the set, which UPDATE_AFTER_BIND on bindings 0 and 2 permits. The caller must never write an
 	//   element a pending command buffer may read; TexturePool guarantees it, since a slot is only reissued once the GPU has
 	//   retired it. GetSet and GetLayout from any thread.
+	//	 WriteFrameGraph* methods run on the render thread.
 	class BindlessTable
 	{
 	public:

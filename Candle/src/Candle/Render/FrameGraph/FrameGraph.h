@@ -69,7 +69,8 @@ namespace Candle {
 		~FrameGraph();
 
 		void Reset(glm::uvec2 outputExtent);
-		void Compile(uint64_t currentTimelineVal);
+		void Compile(uint64_t frameIndex);
+		void EvictUnusedResources(uint64_t frameIndex, uint64_t lastSubmittedValue, uint64_t completedValue);	// After Compile, so this frame's transients count as used
 		void Execute(const RenderDevice& renderDevice, vk::raii::CommandBuffer& commandBuffer);
 
 		template<typename PassData = FGNoData, typename SetupFunc, typename ExecuteFunc>

@@ -211,8 +211,10 @@ namespace Candle {
 		AddDebugDrawPass(packet, frame, sceneData, global);
 		AddGuiPass(packet, frame, swapChainHandle, sceneData.Color, global);
 
-		// The cache only needs this to grow every frame. It's a lower bound on what this frame's submit returns, so evicting by it would be early
-		m_FrameGraph.Compile(m_RenderDevice.GetLastSubmittedTimelineValue(QueueType::Graphics) + 1);
+		m_FrameGraph.Compile(packet.FrameIndex);
+		m_FrameGraph.EvictUnusedResources(packet.FrameIndex,
+			m_RenderDevice.GetLastSubmittedTimelineValue(QueueType::Graphics),
+			m_RenderDevice.GetCompletedTimelineValue(QueueType::Graphics));
 
 		frame.CommandBuffer.begin({ .flags = vk::CommandBufferUsageFlagBits::eOneTimeSubmit });
 		m_BindlessTable.BindSet(*frame.CommandBuffer, vk::PipelineBindPoint::eGraphics, m_PipelineStore.GetGlobalLayout());
