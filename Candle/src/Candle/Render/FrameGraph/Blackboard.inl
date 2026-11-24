@@ -43,4 +43,9 @@ namespace Candle {
 			return nullptr;
 	}
 
+	inline void Blackboard::Clear()
+	{
+		m_Values.clear();
+	}
+
 }

@@ -86,11 +86,6 @@ namespace Candle {
 
 				vk::CommandBuffer commandBuffer = ctx.GetCommandBuffer();
 				ctx.BindPipeline(vk::PipelineBindPoint::eGraphics, debugDrawPipeline);
-				//commandBuffer.bindPipeline(vk::PipelineBindPoint::eGraphics, debugDrawPipeline);
-
-				const vk::Extent2D extent = ctx.GetRenderExtent();
-				commandBuffer.setViewport(0, vk::Viewport(0.0f, static_cast<float>(extent.height), static_cast<float>(extent.width), -static_cast<float>(extent.height), 0.0f, 1.0f));
-				commandBuffer.setScissor(0, vk::Rect2D(vk::Offset2D(0, 0), extent));
 
 				const vk::DeviceAddress vertexBase = inputs.Frame.DebugDrawVertices.GetDeviceAddress();
 				std::optional<DebugDrawBucket> currentBucket;

@@ -90,11 +90,10 @@ namespace Candle {
 
 				vk::CommandBuffer commandBuffer = ctx.GetCommandBuffer();
 				ctx.BindPipeline(vk::PipelineBindPoint::eGraphics, guiPipeline);
-				//commandBuffer.bindPipeline(vk::PipelineBindPoint::eGraphics, guiPipeline);
 
+				// Override viewport so not upside down
 				const vk::Extent2D extent = ctx.GetRenderExtent();
 				commandBuffer.setViewport(0, vk::Viewport(0.0f, 0.0f, static_cast<float>(extent.width), static_cast<float>(extent.height), 0.0f, 1.0f));
-				commandBuffer.setDepthTestEnable(false);
 
 				const glm::vec2 scale = 2.0f / gui.DisplaySize;
 				const glm::vec2 translate = -1.0f - gui.DisplayPos * scale;
@@ -123,7 +122,6 @@ namespace Candle {
 						.SamplerIndex = samplerIndex
 					};
 					ctx.PushConstants(pushConstants);
-					//ApplyPushConstants(commandBuffer, m_PipelineStore.GetGlobalLayout(), pushConstants);
 
 					commandBuffer.drawIndexed(cmd.IndexCount, 1, cmd.IndexOffset, 0, 0);
 				}

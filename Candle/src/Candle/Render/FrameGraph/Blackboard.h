@@ -17,6 +17,7 @@ namespace Candle {
 		template<typename T> [[nodiscard]] T& Get() const;
 		template<typename T> [[nodiscard]] T* TryGet() const;
 
+		void Clear();
 
 	private:
 		std::unordered_map<std::type_index, std::any> m_Values;

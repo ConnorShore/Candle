@@ -107,15 +107,7 @@ namespace Candle {
 				}
 
 				vk::CommandBuffer commandBuffer = ctx.GetCommandBuffer();
-				//commandBuffer.bindPipeline(vk::PipelineBindPoint::eGraphics, trianglePipeline);
 				ctx.BindPipeline(vk::PipelineBindPoint::eGraphics, trianglePipeline);
-
-				// TODO NOW: This may be taken care of already by the frame graph
-				//  once modules work, revisit to see if can remove these viewport, scissor, depth test calls
-				const vk::Extent2D extent = ctx.GetRenderExtent();
-				commandBuffer.setViewport(0, vk::Viewport(0.0f, static_cast<float>(extent.height), static_cast<float>(extent.width), -static_cast<float>(extent.height), 0.0f, 1.0f));
-				commandBuffer.setScissor(0, vk::Rect2D(vk::Offset2D(0, 0), extent));
-				commandBuffer.setDepthTestEnable(true);
 
 				const uint32_t computeTextureIndex = ctx.GetTexture(computeData.Output).BindlessIndex;
 				for (const DrawItem& item : inputs.Packet.DrawItems)
@@ -138,7 +130,6 @@ namespace Candle {
 						.ComputeTextureIndex = computeTextureIndex
 					};
 
-					//ApplyPushConstants(commandBuffer, m_PipelineStore.GetGlobalLayout(), pushConstants);
 					ctx.PushConstants(pushConstants);
 
 					commandBuffer.bindIndexBuffer(drawInfo.Indices, 0, vk::IndexType::eUint32);

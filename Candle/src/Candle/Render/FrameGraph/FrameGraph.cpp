@@ -79,12 +79,15 @@ namespace Candle {
 		m_FrameArena.Reset();
 		m_TextureAccesses.clear();
 		m_CompiledGraph.Reset();
+		m_Blackboard.Clear();
 
 		m_ResetBeforeCompile = true;
 	}
 
 	void FrameGraph::CullPasses()
 	{
+		CDL_PROFILE_SCOPE("FrameGraph CullPasses");
+
 		std::vector<uint32_t> livePasses;
 		livePasses.reserve(m_Passes.size());
 
@@ -126,6 +129,8 @@ namespace Candle {
 
 	void FrameGraph::Compile(uint64_t frameIndex)
 	{
+		CDL_PROFILE_SCOPE("FrameGraph Compile");
+
 		CDL_CORE_ASSERT(m_ResetBeforeCompile, "FrameGraph must be reset before compiling");
 		m_ResetBeforeCompile = false;	// Reset the flag for next frame
 
@@ -320,6 +325,7 @@ namespace Candle {
 
 	void FrameGraph::Execute(const RenderDevice& renderDevice, vk::raii::CommandBuffer& commandBuffer)
 	{
+		CDL_PROFILE_SCOPE("FrameGraph Execute");
 		// Walk the compiled graph and execute each pass, creating barriers and attachments as needed
 		for (const FGCompiledPass& pass : m_CompiledGraph.Passes)
 		{
