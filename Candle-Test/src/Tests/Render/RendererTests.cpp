@@ -357,9 +357,10 @@ CDL_TEST_CASE(Renderer, DrawsEveryItemWithItsOwnTransform, Gpu)
 	ExpectNoVulkanDebugMessages(logs);
 }
 
-// Built for a small target, then grown as RenderManager grows it on a resize; not square, so a swapped width and height
-// shows. A depth image smaller than the render area fails validation, and the pixels show depth testing holds across all of it.
-CDL_TEST_CASE(Renderer, RecreateTargetsSizesDepthToTheNewTarget, Gpu)
+// Drawn to a small target, then to a grown one as after a resize; not square, so a swapped width and height shows. Depth is
+// a graph transient sized from the target each frame, so one left at the old size fails validation, and the pixels show
+// depth testing holds across all of it.
+CDL_TEST_CASE(Renderer, DepthFollowsTheTargetsSize, Gpu)
 {
 	SkipUnlessRendererShadersCompiled();
 	constexpr vk::Extent2D kGrownExtent{ 16, 8 };
@@ -375,8 +376,6 @@ CDL_TEST_CASE(Renderer, RecreateTargetsSizesDepthToTheNewTarget, Gpu)
 		const Texel nearColour = ShadeAlone(test, small, quad, nearTexture);
 		CheckDistinguishable(nearColour, ShadeAlone(test, small, quad, farTexture));
 
-		// Every frame was waited on, as RenderManager idles the GPU before it rebuilds
-		test.SceneRenderer.RecreateTargets(kGrownExtent, test.Allocator);
 		TestTarget grown = CreateTarget(test.Device, kGrownExtent);
 
 		const FramePacket packet = MakePacket(quad, { { nearTexture, AtDepth(0.25f) }, { farTexture, AtDepth(0.75f) } });
@@ -698,9 +697,9 @@ CDL_TEST_CASE(Renderer, GuiShowsTheOutputTargetTheSceneDrewThatFrame, Gpu)
 	ExpectNoVulkanDebugMessages(logs);
 }
 
-// Depth starts at the renderer's target extent, and RenderManager matches it to each output target before drawing. The new
-// target is larger, so depth left at the old size fails validation, and not square, so a swapped width and height shows.
-CDL_TEST_CASE(Renderer, MatchDepthToOutputSizesDepthToTheOutputTarget, Gpu)
+// Depth is sized from each frame's output target rather than the renderer's target extent. The new target is larger, so
+// depth left at the old size fails validation, and not square, so a swapped width and height shows.
+CDL_TEST_CASE(Renderer, DepthFollowsTheOutputTargetsSize, Gpu)
 {
 	SkipUnlessRendererShadersCompiled();
 	SkipUnlessCompiled(kBindlessFixturePath);
@@ -718,10 +717,7 @@ CDL_TEST_CASE(Renderer, MatchDepthToOutputSizesDepthToTheOutputTarget, Gpu)
 		const Texel nearColour = ShadeAloneIntoOutput(test, target, small, quad, nearTexture);
 		CheckDistinguishable(nearColour, ShadeAloneIntoOutput(test, target, small, quad, farTexture));
 
-		// Every frame was waited on, so the old depth image is already free to go
 		const GPUTextureHandle grown = test.CreateOutputTarget(kOutputExtent);
-		test.SceneRenderer.MatchDepthToOutput(kOutputExtent, test.Device.GetCompletedTimelineValue(QueueType::Graphics));
-
 		FramePacket packet = MakePacket(quad, { { nearTexture, AtDepth(0.25f) }, { farTexture, AtDepth(0.75f) } });
 		packet.OutputTarget = grown;
 		RenderFrame(test, target, packet);
@@ -733,58 +729,9 @@ CDL_TEST_CASE(Renderer, MatchDepthToOutputSizesDepthToTheOutputTarget, Gpu)
 	ExpectNoVulkanDebugMessages(logs);
 }
 
-// RenderManager calls it every frame, so the common case, a target the size depth already is, must neither allocate a new
-// depth image nor queue the current one.
-CDL_TEST_CASE(Renderer, MatchDepthToOutputKeepsDepthWhenTheExtentIsUnchanged, Gpu)
-{
-	SkipUnlessRendererShadersCompiled();
-
-	LoggerFixture logs(LogLevel::Warn, kRenderChannelMask);
-	{
-		TestRenderer test(kExtent, RenderTo::OutputTarget);
-		const uint32_t before = LiveAllocations(test.Allocator);
-
-		test.SceneRenderer.MatchDepthToOutput({ kExtent.width, kExtent.height }, std::numeric_limits<uint64_t>::max());
-		CDL_EXPECT_EQ(LiveAllocations(test.Allocator), before);
-	}
-	ExpectNoVulkanDebugMessages(logs);
-}
-
-// Frames in flight may still test against the depth image MatchDepthToOutput replaces, so it lives until the GPU reaches the
-// value it was given, the newest frame's, and the first Render after that frees it.
-CDL_TEST_CASE(Renderer, ReplacedDepthImageIsFreedOnceItsLastFrameRetires, Gpu)
-{
-	SkipUnlessRendererShadersCompiled();
-	constexpr glm::uvec2 kGrownExtent{ 8, 8 };
-
-	LoggerFixture logs(LogLevel::Warn, kRenderChannelMask);
-	{
-		TestRenderer test(kExtent, RenderTo::OutputTarget);
-		TestTarget target = CreateTarget(test.Device, kExtent);
-		FramePacket packet = MakePacket(test.CreateQuad(), { { test.CreateSolidTexture(kBright), AtDepth(0.5f) } });
-		packet.OutputTarget = test.CreateOutputTarget({ kExtent.width, kExtent.height });
-		RenderFrame(test, target, packet);
-
-		packet.OutputTarget = test.CreateOutputTarget(kGrownExtent);
-		const uint32_t before = LiveAllocations(test.Allocator);
-
-		// The GPU reaches this with the next submit: the frame below
-		const uint64_t lastUse = test.Device.GetLastSubmittedTimelineValue(QueueType::Graphics) + 1;
-		test.SceneRenderer.MatchDepthToOutput(kGrownExtent, lastUse);
-		CDL_EXPECT_EQ(LiveAllocations(test.Allocator), before + 1u);	// The new depth image, and the old one held
-
-		RenderFrame(test, target, packet);	// Drains before its own submit, so before lastUse is reached
-		CDL_EXPECT_EQ(LiveAllocations(test.Allocator), before + 1u);
-
-		RenderFrame(test, target, packet);	// Drains with lastUse reached
-		CDL_EXPECT_EQ(LiveAllocations(test.Allocator), before);
-	}
-	ExpectNoVulkanDebugMessages(logs);
-}
-
-// A swapchain resize says nothing about the output target, so depth stays at the target's size: nothing is reallocated,
-// and a frame at the old output extent still depth-tests, with the swapchain image now larger than it.
-CDL_TEST_CASE(Renderer, RecreateTargetsLeavesDepthAloneWhenRenderingToAnOutputTarget, Gpu)
+// A swapchain resize says nothing about the output target, so depth stays at the output's size, and a frame at the old
+// output extent still depth-tests with the swapchain image now larger than it.
+CDL_TEST_CASE(Renderer, OutputTargetDepthIgnoresTheSwapChainsSize, Gpu)
 {
 	SkipUnlessRendererShadersCompiled();
 	SkipUnlessCompiled(kBindlessFixturePath);
@@ -801,11 +748,6 @@ CDL_TEST_CASE(Renderer, RecreateTargetsLeavesDepthAloneWhenRenderingToAnOutputTa
 
 		const Texel nearColour = ShadeAloneIntoOutput(test, small, output, quad, nearTexture);
 		CheckDistinguishable(nearColour, ShadeAloneIntoOutput(test, small, output, quad, farTexture));
-
-		// A check, not an expectation: Render asserts that depth matches the output target, which would end the whole run
-		const uint32_t before = LiveAllocations(test.Allocator);
-		test.SceneRenderer.RecreateTargets(kGrownExtent, test.Allocator);
-		CDL_CHECK_EQ(LiveAllocations(test.Allocator), before);
 
 		TestTarget grown = CreateTarget(test.Device, kGrownExtent);
 		FramePacket packet = MakePacket(quad, { { nearTexture, AtDepth(0.25f) }, { farTexture, AtDepth(0.75f) } });

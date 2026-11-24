@@ -323,7 +323,7 @@ namespace Candle {
 					commandBuffer.bindIndexBuffer(drawInfo.Indices, 0, vk::IndexType::eUint32);
 					commandBuffer.drawIndexed(drawInfo.IndexCount, 1, 0, 0, 0);
 				}
-			});
+			}, true);
 	}
 
 	Renderer::DebugDrawPassData Renderer::AddDebugDrawPass(const FramePacket& packet, FrameContext& frame, const ScenePassData& sceneData, const GPU::GlobalPushConstants& global)

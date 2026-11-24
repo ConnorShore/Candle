@@ -69,7 +69,8 @@ namespace Candle {
 			},
 			.Imported = false,	
 			.InitialState = initialState,
-			.FinalState = initialState	// Will be updated during compilation to the last pass's final state
+			.FinalState = initialState,	// Will be updated during compilation to the last pass's final state
+			.LastWritePassIndex = m_PassIndex
 			});
 		return { .Index = static_cast<uint32_t>(m_Graph.m_Textures.size() - 1), .Version = 0 };
 	}
@@ -84,7 +85,8 @@ namespace Candle {
 		FGTextureAccessEntry accessEntry{
 			.Handle = texture,
 			.Usage = usage,
-			.Write = false
+			.Write = false,
+			.SrcPassIndex = textureEntry.LastWritePassIndex
 		};
 		m_Graph.m_TextureAccesses[m_PassIndex].push_back(accessEntry);
 	}
@@ -100,6 +102,7 @@ namespace Candle {
 			.Write = true
 		};
 		m_Graph.m_TextureAccesses[m_PassIndex].push_back(accessEntry);
+		m_Graph.m_Textures[texture.Index].LastWritePassIndex = m_PassIndex;
 		return { .Index = texture.Index, .Version = IncrementHandleVersion(texture) };
 	}
 
@@ -113,9 +116,11 @@ namespace Candle {
 			.Usage = FGUsage::ColorAttachment,
 			.Write = true,
 			.LoadOp = loadOp,
-			.ClearVlaue = clearColor
+			.ClearVlaue = clearColor,
+			.SrcPassIndex = loadOp == FGLoad::Clear ? std::numeric_limits<uint32_t>::max() : m_Graph.m_Textures[texture.Index].LastWritePassIndex
 		};
 		m_Graph.m_TextureAccesses[m_PassIndex].push_back(accessEntry);
+		m_Graph.m_Textures[texture.Index].LastWritePassIndex = m_PassIndex;
 		return { .Index = texture.Index, .Version = IncrementHandleVersion(texture) };
 	}
 
@@ -128,9 +133,11 @@ namespace Candle {
 			.Usage = FGUsage::DepthAttachment,
 			.Write = true,
 			.LoadOp = loadOp,
-			.ClearVlaue = vk::ClearDepthStencilValue(1.0f, 0)	// TODO: Depth clear value should be specified by the pass, but for now just using a default
+			.ClearVlaue = vk::ClearDepthStencilValue(1.0f, 0),	// TODO: Depth clear value should be specified by the pass, but for now just using a default
+			.SrcPassIndex = loadOp == FGLoad::Clear ? std::numeric_limits<uint32_t>::max() : m_Graph.m_Textures[texture.Index].LastWritePassIndex
 		};
 		m_Graph.m_TextureAccesses[m_PassIndex].push_back(accessEntry);
+		m_Graph.m_Textures[texture.Index].LastWritePassIndex = m_PassIndex;
 		return { .Index = texture.Index, .Version = IncrementHandleVersion(texture) };
 	}
 

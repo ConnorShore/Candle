@@ -52,6 +52,7 @@ namespace Candle {
 		ImageState InitialState, FinalState;
 		uint32_t CacheIndex{ std::numeric_limits<uint32_t>::max() };	// Transients only
 		uint32_t LatestVersion{ 0 };	// Incremented every time a transient is created, so handles to old resources can be detected
+		uint32_t LastWritePassIndex{ std::numeric_limits<uint32_t>::max() };	// Updated during compilation to the last pass that writes to this texture
 	};
 
 	struct FGTextureAccessEntry
@@ -61,6 +62,7 @@ namespace Candle {
 		bool Write{ false };				// If true, the pass writes to the texture, so it needs a layout transition and a barrier
 		FGLoad LoadOp{ FGLoad::DontCare };	// Attachments only
 		vk::ClearValue ClearVlaue;			// Attachments only
+		uint32_t SrcPassIndex{ std::numeric_limits<uint32_t>::max() };	// Updated during compilation to the last pass that writes to this texture
 	};
 
 	class FrameGraph
@@ -75,15 +77,15 @@ namespace Candle {
 		void Execute(const RenderDevice& renderDevice, vk::raii::CommandBuffer& commandBuffer);
 
 		template<typename PassData = FGNoData, typename SetupFunc, typename ExecuteFunc>
-		const PassData& AddRasterPass(std::string_view name, SetupFunc setup, ExecuteFunc execute)
+		const PassData& AddRasterPass(std::string_view name, SetupFunc setup, ExecuteFunc execute, bool NeverCull = false)
 		{
-			return AddPass<PassData>(name, setup, execute, false);
+			return AddPass<PassData>(name, setup, execute, false, NeverCull);
 		}
 
 		template<typename PassData = FGNoData, typename SetupFunc, typename ExecuteFunc>
-		const PassData& AddComputePass(std::string_view name, SetupFunc setup, ExecuteFunc execute)
+		const PassData& AddComputePass(std::string_view name, SetupFunc setup, ExecuteFunc execute, bool NeverCull = false)
 		{
-			return AddPass<PassData>(name, setup, execute, true);
+			return AddPass<PassData>(name, setup, execute, true, NeverCull);
 		}
 
 		FGTextureHandle ImportSwapChainImage(SwapChainImage& image);
@@ -103,7 +105,7 @@ namespace Candle {
 		friend class FrameGraphContext;
 
 		template<typename PassData = FGNoData, typename SetupFunc, typename ExecuteFunc>
-		const PassData& AddPass(std::string_view name, SetupFunc setup, ExecuteFunc execute, bool IsCompute = false)
+		const PassData& AddPass(std::string_view name, SetupFunc setup, ExecuteFunc execute, bool IsCompute = false, bool NeverCull = false)
 		{
 			CDL_STATIC_ASSERT(std::is_trivially_destructible_v<PassData>, "PassData lives in the frame arena, which never runs destructors");
 			CDL_STATIC_ASSERT(std::is_trivially_destructible_v<ExecuteFunc>,
@@ -111,7 +113,7 @@ namespace Candle {
 
 			using Pass = FrameGraphPass<PassData, ExecuteFunc>;
 			Pass* pass = m_FrameArena.New<Pass>(std::move(execute));
-			FrameGraphPassNode node(name, pass, IsCompute);
+			FrameGraphPassNode node(name, pass, IsCompute, NeverCull);
 
 			// Add an empty texture access list for this pass, which will be filled by the builder. The builder keeps a reference to it, so it must stay valid until Reset.
 			m_TextureAccesses.push_back({});
@@ -124,6 +126,8 @@ namespace Candle {
 			// Arena memory never moves, unlike m_Passes, so this stays valid until Reset
 			return pass->Data;
 		}
+
+		void CullPasses();
 
 	private:
 		TexturePool& m_TexturePool;

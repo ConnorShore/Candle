@@ -82,14 +82,60 @@ namespace Candle {
 		m_ResetBeforeCompile = true;
 	}
 
+	void FrameGraph::CullPasses()
+	{
+		std::vector<uint32_t> livePasses;
+		livePasses.reserve(m_Passes.size());
+
+		// Walk the passes and mark any that are NeverCull or write to an imported texture as live. The rest will be culled.
+		for (size_t i = 0; i < m_Passes.size(); ++i)
+		{
+			FrameGraphPassNode& passNode = m_Passes[i];
+			bool isLastImportWrite = std::any_of(m_Textures.begin(), m_Textures.end(), [i](const FGTextureEntry& texture) {
+				return texture.LastWritePassIndex == i && texture.Imported;
+				});
+			if (passNode.NeverCull || isLastImportWrite)
+			{
+				livePasses.push_back(static_cast<uint32_t>(i));
+				continue;
+			}
+		}
+
+		// Walk the live passes and mark any passes that wrote to the textures they read from as live, since they are needed to produce the inputs for the live passes
+		while (!livePasses.empty())
+		{
+			uint32_t passIndex = livePasses.back();
+			livePasses.pop_back();
+
+			FrameGraphPassNode& passNode = m_Passes[passIndex];
+			CDL_CORE_ASSERT(!passNode.IsLive, "Pass was already marked as live");
+
+			passNode.IsLive = true;
+
+			// Walk the texture accesses for this pass and mark any passes that wrote to those textures as live, since they are needed to produce the inputs for this pass
+			for (const FGTextureAccessEntry& textureAccess : m_TextureAccesses[passIndex])
+			{
+				uint32_t srcPassIndex = textureAccess.SrcPassIndex;
+				if (srcPassIndex < m_Passes.size() && !m_Passes[srcPassIndex].IsLive)
+					livePasses.push_back(srcPassIndex);
+			}
+		}
+	}
+
 	void FrameGraph::Compile(uint64_t frameIndex)
 	{
 		CDL_CORE_ASSERT(m_ResetBeforeCompile, "FrameGraph must be reset before compiling");
 		m_ResetBeforeCompile = false;	// Reset the flag for next frame
 
+		// Cull passes that don't write to imported textures and aren't marked as NeverCull
+		CullPasses();
+
 		// Walk attachments and OR together usages for each attachment to determine the final usage for the resource cache and bindless table
 		for (size_t pass = 0; pass < m_TextureAccesses.size(); ++pass)
 		{
+			if (!m_Passes[pass].IsLive)
+				continue;
+
 			for (size_t access = 0; access < m_TextureAccesses[pass].size(); ++access)
 			{
 				FGTextureAccessEntry& textureAccess = m_TextureAccesses[pass][access];
@@ -108,6 +154,8 @@ namespace Candle {
 			FGTextureEntry& texture = m_Textures[i];
 			if (texture.Imported)
 				continue;
+			if (!m_Passes[texture.LastWritePassIndex].IsLive)
+				continue;	// If the pass that created this transient texture was culled, we don't need to create a resource for it
 
 			FGTextureKey key{
 				.Format{ texture.Desc.Format },
@@ -153,6 +201,9 @@ namespace Candle {
 		// Create the compiled graph by walking the passes and their texture accesses, creating barriers and compiled attachments as needed
 		for (size_t pass = 0; pass < m_Passes.size(); ++pass)
 		{
+			if (!m_Passes[pass].IsLive)
+				continue;
+
 			FrameGraphPassNode& passNode = m_Passes[pass];
 			uint32_t barrierStartIndex = static_cast<uint32_t>(m_CompiledGraph.Barriers.size());
 			uint32_t attachmentStartIndex = static_cast<uint32_t>(m_CompiledGraph.Attachments.size());
@@ -254,11 +305,9 @@ namespace Candle {
 		// also covers last frame's command buffer; a second queue would need a semaphore instead.
 		for (const FGTextureEntry& texture : m_Textures)
 		{
-			if (!texture.Imported)
+			if (!texture.Imported && m_Passes[texture.LastWritePassIndex].IsLive)
 				m_ResourceCache.SetTextureState(texture.CacheIndex, texture.FinalState);
 		}
-
-		// TODO: Need to handle pass culling
 	}
 
 	void FrameGraph::EvictUnusedResources(uint64_t frameIndex, uint64_t lastSubmittedValue, uint64_t completedValue)
