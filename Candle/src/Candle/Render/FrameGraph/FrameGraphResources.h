@@ -42,9 +42,12 @@ namespace Candle {
 		SampledVertex,
 		SampledFragment,
 		SampledCompute,
-		StorageVertex,
-		StorageFragment,
-		StorageCompute
+		StorageReadVertex,
+		StorageReadFragment,
+		StorageReadCompute,
+		StorageWriteVertex,
+		StorageWriteFragment,
+		StorageWriteCompute
 	};
 
 	struct FGUsageInfo
@@ -87,15 +90,25 @@ namespace Candle {
 			return { .State = { .Layout = vk::ImageLayout::eShaderReadOnlyOptimal, .Access = vk::AccessFlagBits2::eShaderSampledRead,
 								.Stage = vk::PipelineStageFlagBits2::eComputeShader },
 					 .ImageUsage = vk::ImageUsageFlagBits::eSampled, .BufferUsage = {}, .Read = true, .Write = false };
-		case FGUsage::StorageVertex:
+		case FGUsage::StorageReadVertex:
+			return { .State = { .Layout = vk::ImageLayout::eGeneral, .Access = vk::AccessFlagBits2::eShaderStorageRead, .Stage = vk::PipelineStageFlagBits2::eVertexShader },
+					 .ImageUsage = vk::ImageUsageFlagBits::eStorage, .BufferUsage = {}, .Read = true, .Write = false };
+		case FGUsage::StorageReadFragment:
+			return { .State = { .Layout = vk::ImageLayout::eGeneral, .Access = vk::AccessFlagBits2::eShaderStorageRead, .Stage = vk::PipelineStageFlagBits2::eFragmentShader },
+					 .ImageUsage = vk::ImageUsageFlagBits::eStorage, .BufferUsage = {}, .Read = true, .Write = false };
+		case FGUsage::StorageReadCompute:
+			return { .State = { .Layout = vk::ImageLayout::eGeneral, .Access = vk::AccessFlagBits2::eShaderStorageRead, .Stage = vk::PipelineStageFlagBits2::eComputeShader },
+					 .ImageUsage = vk::ImageUsageFlagBits::eStorage, .BufferUsage = {}, .Read = true, .Write = false };
+		// The writes keep read access too, since the graph can't tell whether the shader reads before it writes
+		case FGUsage::StorageWriteVertex:
 			return { .State = { .Layout = vk::ImageLayout::eGeneral, .Access = vk::AccessFlagBits2::eShaderStorageRead | vk::AccessFlagBits2::eShaderStorageWrite,
 								.Stage = vk::PipelineStageFlagBits2::eVertexShader },
 					 .ImageUsage = vk::ImageUsageFlagBits::eStorage, .BufferUsage = {}, .Read = true, .Write = true };
-		case FGUsage::StorageFragment:
+		case FGUsage::StorageWriteFragment:
 			return { .State = { .Layout = vk::ImageLayout::eGeneral, .Access = vk::AccessFlagBits2::eShaderStorageRead | vk::AccessFlagBits2::eShaderStorageWrite,
 								.Stage = vk::PipelineStageFlagBits2::eFragmentShader },
 					 .ImageUsage = vk::ImageUsageFlagBits::eStorage, .BufferUsage = {}, .Read = true, .Write = true };
-		case FGUsage::StorageCompute:
+		case FGUsage::StorageWriteCompute:
 			return { .State = { .Layout = vk::ImageLayout::eGeneral, .Access = vk::AccessFlagBits2::eShaderStorageRead | vk::AccessFlagBits2::eShaderStorageWrite,
 								.Stage = vk::PipelineStageFlagBits2::eComputeShader },
 					 .ImageUsage = vk::ImageUsageFlagBits::eStorage, .BufferUsage = {}, .Read = true, .Write = true };

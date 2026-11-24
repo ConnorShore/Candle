@@ -49,7 +49,7 @@ namespace Candle {
 			[&](FrameGraphBuilder& builder, ComputePassData& data)
 			{
 				FGTextureHandle output = builder.CreateTexture("ComputeOutput", { .Size = { .Mode = FGSizeMode::Absolute, .Extent = { 64, 64 } }, .Format = vk::Format::eR8G8B8A8Unorm });
-				data.Output = builder.WriteTexture(output, FGUsage::StorageCompute);
+				data.Output = builder.WriteTexture(output, FGUsage::StorageWriteCompute);
 			},
 			[&](const ComputePassData& data, FrameGraphContext& ctx)
 			{

@@ -25,7 +25,8 @@ namespace {
 
 	struct TestFrameGraph : TestTextures
 	{
-		FrameGraph Graph{ { .Allocator = Allocator, .BindlessTable = Bindless, .TexturePool = Pool } };
+		TestPipelineStore Pipelines{ Device, Bindless };
+		FrameGraph Graph{ { .Allocator = Allocator, .BindlessTable = Bindless, .TexturePool = Pool, .PipelineStore = Pipelines } };
 	};
 
 	struct ValueData
@@ -214,7 +215,7 @@ CDL_TEST_CASE(FrameGraph, EveryWriteHandsBackTheTexturesNextVersion, Gpu)
 			}, kNoExecute);
 		test.Graph.AddComputePass("Fog", [&](FrameGraphBuilder& builder, FGNoData&)
 			{
-				color.push_back(builder.WriteTexture(color.back(), FGUsage::StorageCompute));
+				color.push_back(builder.WriteTexture(color.back(), FGUsage::StorageWriteCompute));
 			}, kNoExecute);
 
 		for (const std::vector<FGTextureHandle>* versions : { &color, &depth, &imported })

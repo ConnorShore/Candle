@@ -45,7 +45,8 @@ namespace {
 
 	struct TestFrameGraph : TestTextures
 	{
-		FrameGraph Graph{ { .Allocator = Allocator, .BindlessTable = Bindless, .TexturePool = Pool } };
+		TestPipelineStore Pipelines{ Device, Bindless };
+		FrameGraph Graph{ { .Allocator = Allocator, .BindlessTable = Bindless, .TexturePool = Pool, .PipelineStore = Pipelines } };
 
 		// A fresh pool render target imported into this frame. name must outlive the frame, e.g. a string literal.
 		FGTextureHandle ImportTarget(std::string_view name,
@@ -676,7 +677,7 @@ CDL_TEST_CASE(FrameGraphCompile, SampledReadUsesTheLayoutItsDescriptorWasWritten
 		test.Graph.Reset(kOutputExtent);
 
 		FGTextureHandle storage = test.ImportStorageTarget("Storage");
-		DeclarePass(test.Graph, "Compute", [&](FrameGraphBuilder& builder) { storage = builder.WriteTexture(storage, FGUsage::StorageCompute); });
+		DeclarePass(test.Graph, "Compute", [&](FrameGraphBuilder& builder) { storage = builder.WriteTexture(storage, FGUsage::StorageWriteCompute); });
 		DeclarePass(test.Graph, "Scene", [&](FrameGraphBuilder& builder) { builder.ReadTexture(storage, FGUsage::SampledFragment); });
 		test.Graph.Compile(1);
 
@@ -722,13 +723,56 @@ CDL_TEST_CASE(FrameGraphCompile, ReadAfterAWriteInTheSameLayoutStillWaits, Gpu)
 		test.Graph.Reset(kOutputExtent);
 
 		FGTextureHandle storage = test.ImportStorageTarget("Storage");
-		DeclarePass(test.Graph, "Compute", [&](FrameGraphBuilder& builder) { storage = builder.WriteTexture(storage, FGUsage::StorageCompute); });
-		DeclarePass(test.Graph, "Fragment", [&](FrameGraphBuilder& builder) { builder.ReadTexture(storage, FGUsage::StorageFragment); });
+		DeclarePass(test.Graph, "Compute", [&](FrameGraphBuilder& builder) { storage = builder.WriteTexture(storage, FGUsage::StorageWriteCompute); });
+		DeclarePass(test.Graph, "Fragment", [&](FrameGraphBuilder& builder) { builder.ReadTexture(storage, FGUsage::StorageReadFragment); });
 		test.Graph.Compile(1);
 
 		const FGBarrier* barrier = FindBarrier(BarriersOf(test.Graph.GetCompiledGraph(), 1), storage);
 		CDL_CHECK(barrier);
 		ExpectWaitsFor(barrier->FromState, vk::AccessFlagBits2::eShaderStorageWrite, vk::PipelineStageFlagBits2::eComputeShader, "The read's barrier source");
+	}
+	ExpectNoVulkanDebugMessages(logs);
+}
+
+// A storage read carries no write access, so once the first read has waited for the write, the second has nothing to
+// wait for. If it did, every pass reading a shared storage resource would serialise behind the one before it.
+CDL_TEST_CASE(FrameGraphCompile, StorageReadsAfterAWriteShareOneBarrier, Gpu)
+{
+	LoggerFixture logs(LogLevel::Warn, kRenderChannelMask);
+	{
+		TestFrameGraph test;
+		NotePlanOnFailure dump(test.Graph);
+		test.Graph.Reset(kOutputExtent);
+
+		FGTextureHandle storage = test.ImportStorageTarget("Storage");
+		DeclarePass(test.Graph, "Write", [&](FrameGraphBuilder& builder) { storage = builder.WriteTexture(storage, FGUsage::StorageWriteCompute); });
+		DeclarePass(test.Graph, "FirstRead", [&](FrameGraphBuilder& builder) { builder.ReadTexture(storage, FGUsage::StorageReadCompute); });
+		DeclarePass(test.Graph, "SecondRead", [&](FrameGraphBuilder& builder) { builder.ReadTexture(storage, FGUsage::StorageReadCompute); });
+		test.Graph.Compile(1);
+
+		CDL_EXPECT(FindBarrier(BarriersOf(test.Graph.GetCompiledGraph(), 1), storage));
+		CDL_EXPECT(!FindBarrier(BarriersOf(test.Graph.GetCompiledGraph(), 2), storage));
+	}
+	ExpectNoVulkanDebugMessages(logs);
+}
+
+// The layout doesn't change between them, but the second write mustn't land before the first
+CDL_TEST_CASE(FrameGraphCompile, StorageWriteAfterAStorageWriteStillWaits, Gpu)
+{
+	LoggerFixture logs(LogLevel::Warn, kRenderChannelMask);
+	{
+		TestFrameGraph test;
+		NotePlanOnFailure dump(test.Graph);
+		test.Graph.Reset(kOutputExtent);
+
+		FGTextureHandle storage = test.ImportStorageTarget("Storage");
+		DeclarePass(test.Graph, "Write", [&](FrameGraphBuilder& builder) { storage = builder.WriteTexture(storage, FGUsage::StorageWriteCompute); });
+		DeclarePass(test.Graph, "Rewrite", [&](FrameGraphBuilder& builder) { storage = builder.WriteTexture(storage, FGUsage::StorageWriteCompute); });
+		test.Graph.Compile(1);
+
+		const FGBarrier* barrier = FindBarrier(BarriersOf(test.Graph.GetCompiledGraph(), 1), storage);
+		CDL_CHECK(barrier);
+		ExpectWaitsFor(barrier->FromState, vk::AccessFlagBits2::eShaderStorageWrite, vk::PipelineStageFlagBits2::eComputeShader, "The rewrite's barrier source");
 	}
 	ExpectNoVulkanDebugMessages(logs);
 }

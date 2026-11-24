@@ -16,6 +16,7 @@
 #include <glm/glm.hpp>
 
 #include <limits>
+#include <span>
 #include <string>
 #include <string_view>
 #include <type_traits>
@@ -58,14 +59,24 @@ namespace Candle {
 		uint32_t LastWritePassIndex{ std::numeric_limits<uint32_t>::max() };	// Set by the builder during setup: the last pass so far to write it, or a transient's creator
 	};
 
-	struct FGTextureAccessEntry
+	enum class FGResourceType : uint8_t { Texture, Buffer };
+
+	struct FGAccessEntry
 	{
-		FGTextureHandle Handle;
+		FGResourceType Type{ FGResourceType::Texture };
+		uint32_t ResourceIndex{ std::numeric_limits<uint32_t>::max() };	// Into m_Textures or m_Buffers, by Type
+		uint32_t Version{ 0 };
 		FGUsage Usage;
-		bool Write{ false };				// If true, the pass writes to the texture, so it needs a layout transition and a barrier
+		bool Write{ false };				// If true, the pass writes to the resource, so it needs a barrier
 		FGLoad LoadOp{ FGLoad::DontCare };	// Attachments only
-		vk::ClearValue ClearVlaue;			// Attachments only
+		vk::ClearValue ClearValue;			// Attachments only
 		uint32_t SrcPassIndex{ std::numeric_limits<uint32_t>::max() };	// Set by the builder during setup: the pass that wrote what this access reads. None for a Clear or DontCare.
+
+		inline FGTextureHandle GetTextureHandle() const
+		{
+			CDL_CORE_ASSERT(Type == FGResourceType::Texture, "Access is not to a texture");
+			return { .Index = ResourceIndex, .Version = Version };
+		}
 	};
 
 	class FrameGraph
@@ -119,17 +130,25 @@ namespace Candle {
 			using Pass = FrameGraphPass<PassData, ExecuteFunc>;
 			Pass* pass = m_FrameArena.New<Pass>(std::move(execute));
 			FrameGraphPassNode node(name, pass, IsCompute, NeverCull);
+			node.AccessStart = static_cast<uint32_t>(m_Accesses.size());
 
-			// Add an empty texture access list for this pass, which will be filled by the builder. The builder keeps a reference to it, so it must stay valid until Reset.
-			m_TextureAccesses.push_back({});
-
-			FrameGraphBuilder builder(*this, static_cast<uint32_t>(m_Passes.size()));	// TODO: Use concepts to enforce that the setup function takes a FrameGraphBuilder& and PassData& as parameters
+			const uint32_t passIndex = static_cast<uint32_t>(m_Passes.size());
+			FrameGraphBuilder builder(*this, passIndex);	// TODO: Use concepts to enforce that the setup function takes a FrameGraphBuilder& and PassData& as parameters
 			setup(builder, pass->Data);
 
+			// A pass added from inside setup would take this pass's index and split its accesses in two
+			CDL_CORE_ASSERT(m_Passes.size() == passIndex, "AddPass can't be called from inside another pass's setup");
+			node.AccessCount = static_cast<uint32_t>(m_Accesses.size()) - node.AccessStart;
 			m_Passes.push_back(std::move(node));
 
 			// Arena memory never moves, unlike m_Passes, so this stays valid until Reset
 			return pass->Data;
+		}
+
+		inline std::span<const FGAccessEntry> GetPassAccesses(uint32_t passIndex) const
+		{
+			const FrameGraphPassNode& pass = m_Passes[passIndex];
+			return std::span(m_Accesses).subspan(pass.AccessStart, pass.AccessCount);
 		}
 
 		void CullPasses();
@@ -147,10 +166,9 @@ namespace Candle {
 
 		// The frame graph owns the textures, which are either imported from the pool or swapchain, or created as transients. The passes only have handles to them.
 		std::vector<FGTextureEntry> m_Textures;
-
-		// TODO NOW: Once FG is working, optimize this nested vector (probably to single vector)
-		std::vector<std::vector<FGTextureAccessEntry>> m_TextureAccesses;	// Indexed by pass, so each pass has a list of the textures it reads and writes
 		//std::vector<FGBufferHandle> m_Buffers;
+
+		std::vector<FGAccessEntry> m_Accesses;	// Every pass's reads and writes, each pass's in one run (see GetPassAccesses)
 
 		bool m_ResetBeforeCompile{ false };
 	};

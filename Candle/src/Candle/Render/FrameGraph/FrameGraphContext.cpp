@@ -25,11 +25,11 @@ namespace Candle {
 			.width = 0,
 			.height = 0
 		};
-		for (const FGTextureAccessEntry& entry : m_FrameGraph.m_TextureAccesses[m_PassIndex])
+		for (const FGAccessEntry& entry : m_FrameGraph.GetPassAccesses(m_PassIndex))
 		{
-			const FGTextureEntry& texture = m_FrameGraph.m_Textures[entry.Handle.Index];
 			if (entry.Usage == FGUsage::ColorAttachment || entry.Usage == FGUsage::DepthAttachment)
 			{
+				const FGTextureEntry& texture = m_FrameGraph.m_Textures[entry.ResourceIndex];
 				extent.width = glm::max(extent.width, static_cast<uint32_t>(texture.Desc.Extent.x));
 				extent.height = glm::max(extent.height, static_cast<uint32_t>(texture.Desc.Extent.y));
 			}

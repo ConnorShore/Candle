@@ -80,30 +80,36 @@ namespace Candle {
 		FGTextureEntry& textureEntry = m_Graph.m_Textures[texture.Index];
 		CDL_CORE_ASSERT(textureEntry.Imported || texture.Version > 0, "Cannot read from a texture that has not been written to");
 		CDL_CORE_ASSERT(texture.Version == textureEntry.LatestVersion, "Reading from a stale handle");
+		CDL_CORE_ASSERT(!GetUsageInfo(usage).Write, "ReadTexture was given a write usage; use WriteTexture");
 
 		// Add an entry to the pass's texture access list, which the graph will use to insert barriers and track usage
-		FGTextureAccessEntry accessEntry{
-			.Handle = texture,
+		FGAccessEntry accessEntry{
+			.Type = FGResourceType::Texture,
+			.ResourceIndex = texture.Index,
+			.Version = texture.Version,
 			.Usage = usage,
 			.Write = false,
 			.SrcPassIndex = textureEntry.LastWritePassIndex
 		};
-		m_Graph.m_TextureAccesses[m_PassIndex].push_back(accessEntry);
+		m_Graph.m_Accesses.push_back(accessEntry);
 	}
 
 	FGTextureHandle FrameGraphBuilder::WriteTexture(FGTextureHandle texture, FGUsage usage)
 	{
 		CDL_CORE_ASSERT(texture.Index < m_Graph.m_Textures.size(), "FGTextureHandle is not from this frame");
 		CDL_CORE_ASSERT(texture.Version == m_Graph.m_Textures[texture.Index].LatestVersion, "Writing to a stale texture handle");
+		CDL_CORE_ASSERT(GetUsageInfo(usage).Write, "WriteTexture was given a read-only usage; use ReadTexture");
 
 		// Add an entry to the pass's texture access list, which the graph will use to insert barriers and track usage
-		FGTextureAccessEntry accessEntry{
-			.Handle = texture,
+		FGAccessEntry accessEntry{
+			.Type = FGResourceType::Texture,
+			.ResourceIndex = texture.Index,
+			.Version = texture.Version,
 			.Usage = usage,
 			.Write = true,
 			.SrcPassIndex = m_Graph.m_Textures[texture.Index].LastWritePassIndex	// A storage write may read what's there first, and the graph can't tell
 		};
-		m_Graph.m_TextureAccesses[m_PassIndex].push_back(accessEntry);
+		m_Graph.m_Accesses.push_back(accessEntry);
 		m_Graph.m_Textures[texture.Index].LastWritePassIndex = m_PassIndex;
 		return { .Index = texture.Index, .Version = IncrementHandleVersion(texture) };
 	}
@@ -113,15 +119,17 @@ namespace Candle {
 		CDL_CORE_ASSERT(texture.Version == m_Graph.m_Textures[texture.Index].LatestVersion, "Using a stale texture handle for a color attachment");
 
 		// Add an entry to the pass's texture access list, which the graph will use to insert barriers and track usage
-		FGTextureAccessEntry accessEntry{
-			.Handle = texture,
+		FGAccessEntry accessEntry{
+			.Type = FGResourceType::Texture,
+			.ResourceIndex = texture.Index,
+			.Version = texture.Version,
 			.Usage = FGUsage::ColorAttachment,
 			.Write = true,
 			.LoadOp = loadOp,
-			.ClearVlaue = clearColor,
+			.ClearValue = clearColor,
 			.SrcPassIndex = loadOp != FGLoad::Load ? std::numeric_limits<uint32_t>::max() : m_Graph.m_Textures[texture.Index].LastWritePassIndex
 		};
-		m_Graph.m_TextureAccesses[m_PassIndex].push_back(accessEntry);
+		m_Graph.m_Accesses.push_back(accessEntry);
 		m_Graph.m_Textures[texture.Index].LastWritePassIndex = m_PassIndex;
 		return { .Index = texture.Index, .Version = IncrementHandleVersion(texture) };
 	}
@@ -130,15 +138,17 @@ namespace Candle {
 	{
 		CDL_CORE_ASSERT(texture.Version == m_Graph.m_Textures[texture.Index].LatestVersion, "Using a stale texture handle for a depth attachment");
 
-		FGTextureAccessEntry accessEntry{
-			.Handle = texture,
+		FGAccessEntry accessEntry{
+			.Type = FGResourceType::Texture,
+			.ResourceIndex = texture.Index,
+			.Version = texture.Version,
 			.Usage = FGUsage::DepthAttachment,
 			.Write = true,
 			.LoadOp = loadOp,
-			.ClearVlaue = vk::ClearDepthStencilValue(1.0f, 0),	// TODO: Depth clear value should be specified by the pass, but for now just using a default
+			.ClearValue = vk::ClearDepthStencilValue(1.0f, 0),	// TODO: Depth clear value should be specified by the pass, but for now just using a default
 			.SrcPassIndex = loadOp != FGLoad::Load ? std::numeric_limits<uint32_t>::max() : m_Graph.m_Textures[texture.Index].LastWritePassIndex
 		};
-		m_Graph.m_TextureAccesses[m_PassIndex].push_back(accessEntry);
+		m_Graph.m_Accesses.push_back(accessEntry);
 		m_Graph.m_Textures[texture.Index].LastWritePassIndex = m_PassIndex;
 		return { .Index = texture.Index, .Version = IncrementHandleVersion(texture) };
 	}

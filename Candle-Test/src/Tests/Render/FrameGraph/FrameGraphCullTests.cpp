@@ -32,7 +32,8 @@ namespace {
 
 	struct TestFrameGraph : TestTextures
 	{
-		FrameGraph Graph{ { .Allocator = Allocator, .BindlessTable = Bindless, .TexturePool = Pool } };
+		TestPipelineStore Pipelines{ Device, Bindless };
+		FrameGraph Graph{ { .Allocator = Allocator, .BindlessTable = Bindless, .TexturePool = Pool, .PipelineStore = Pipelines } };
 		TestCommands Commands{ Device };
 		GPUTextureHandle OutputTarget = Pool.CreateRenderTarget({ .Extent = kOutputExtent, .Format = kColorFormat, .DebugName = "Output" });
 		std::vector<std::string> Ran;	// The last frame's passes, in the order they executed
@@ -108,7 +109,7 @@ namespace {
 			{
 				for (const FGTextureHandle read : reads)
 					builder.ReadTexture(read, readUsage);
-				output = builder.WriteTexture(builder.CreateTexture(name, OutputSized()), FGUsage::StorageCompute);
+				output = builder.WriteTexture(builder.CreateTexture(name, OutputSized()), FGUsage::StorageWriteCompute);
 			});
 		return output;
 	}
@@ -587,7 +588,7 @@ CDL_TEST_CASE(FrameGraphCull, InPlaceStorageWriteKeepsThePassBefore, Gpu)
 		test.Graph.Reset(kOutputExtent);
 
 		FGTextureHandle color = DrawNewTexture(test, "Scene");
-		DeclareComputePass(test, "VolumetricFog", [&](FrameGraphBuilder& builder) { color = builder.WriteTexture(color, FGUsage::StorageCompute); });
+		DeclareComputePass(test, "VolumetricFog", [&](FrameGraphBuilder& builder) { color = builder.WriteTexture(color, FGUsage::StorageWriteCompute); });
 		DrawToOutput(test, "Tonemap", { color });
 		test.RunFrame(1);
 
@@ -630,7 +631,7 @@ CDL_TEST_CASE(FrameGraphCull, CulledPassesUsageIsLeftOffTheTexture, Gpu)
 
 		const FGTextureHandle gbuffer = DrawNewTexture(test, "GBuffer");
 		DrawToOutput(test, "Lighting", { gbuffer });
-		ComputeNewTexture(test, "HistogramDebugView", { gbuffer }, FGUsage::StorageCompute);
+		ComputeNewTexture(test, "HistogramDebugView", { gbuffer }, FGUsage::StorageReadCompute);
 		test.RunFrame(1);
 
 		ExpectRan(test.Ran, { "GBuffer", "Lighting" });

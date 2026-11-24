@@ -33,7 +33,8 @@ namespace {
 
 	struct TestFrameGraph : TestTextures
 	{
-		FrameGraph Graph{ { .Allocator = Allocator, .BindlessTable = Bindless, .TexturePool = Pool } };
+		TestPipelineStore Pipelines{ Device, Bindless };
+		FrameGraph Graph{ { .Allocator = Allocator, .BindlessTable = Bindless, .TexturePool = Pool, .PipelineStore = Pipelines } };
 		TestCommands Commands{ Device };
 
 		// One the test can copy back out. name must outlive the frame, e.g. a string literal.
@@ -180,7 +181,7 @@ CDL_TEST_CASE(FrameGraphExecute, ContextResolvesTheHandleSetupLeftInThePassData,
 		const OutputData& passData = test.Graph.AddComputePass<OutputData>("Particles",
 			[](FrameGraphBuilder& builder, OutputData& data)
 			{
-				data.Output = builder.WriteTexture(builder.CreateTexture("Particles", OutputSized()), FGUsage::StorageCompute);
+				data.Output = builder.WriteTexture(builder.CreateTexture("Particles", OutputSized()), FGUsage::StorageWriteCompute);
 			},
 			[seen = &seen](const OutputData& data, FrameGraphContext& context) { *seen = context.GetTexture(data.Output); }, true);
 		test.RunFrame(1);

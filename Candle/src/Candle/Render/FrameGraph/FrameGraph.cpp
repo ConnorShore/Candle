@@ -77,7 +77,7 @@ namespace Candle {
 		m_Passes.clear();
 		m_Textures.clear();
 		m_FrameArena.Reset();
-		m_TextureAccesses.clear();
+		m_Accesses.clear();
 		m_CompiledGraph.Reset();
 		m_Blackboard.Clear();
 
@@ -117,10 +117,10 @@ namespace Candle {
 
 			passNode.IsLive = true;
 
-			// Walk the texture accesses for this pass and mark any passes that wrote to those textures as live, since they are needed to produce the inputs for this pass
-			for (const FGTextureAccessEntry& textureAccess : m_TextureAccesses[passIndex])
+			// Walk the accesses for this pass and mark any passes that wrote to those resources as live, since they are needed to produce the inputs for this pass
+			for (const FGAccessEntry& access : GetPassAccesses(passIndex))
 			{
-				uint32_t srcPassIndex = textureAccess.SrcPassIndex;
+				uint32_t srcPassIndex = access.SrcPassIndex;
 				if (srcPassIndex < m_Passes.size() && !m_Passes[srcPassIndex].IsLive)
 					livePasses.push_back(srcPassIndex);
 			}
@@ -138,15 +138,17 @@ namespace Candle {
 		CullPasses();
 
 		// Walk attachments and OR together usages for each attachment to determine the final usage for the resource cache and bindless table
-		for (size_t pass = 0; pass < m_TextureAccesses.size(); ++pass)
+		for (uint32_t pass = 0; pass < m_Passes.size(); ++pass)
 		{
 			if (!m_Passes[pass].IsLive)
 				continue;
 
-			for (size_t access = 0; access < m_TextureAccesses[pass].size(); ++access)
+			for (const FGAccessEntry& textureAccess : GetPassAccesses(pass))
 			{
-				FGTextureAccessEntry& textureAccess = m_TextureAccesses[pass][access];
-				FGTextureEntry& texture = m_Textures[textureAccess.Handle.Index];
+				if (textureAccess.Type != FGResourceType::Texture)
+					continue;
+
+				FGTextureEntry& texture = m_Textures[textureAccess.ResourceIndex];
 				FGUsageInfo usageInfo = GetUsageInfo(textureAccess.Usage);
 
 				// OR together the usages for this attachment
@@ -206,7 +208,7 @@ namespace Candle {
 		}
 
 		// Create the compiled graph by walking the passes and their texture accesses, creating barriers and compiled attachments as needed
-		for (size_t pass = 0; pass < m_Passes.size(); ++pass)
+		for (uint32_t pass = 0; pass < m_Passes.size(); ++pass)
 		{
 			if (!m_Passes[pass].IsLive)
 				continue;
@@ -216,11 +218,15 @@ namespace Candle {
 			uint32_t attachmentStartIndex = static_cast<uint32_t>(m_CompiledGraph.Attachments.size());
 			int depthAttachmentIndex = -1;
 
-			// Walk texture entries and for each texture access entry that belongs to this pass, create a barrier and compiled attachment if needed
-			for (size_t access = 0; access < m_TextureAccesses[pass].size(); ++access)
+			// Walk this pass's texture accesses, creating a barrier and compiled attachment for each if needed
+			const std::span<const FGAccessEntry> accesses = GetPassAccesses(pass);
+			for (size_t access = 0; access < accesses.size(); ++access)
 			{
-				FGTextureAccessEntry& textureAccess = m_TextureAccesses[pass][access];
-				uint32_t textureIndex = textureAccess.Handle.Index;
+				const FGAccessEntry& textureAccess = accesses[access];
+				if (textureAccess.Type != FGResourceType::Texture)
+					continue;
+
+				uint32_t textureIndex = textureAccess.ResourceIndex;
 				FGTextureEntry& texture = m_Textures[textureIndex];
 				FGUsageInfo usageInfo = GetUsageInfo(textureAccess.Usage);
 				if (usageInfo.ImageUsage & vk::ImageUsageFlagBits::eSampled)
@@ -239,7 +245,7 @@ namespace Candle {
 				else
 				{
 					FGBarrier barrier{
-						.Texture{ textureAccess.Handle },
+						.Texture{ textureAccess.GetTextureHandle() },
 						.FromState{ texture.FinalState },
 						.ToState{ usageInfo.State }
 					};
@@ -260,11 +266,11 @@ namespace Candle {
 					}
 					
 					FGCompiledAttachment compiledAttachment{
-						.Texture{ textureAccess.Handle },
+						.Texture{ textureAccess.GetTextureHandle() },
 						.Layout{ usageInfo.State.Layout },
 						.LoadOp{ ToAttachmentLoadOp(textureAccess.LoadOp) },
 						.StoreOp{ vk::AttachmentStoreOp::eStore }, // TODO: Make this configurable
-						.ClearValue{ textureAccess.ClearVlaue }
+						.ClearValue{ textureAccess.ClearValue }
 					};
 					m_CompiledGraph.Attachments.push_back(compiledAttachment);
 				}
@@ -273,11 +279,10 @@ namespace Candle {
 			// If there was a depth attachment, create its compiled attachment after the color attachments
 			if (depthAttachmentIndex >= 0)
 			{
-				FGTextureAccessEntry& depthAccess = m_TextureAccesses[pass][depthAttachmentIndex];
-				FGTextureEntry& depthTexture = m_Textures[depthAccess.Handle.Index];
+				const FGAccessEntry& depthAccess = accesses[depthAttachmentIndex];
 				FGUsageInfo depthUsageInfo = GetUsageInfo(depthAccess.Usage);
 				FGCompiledAttachment depthAttachment{
-					.Texture{ depthAccess.Handle },
+					.Texture{ depthAccess.GetTextureHandle() },
 					.Layout{ depthUsageInfo.State.Layout },
 					.LoadOp{ ToAttachmentLoadOp(depthAccess.LoadOp) },
 					.StoreOp{ vk::AttachmentStoreOp::eStore }, // TODO: Make this configurable

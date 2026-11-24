@@ -41,6 +41,7 @@ namespace Candle {
 		bool IsComputePass{ false };	// TODO: Eventually remove this and use the pipeline type to determine if it's a compute pass
 		bool NeverCull{ false };
 		bool IsLive{ false };	// Set to false if the pass is culled during compilation, so it won't be executed
+		uint32_t AccessStart{ 0 }, AccessCount{ 0 };	// Into the graph's access list. Contiguous, since a pass's setup finishes before the next pass is added.
 	};
 
 }
