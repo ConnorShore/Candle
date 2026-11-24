@@ -51,8 +51,8 @@ namespace Candle {
 		vk::ImageLayout SampledLayout{ vk::ImageLayout::eShaderReadOnlyOptimal };
 		ImageState InitialState, FinalState;
 		uint32_t CacheIndex{ std::numeric_limits<uint32_t>::max() };	// Transients only
-		uint32_t LatestVersion{ 0 };	// Incremented every time a transient is created, so handles to old resources can be detected
-		uint32_t LastWritePassIndex{ std::numeric_limits<uint32_t>::max() };	// Updated during compilation to the last pass that writes to this texture
+		uint32_t LatestVersion{ 0 };	// Bumped by every write, so a handle from before the last write is caught as stale
+		uint32_t LastWritePassIndex{ std::numeric_limits<uint32_t>::max() };	// Set by the builder during setup: the last pass so far to write it, or a transient's creator
 	};
 
 	struct FGTextureAccessEntry
@@ -62,7 +62,7 @@ namespace Candle {
 		bool Write{ false };				// If true, the pass writes to the texture, so it needs a layout transition and a barrier
 		FGLoad LoadOp{ FGLoad::DontCare };	// Attachments only
 		vk::ClearValue ClearVlaue;			// Attachments only
-		uint32_t SrcPassIndex{ std::numeric_limits<uint32_t>::max() };	// Updated during compilation to the last pass that writes to this texture
+		uint32_t SrcPassIndex{ std::numeric_limits<uint32_t>::max() };	// Set by the builder during setup: the pass that wrote what this access reads. None for a Clear or DontCare.
 	};
 
 	class FrameGraph

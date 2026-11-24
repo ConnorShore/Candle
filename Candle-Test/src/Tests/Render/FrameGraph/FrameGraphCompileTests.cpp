@@ -85,11 +85,12 @@ namespace {
 		return { .Size = { .Mode = FGSizeMode::RelativeToOutput, .Scale = scale }, .Format = format };
 	}
 
-	// A pass that only declares accesses, since compile never runs execute
+	// A pass that only declares accesses, since compile never runs execute. Never culled: these tests pin what a kept pass
+	// compiles to, and FrameGraphCull pins which passes are kept.
 	template<typename SetupFunc>
 	void DeclarePass(FrameGraph& graph, std::string_view name, SetupFunc setup)
 	{
-		graph.AddRasterPass(name, [&setup](FrameGraphBuilder& builder, FGNoData&) { setup(builder); }, kNoExecute);
+		graph.AddRasterPass(name, [&setup](FrameGraphBuilder& builder, FGNoData&) { setup(builder); }, kNoExecute, true);
 	}
 
 	// One frame with a single pass clearing an output-sized transient, for tests that span frames
@@ -100,7 +101,7 @@ namespace {
 		DeclarePass(graph, "Draw", [&](FrameGraphBuilder& builder)
 			{
 				transient = builder.CreateTexture("Transient", OutputSized(kColorFormat));
-				builder.ColorAttachment(transient, FGLoad::Clear, kClearColor);
+				transient = builder.ColorAttachment(transient, FGLoad::Clear, kClearColor);
 			});
 		graph.Compile(frame);
 		return transient;
@@ -126,10 +127,11 @@ namespace {
 		return Range(plan.Attachments, plan.Passes[pass].AttachmentStartIndex, plan.Passes[pass].AttachmentCount);
 	}
 
-	// Null when there's none, so a test can tell a missing barrier from a wrong one
+	// Null when there's none, so a test can tell a missing barrier from a wrong one. Barriers name the version their pass
+	// used, so this matches any version of texture.
 	const FGBarrier* FindBarrier(std::span<const FGBarrier> barriers, FGTextureHandle texture)
 	{
-		const auto found = std::ranges::find(barriers, texture, &FGBarrier::Texture);
+		const auto found = std::ranges::find_if(barriers, [texture](const FGBarrier& barrier) { return barrier.Texture.IsSameResource(texture); });
 		return found == barriers.end() ? nullptr : &*found;
 	}
 
@@ -260,13 +262,13 @@ CDL_TEST_CASE(FrameGraphCompile, EachPassOwnsTheBarriersAndAttachmentsItDeclared
 		NotePlanOnFailure dump(test.Graph);
 		test.Graph.Reset(kOutputExtent);
 
-		const FGTextureHandle scene = test.ImportTarget("Scene");
-		const FGTextureHandle gui = test.ImportTarget("Gui");
-		DeclarePass(test.Graph, "Scene", [&](FrameGraphBuilder& builder) { builder.ColorAttachment(scene, FGLoad::Clear, kClearColor); });
+		FGTextureHandle scene = test.ImportTarget("Scene");
+		FGTextureHandle gui = test.ImportTarget("Gui");
+		DeclarePass(test.Graph, "Scene", [&](FrameGraphBuilder& builder) { scene = builder.ColorAttachment(scene, FGLoad::Clear, kClearColor); });
 		DeclarePass(test.Graph, "Gui", [&](FrameGraphBuilder& builder)
 			{
 				builder.ReadTexture(scene, FGUsage::SampledFragment);
-				builder.ColorAttachment(gui, FGLoad::Clear, kClearColor);
+				gui = builder.ColorAttachment(gui, FGLoad::Clear, kClearColor);
 			});
 		test.Graph.Compile(1);
 
@@ -288,8 +290,8 @@ CDL_TEST_CASE(FrameGraphCompile, EachPassOwnsTheBarriersAndAttachmentsItDeclared
 		const std::span<const FGCompiledAttachment> secondAttachments = AttachmentsOf(plan, 1);
 		CDL_CHECK_EQ(firstAttachments.size(), 1u);
 		CDL_CHECK_EQ(secondAttachments.size(), 1u);
-		CDL_EXPECT(firstAttachments[0].Texture == scene);
-		CDL_EXPECT(secondAttachments[0].Texture == gui);
+		CDL_EXPECT(firstAttachments[0].Texture.IsSameResource(scene));
+		CDL_EXPECT(secondAttachments[0].Texture.IsSameResource(gui));
 	}
 	ExpectNoVulkanDebugMessages(logs);
 }
@@ -302,10 +304,10 @@ CDL_TEST_CASE(FrameGraphCompile, ColorAttachmentKeepsItsLoadOpAndClearValue, Gpu
 		NotePlanOnFailure dump(test.Graph);
 		test.Graph.Reset(kOutputExtent);
 
-		const FGTextureHandle target = test.ImportTarget("Target");
-		DeclarePass(test.Graph, "Clears", [&](FrameGraphBuilder& builder) { builder.ColorAttachment(target, FGLoad::Clear, kClearColor); });
-		DeclarePass(test.Graph, "Loads", [&](FrameGraphBuilder& builder) { builder.ColorAttachment(target, FGLoad::Load, kClearColor); });
-		DeclarePass(test.Graph, "DontCares", [&](FrameGraphBuilder& builder) { builder.ColorAttachment(target, FGLoad::DontCare, kClearColor); });
+		FGTextureHandle target = test.ImportTarget("Target");
+		DeclarePass(test.Graph, "Clears", [&](FrameGraphBuilder& builder) { target = builder.ColorAttachment(target, FGLoad::Clear, kClearColor); });
+		DeclarePass(test.Graph, "Loads", [&](FrameGraphBuilder& builder) { target = builder.ColorAttachment(target, FGLoad::Load, kClearColor); });
+		DeclarePass(test.Graph, "DontCares", [&](FrameGraphBuilder& builder) { target = builder.ColorAttachment(target, FGLoad::DontCare, kClearColor); });
 		test.Graph.Compile(1);
 
 		const FGCompiledGraph& plan = test.Graph.GetCompiledGraph();
@@ -333,12 +335,12 @@ CDL_TEST_CASE(FrameGraphCompile, AttachmentsToImportsAreAlwaysStored, Gpu)
 		NotePlanOnFailure dump(test.Graph);
 		test.Graph.Reset(kOutputExtent);
 
-		const FGTextureHandle target = test.ImportTarget("Target");
-		const FGTextureHandle backBuffer = test.Graph.ImportSwapChainImage(swapChain.Image);
+		FGTextureHandle target = test.ImportTarget("Target");
+		FGTextureHandle backBuffer = test.Graph.ImportSwapChainImage(swapChain.Image);
 		DeclarePass(test.Graph, "Draw", [&](FrameGraphBuilder& builder)
 			{
-				builder.ColorAttachment(target, FGLoad::Clear, kClearColor);
-				builder.ColorAttachment(backBuffer, FGLoad::DontCare, kClearColor);
+				target = builder.ColorAttachment(target, FGLoad::Clear, kClearColor);
+				backBuffer = builder.ColorAttachment(backBuffer, FGLoad::DontCare, kClearColor);
 			});
 		test.Graph.Compile(1);
 
@@ -359,13 +361,13 @@ CDL_TEST_CASE(FrameGraphCompile, DepthAttachmentIsFlaggedAndComesAfterTheColors,
 		NotePlanOnFailure dump(test.Graph);
 		test.Graph.Reset(kOutputExtent);
 
-		const FGTextureHandle color = test.ImportTarget("Color");
+		FGTextureHandle color = test.ImportTarget("Color");
 		FGTextureHandle depth;
 		DeclarePass(test.Graph, "Scene", [&](FrameGraphBuilder& builder)
 			{
 				depth = builder.CreateTexture("Depth", OutputSized(kDepthFormat));
-				builder.DepthAttachment(depth, FGLoad::Clear);
-				builder.ColorAttachment(color, FGLoad::Clear, kClearColor);
+				depth = builder.DepthAttachment(depth, FGLoad::Clear);
+				color = builder.ColorAttachment(color, FGLoad::Clear, kClearColor);
 			});
 		test.Graph.Compile(1);
 
@@ -375,8 +377,8 @@ CDL_TEST_CASE(FrameGraphCompile, DepthAttachmentIsFlaggedAndComesAfterTheColors,
 
 		const std::span<const FGCompiledAttachment> attachments = AttachmentsOf(plan, 0);
 		CDL_CHECK_EQ(attachments.size(), 2u);
-		CDL_EXPECT(attachments[0].Texture == color);
-		CDL_EXPECT(attachments[1].Texture == depth);
+		CDL_EXPECT(attachments[0].Texture.IsSameResource(color));
+		CDL_EXPECT(attachments[1].Texture.IsSameResource(depth));
 		CDL_EXPECT_EQ(attachments[1].Layout, vk::ImageLayout::eDepthStencilAttachmentOptimal);
 	}
 	ExpectNoVulkanDebugMessages(logs);
@@ -393,12 +395,12 @@ CDL_TEST_CASE(FrameGraphCompile, FirstUseOfAnImportStartsFromItsInitialState, Gp
 		NotePlanOnFailure dump(test.Graph);
 		test.Graph.Reset(kOutputExtent);
 
-		const FGTextureHandle target = test.ImportTarget("Target");
-		const FGTextureHandle backBuffer = test.Graph.ImportSwapChainImage(swapChain.Image);
+		FGTextureHandle target = test.ImportTarget("Target");
+		FGTextureHandle backBuffer = test.Graph.ImportSwapChainImage(swapChain.Image);
 		DeclarePass(test.Graph, "Draw", [&](FrameGraphBuilder& builder)
 			{
-				builder.ColorAttachment(target, FGLoad::Clear, kClearColor);
-				builder.ColorAttachment(backBuffer, FGLoad::Clear, kClearColor);
+				target = builder.ColorAttachment(target, FGLoad::Clear, kClearColor);
+				backBuffer = builder.ColorAttachment(backBuffer, FGLoad::Clear, kClearColor);
 			});
 		test.Graph.Compile(1);
 
@@ -428,8 +430,8 @@ CDL_TEST_CASE(FrameGraphCompile, SampledReadWaitsForTheEarlierPassesWrites, Gpu)
 		NotePlanOnFailure dump(test.Graph);
 		test.Graph.Reset(kOutputExtent);
 
-		const FGTextureHandle output = test.ImportTarget("Output");
-		DeclarePass(test.Graph, "Scene", [&](FrameGraphBuilder& builder) { builder.ColorAttachment(output, FGLoad::Clear, kClearColor); });
+		FGTextureHandle output = test.ImportTarget("Output");
+		DeclarePass(test.Graph, "Scene", [&](FrameGraphBuilder& builder) { output = builder.ColorAttachment(output, FGLoad::Clear, kClearColor); });
 		DeclarePass(test.Graph, "Gui", [&](FrameGraphBuilder& builder) { builder.ReadTexture(output, FGUsage::SampledFragment); });
 		test.Graph.Compile(1);
 
@@ -454,9 +456,9 @@ CDL_TEST_CASE(FrameGraphCompile, LoadedAttachmentWaitsForTheEarlierPassesWrites,
 		NotePlanOnFailure dump(test.Graph);
 		test.Graph.Reset(kOutputExtent);
 
-		const FGTextureHandle backBuffer = test.Graph.ImportSwapChainImage(swapChain.Image);
-		DeclarePass(test.Graph, "Scene", [&](FrameGraphBuilder& builder) { builder.ColorAttachment(backBuffer, FGLoad::Clear, kClearColor); });
-		DeclarePass(test.Graph, "DebugDraw", [&](FrameGraphBuilder& builder) { builder.ColorAttachment(backBuffer, FGLoad::Load, kClearColor); });
+		FGTextureHandle backBuffer = test.Graph.ImportSwapChainImage(swapChain.Image);
+		DeclarePass(test.Graph, "Scene", [&](FrameGraphBuilder& builder) { backBuffer = builder.ColorAttachment(backBuffer, FGLoad::Clear, kClearColor); });
+		DeclarePass(test.Graph, "DebugDraw", [&](FrameGraphBuilder& builder) { backBuffer = builder.ColorAttachment(backBuffer, FGLoad::Load, kClearColor); });
 		test.Graph.Compile(1);
 
 		const FGBarrier* barrier = FindBarrier(BarriersOf(test.Graph.GetCompiledGraph(), 1), backBuffer);
@@ -478,10 +480,10 @@ CDL_TEST_CASE(FrameGraphCompile, SwapChainPassesChainTheirBarriersThroughToPrese
 		NotePlanOnFailure dump(test.Graph);
 		test.Graph.Reset(kOutputExtent);
 
-		const FGTextureHandle backBuffer = test.Graph.ImportSwapChainImage(swapChain.Image);
-		DeclarePass(test.Graph, "Scene", [&](FrameGraphBuilder& builder) { builder.ColorAttachment(backBuffer, FGLoad::Clear, kClearColor); });
-		DeclarePass(test.Graph, "DebugDraw", [&](FrameGraphBuilder& builder) { builder.ColorAttachment(backBuffer, FGLoad::Load, kClearColor); });
-		DeclarePass(test.Graph, "Gui", [&](FrameGraphBuilder& builder) { builder.ColorAttachment(backBuffer, FGLoad::Load, kClearColor); });
+		FGTextureHandle backBuffer = test.Graph.ImportSwapChainImage(swapChain.Image);
+		DeclarePass(test.Graph, "Scene", [&](FrameGraphBuilder& builder) { backBuffer = builder.ColorAttachment(backBuffer, FGLoad::Clear, kClearColor); });
+		DeclarePass(test.Graph, "DebugDraw", [&](FrameGraphBuilder& builder) { backBuffer = builder.ColorAttachment(backBuffer, FGLoad::Load, kClearColor); });
+		DeclarePass(test.Graph, "Gui", [&](FrameGraphBuilder& builder) { backBuffer = builder.ColorAttachment(backBuffer, FGLoad::Load, kClearColor); });
 		test.Graph.Compile(1);
 
 		const FGCompiledGraph& plan = test.Graph.GetCompiledGraph();
@@ -519,8 +521,8 @@ CDL_TEST_CASE(FrameGraphCompile, FinalBarrierStartsWhereTheLastPassLeftTheImport
 		NotePlanOnFailure dump(test.Graph);
 		test.Graph.Reset(kOutputExtent);
 
-		const FGTextureHandle target = test.ImportTarget("Target");
-		DeclarePass(test.Graph, "Draw", [&](FrameGraphBuilder& builder) { builder.ColorAttachment(target, FGLoad::Clear, kClearColor); });
+		FGTextureHandle target = test.ImportTarget("Target");
+		DeclarePass(test.Graph, "Draw", [&](FrameGraphBuilder& builder) { target = builder.ColorAttachment(target, FGLoad::Clear, kClearColor); });
 		test.Graph.Compile(1);
 
 		const FGBarrier* barrier = FindBarrier(test.Graph.GetCompiledGraph().FinalBarriers, target);
@@ -541,12 +543,12 @@ CDL_TEST_CASE(FrameGraphCompile, EveryWrittenImportGetsOneFinalBarrierToItsFinal
 		NotePlanOnFailure dump(test.Graph);
 		test.Graph.Reset(kOutputExtent);
 
-		const FGTextureHandle target = test.ImportTarget("Target");
-		const FGTextureHandle backBuffer = test.Graph.ImportSwapChainImage(swapChain.Image);
+		FGTextureHandle target = test.ImportTarget("Target");
+		FGTextureHandle backBuffer = test.Graph.ImportSwapChainImage(swapChain.Image);
 		DeclarePass(test.Graph, "Draw", [&](FrameGraphBuilder& builder)
 			{
-				builder.ColorAttachment(target, FGLoad::Clear, kClearColor);
-				builder.ColorAttachment(backBuffer, FGLoad::Clear, kClearColor);
+				target = builder.ColorAttachment(target, FGLoad::Clear, kClearColor);
+				backBuffer = builder.ColorAttachment(backBuffer, FGLoad::Clear, kClearColor);
 			});
 		test.Graph.Compile(1);
 
@@ -554,7 +556,8 @@ CDL_TEST_CASE(FrameGraphCompile, EveryWrittenImportGetsOneFinalBarrierToItsFinal
 		for (const FGTextureHandle imported : { target, backBuffer })
 		{
 			const FGTextureEntry& entry = test.Graph.GetTexture(imported);
-			CDL_EXPECT_MSG(std::ranges::count(plan.FinalBarriers, imported, &FGBarrier::Texture) == 1, std::format("{} needs exactly one final barrier", entry.Name));
+			const auto finalBarriers = std::ranges::count_if(plan.FinalBarriers, [imported](const FGBarrier& barrier) { return barrier.Texture.IsSameResource(imported); });
+			CDL_EXPECT_MSG(finalBarriers == 1, std::format("{} needs exactly one final barrier", entry.Name));
 
 			const FGBarrier* barrier = FindBarrier(plan.FinalBarriers, imported);
 			if (barrier)
@@ -577,7 +580,7 @@ CDL_TEST_CASE(FrameGraphCompile, TransientsGetNoFinalBarrier, Gpu)
 		DeclarePass(test.Graph, "Draw", [&](FrameGraphBuilder& builder)
 			{
 				transient = builder.CreateTexture("Transient", OutputSized(kColorFormat));
-				builder.ColorAttachment(transient, FGLoad::Clear, kClearColor);
+				transient = builder.ColorAttachment(transient, FGLoad::Clear, kClearColor);
 			});
 		DeclarePass(test.Graph, "Sample", [&](FrameGraphBuilder& builder) { builder.ReadTexture(transient, FGUsage::SampledFragment); });
 		test.Graph.Compile(1);
@@ -601,10 +604,10 @@ CDL_TEST_CASE(FrameGraphCompile, WriteAfterReadWaitsForTheRead, Gpu)
 		DeclarePass(test.Graph, "Draw", [&](FrameGraphBuilder& builder)
 			{
 				transient = builder.CreateTexture("Transient", OutputSized(kColorFormat));
-				builder.ColorAttachment(transient, FGLoad::Clear, kClearColor);
+				transient = builder.ColorAttachment(transient, FGLoad::Clear, kClearColor);
 			});
 		DeclarePass(test.Graph, "Blur", [&](FrameGraphBuilder& builder) { builder.ReadTexture(transient, FGUsage::SampledCompute); });
-		DeclarePass(test.Graph, "Redraw", [&](FrameGraphBuilder& builder) { builder.ColorAttachment(transient, FGLoad::Clear, kClearColor); });
+		DeclarePass(test.Graph, "Redraw", [&](FrameGraphBuilder& builder) { transient = builder.ColorAttachment(transient, FGLoad::Clear, kClearColor); });
 		test.Graph.Compile(1);
 
 		const FGBarrier* barrier = FindBarrier(BarriersOf(test.Graph.GetCompiledGraph(), 2), transient);
@@ -648,11 +651,11 @@ CDL_TEST_CASE(FrameGraphCompile, WriteAfterSeveralReadsWaitsForEveryOne, Gpu)
 		DeclarePass(test.Graph, "Draw", [&](FrameGraphBuilder& builder)
 			{
 				transient = builder.CreateTexture("Transient", OutputSized(kColorFormat));
-				builder.ColorAttachment(transient, FGLoad::Clear, kClearColor);
+				transient = builder.ColorAttachment(transient, FGLoad::Clear, kClearColor);
 			});
 		DeclarePass(test.Graph, "FragmentRead", [&](FrameGraphBuilder& builder) { builder.ReadTexture(transient, FGUsage::SampledFragment); });
 		DeclarePass(test.Graph, "ComputeRead", [&](FrameGraphBuilder& builder) { builder.ReadTexture(transient, FGUsage::SampledCompute); });
-		DeclarePass(test.Graph, "Redraw", [&](FrameGraphBuilder& builder) { builder.ColorAttachment(transient, FGLoad::Clear, kClearColor); });
+		DeclarePass(test.Graph, "Redraw", [&](FrameGraphBuilder& builder) { transient = builder.ColorAttachment(transient, FGLoad::Clear, kClearColor); });
 		test.Graph.Compile(1);
 
 		const FGBarrier* barrier = FindBarrier(BarriersOf(test.Graph.GetCompiledGraph(), 3), transient);
@@ -672,8 +675,8 @@ CDL_TEST_CASE(FrameGraphCompile, SampledReadUsesTheLayoutItsDescriptorWasWritten
 		NotePlanOnFailure dump(test.Graph);
 		test.Graph.Reset(kOutputExtent);
 
-		const FGTextureHandle storage = test.ImportStorageTarget("Storage");
-		DeclarePass(test.Graph, "Compute", [&](FrameGraphBuilder& builder) { builder.WriteTexture(storage, FGUsage::StorageCompute); });
+		FGTextureHandle storage = test.ImportStorageTarget("Storage");
+		DeclarePass(test.Graph, "Compute", [&](FrameGraphBuilder& builder) { storage = builder.WriteTexture(storage, FGUsage::StorageCompute); });
 		DeclarePass(test.Graph, "Scene", [&](FrameGraphBuilder& builder) { builder.ReadTexture(storage, FGUsage::SampledFragment); });
 		test.Graph.Compile(1);
 
@@ -697,7 +700,7 @@ CDL_TEST_CASE(FrameGraphCompile, SampledReadOfATransientIsInShaderReadOnly, Gpu)
 		DeclarePass(test.Graph, "Draw", [&](FrameGraphBuilder& builder)
 			{
 				transient = builder.CreateTexture("Transient", OutputSized(kColorFormat));
-				builder.ColorAttachment(transient, FGLoad::Clear, kClearColor);
+				transient = builder.ColorAttachment(transient, FGLoad::Clear, kClearColor);
 			});
 		DeclarePass(test.Graph, "Sample", [&](FrameGraphBuilder& builder) { builder.ReadTexture(transient, FGUsage::SampledFragment); });
 		test.Graph.Compile(1);
@@ -718,8 +721,8 @@ CDL_TEST_CASE(FrameGraphCompile, ReadAfterAWriteInTheSameLayoutStillWaits, Gpu)
 		NotePlanOnFailure dump(test.Graph);
 		test.Graph.Reset(kOutputExtent);
 
-		const FGTextureHandle storage = test.ImportStorageTarget("Storage");
-		DeclarePass(test.Graph, "Compute", [&](FrameGraphBuilder& builder) { builder.WriteTexture(storage, FGUsage::StorageCompute); });
+		FGTextureHandle storage = test.ImportStorageTarget("Storage");
+		DeclarePass(test.Graph, "Compute", [&](FrameGraphBuilder& builder) { storage = builder.WriteTexture(storage, FGUsage::StorageCompute); });
 		DeclarePass(test.Graph, "Fragment", [&](FrameGraphBuilder& builder) { builder.ReadTexture(storage, FGUsage::StorageFragment); });
 		test.Graph.Compile(1);
 
@@ -742,12 +745,12 @@ CDL_TEST_CASE(FrameGraphCompile, TransientIsSizedFromItsSpecAndGetsARealImage, G
 		DeclarePass(test.Graph, "Half", [&](FrameGraphBuilder& builder)
 			{
 				half = builder.CreateTexture("Half", OutputSized(kColorFormat, 0.5f));
-				builder.ColorAttachment(half, FGLoad::Clear, kClearColor);
+				half = builder.ColorAttachment(half, FGLoad::Clear, kClearColor);
 			});
 		DeclarePass(test.Graph, "Fixed", [&](FrameGraphBuilder& builder)
 			{
 				fixed = builder.CreateTexture("Fixed", { .Size = { .Mode = FGSizeMode::Absolute, .Extent = { 3, 5 } }, .Format = kColorFormat });
-				builder.ColorAttachment(fixed, FGLoad::Clear, kClearColor);
+				fixed = builder.ColorAttachment(fixed, FGLoad::Clear, kClearColor);
 			});
 		test.Graph.Compile(1);
 
@@ -779,7 +782,7 @@ CDL_TEST_CASE(FrameGraphCompile, TransientUsageIsExactlyWhatItsPassesDeclared, G
 		DeclarePass(test.Graph, "Draw", [&](FrameGraphBuilder& builder)
 			{
 				transient = builder.CreateTexture("Transient", OutputSized(kColorFormat));
-				builder.ColorAttachment(transient, FGLoad::Clear, kClearColor);
+				transient = builder.ColorAttachment(transient, FGLoad::Clear, kClearColor);
 			});
 		DeclarePass(test.Graph, "Sample", [&](FrameGraphBuilder& builder) { builder.ReadTexture(transient, FGUsage::SampledFragment); });
 		test.Graph.Compile(1);
@@ -804,7 +807,7 @@ CDL_TEST_CASE(FrameGraphCompile, DepthTransientIsCreatedAsADepthImage, Gpu)
 		DeclarePass(test.Graph, "Scene", [&](FrameGraphBuilder& builder)
 			{
 				depth = builder.CreateTexture("Depth", OutputSized(kDepthFormat));
-				builder.DepthAttachment(depth, FGLoad::Clear);
+				depth = builder.DepthAttachment(depth, FGLoad::Clear);
 			});
 		test.Graph.Compile(1);
 
@@ -830,13 +833,13 @@ CDL_TEST_CASE(FrameGraphCompile, TransientsWithTheSameDescGetTheirOwnImages, Gpu
 		DeclarePass(test.Graph, "Draw", [&](FrameGraphBuilder& builder)
 			{
 				ping = builder.CreateTexture("Ping", OutputSized(kColorFormat));
-				builder.ColorAttachment(ping, FGLoad::Clear, kClearColor);
+				ping = builder.ColorAttachment(ping, FGLoad::Clear, kClearColor);
 			});
 		DeclarePass(test.Graph, "Blur", [&](FrameGraphBuilder& builder)
 			{
 				pong = builder.CreateTexture("Pong", OutputSized(kColorFormat));
 				builder.ReadTexture(ping, FGUsage::SampledFragment);
-				builder.ColorAttachment(pong, FGLoad::Clear, kClearColor);
+				pong = builder.ColorAttachment(pong, FGLoad::Clear, kClearColor);
 			});
 		test.Graph.Compile(1);
 
@@ -881,7 +884,7 @@ CDL_TEST_CASE(FrameGraphCompile, TransientBindlessIndexIsInTheFrameGraphRange, G
 		DeclarePass(test.Graph, "Draw", [&](FrameGraphBuilder& builder)
 			{
 				transient = builder.CreateTexture("Transient", OutputSized(kColorFormat));
-				builder.ColorAttachment(transient, FGLoad::Clear, kClearColor);
+				transient = builder.ColorAttachment(transient, FGLoad::Clear, kClearColor);
 			});
 		DeclarePass(test.Graph, "Sample", [&](FrameGraphBuilder& builder) { builder.ReadTexture(transient, FGUsage::SampledFragment); });
 		test.Graph.Compile(1);
@@ -903,7 +906,7 @@ CDL_TEST_CASE(FrameGraphCompile, TransientWaitsForLastFramesUseOfItsImage, Gpu)
 		NotePlanOnFailure dump(test.Graph);
 
 		const vk::Image lastFrames = test.Graph.GetTexture(RecordClearFrame(test.Graph, 1)).Image;
-		const FGTextureHandle transient = RecordClearFrame(test.Graph, 2);
+		FGTextureHandle transient = RecordClearFrame(test.Graph, 2);
 		CDL_CHECK_MSG(test.Graph.GetTexture(transient).Image == lastFrames, "the cache has to reuse last frame's image for this to test anything");
 
 		const FGBarrier* barrier = FindBarrier(BarriersOf(test.Graph.GetCompiledGraph(), 0), transient);

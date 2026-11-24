@@ -1,6 +1,7 @@
 #pragma once
 
 #include <cstdint>
+#include <limits>
 
 namespace Candle {
 
@@ -8,7 +9,7 @@ namespace Candle {
 	struct FGResourceHandle
 	{
 		uint32_t Index{ std::numeric_limits<uint32_t>::max() };	// Into this frame's entries; meaningless after Reset
-		uint32_t Version{ 0 };	// Incremented every time a resource is created, so handles to old resources can be detected
+		uint32_t Version{ 0 };	// Each write hands back the next one, so a handle from before a write can be told from one after
 
 		inline bool IsValid() const { return Index != std::numeric_limits<uint32_t>::max(); }
 		inline bool IsSameResource(const FGResourceHandle& other) const { return Index == other.Index; }

@@ -94,12 +94,14 @@ namespace Candle {
 	FGTextureHandle FrameGraphBuilder::WriteTexture(FGTextureHandle texture, FGUsage usage)
 	{
 		CDL_CORE_ASSERT(texture.Index < m_Graph.m_Textures.size(), "FGTextureHandle is not from this frame");
+		CDL_CORE_ASSERT(texture.Version == m_Graph.m_Textures[texture.Index].LatestVersion, "Writing to a stale texture handle");
 
 		// Add an entry to the pass's texture access list, which the graph will use to insert barriers and track usage
 		FGTextureAccessEntry accessEntry{
 			.Handle = texture,
 			.Usage = usage,
-			.Write = true
+			.Write = true,
+			.SrcPassIndex = m_Graph.m_Textures[texture.Index].LastWritePassIndex	// A storage write may read what's there first, and the graph can't tell
 		};
 		m_Graph.m_TextureAccesses[m_PassIndex].push_back(accessEntry);
 		m_Graph.m_Textures[texture.Index].LastWritePassIndex = m_PassIndex;
@@ -117,7 +119,7 @@ namespace Candle {
 			.Write = true,
 			.LoadOp = loadOp,
 			.ClearVlaue = clearColor,
-			.SrcPassIndex = loadOp == FGLoad::Clear ? std::numeric_limits<uint32_t>::max() : m_Graph.m_Textures[texture.Index].LastWritePassIndex
+			.SrcPassIndex = loadOp != FGLoad::Load ? std::numeric_limits<uint32_t>::max() : m_Graph.m_Textures[texture.Index].LastWritePassIndex
 		};
 		m_Graph.m_TextureAccesses[m_PassIndex].push_back(accessEntry);
 		m_Graph.m_Textures[texture.Index].LastWritePassIndex = m_PassIndex;
@@ -134,7 +136,7 @@ namespace Candle {
 			.Write = true,
 			.LoadOp = loadOp,
 			.ClearVlaue = vk::ClearDepthStencilValue(1.0f, 0),	// TODO: Depth clear value should be specified by the pass, but for now just using a default
-			.SrcPassIndex = loadOp == FGLoad::Clear ? std::numeric_limits<uint32_t>::max() : m_Graph.m_Textures[texture.Index].LastWritePassIndex
+			.SrcPassIndex = loadOp != FGLoad::Load ? std::numeric_limits<uint32_t>::max() : m_Graph.m_Textures[texture.Index].LastWritePassIndex
 		};
 		m_Graph.m_TextureAccesses[m_PassIndex].push_back(accessEntry);
 		m_Graph.m_Textures[texture.Index].LastWritePassIndex = m_PassIndex;

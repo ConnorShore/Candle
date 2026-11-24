@@ -1,6 +1,6 @@
 // FrameGraph's setup half. AddPass runs setup at once and hands back the data it wrote, out of an arena Reset frees.
-// Imports record the states the graph finds their images in and must leave them in. The graph needs a real TexturePool,
-// so these are Gpu tests.
+// Imports record the states the graph finds their images in and must leave them in, and every write hands back its
+// texture's next version. The graph needs a real TexturePool, so these are Gpu tests.
 
 #include "TestFramework.h"
 #include "TestHelpers.h"
@@ -10,8 +10,12 @@
 #include <Candle/Render/Resources/TexturePool.h>
 #include <Candle/Render/Vulkan/SwapChainImage.h>
 
+#include <format>
+#include <initializer_list>
 #include <limits>
+#include <string_view>
 #include <utility>
+#include <vector>
 
 using namespace Candle;
 using namespace Candle::Test;
@@ -33,6 +37,7 @@ namespace {
 	constexpr auto kNoExecute = [](const auto&, FrameGraphContext&) {};
 
 	constexpr vk::Format kFormat = vk::Format::eR8G8B8A8Unorm;
+	constexpr vk::Format kDepthFormat = vk::Format::eD16Unorm;
 
 	// Where SwapChain::AquireNextImage leaves an image
 	constexpr ImageState kAcquiredState{
@@ -179,6 +184,73 @@ CDL_TEST_CASE(FrameGraph, ImportedSwapChainImageStartsWhereAcquireLeftItAndEndsR
 		CDL_EXPECT_EQ(entry.InitialState.Layout, kAcquiredState.Layout);
 		CDL_EXPECT(entry.InitialState.Stage == kAcquiredState.Stage);
 		CDL_EXPECT_EQ(entry.FinalState.Layout, vk::ImageLayout::ePresentSrcKHR);
+	}
+	ExpectNoVulkanDebugMessages(logs);
+}
+
+// Whichever way a pass writes, it gets back the texture's next version, so a handle from before a write can be told from
+// one after it. Creating or importing a texture starts it at version 0.
+CDL_TEST_CASE(FrameGraph, EveryWriteHandsBackTheTexturesNextVersion, Gpu)
+{
+	LoggerFixture logs(LogLevel::Warn, kRenderChannelMask);
+	{
+		TestFrameGraph test;
+		const GPUTextureHandle target = test.Pool.CreateRenderTarget({ .Extent = { 4, 4 }, .Format = kFormat, .DebugName = "Target" });
+		test.Graph.Reset({ 4, 4 });
+
+		std::vector<FGTextureHandle> color, depth, imported;
+		imported.push_back(test.Graph.ImportTexture("Target", target));
+		test.Graph.AddRasterPass("Draw", [&](FrameGraphBuilder& builder, FGNoData&)
+			{
+				color.push_back(builder.CreateTexture("Color", { .Size = { .Mode = FGSizeMode::RelativeToOutput }, .Format = kFormat }));
+				color.push_back(builder.ColorAttachment(color.back(), FGLoad::Clear, {}));
+				depth.push_back(builder.CreateTexture("Depth", { .Size = { .Mode = FGSizeMode::RelativeToOutput }, .Format = kDepthFormat }));
+				depth.push_back(builder.DepthAttachment(depth.back(), FGLoad::Clear));
+				imported.push_back(builder.ColorAttachment(imported.back(), FGLoad::Clear, {}));
+			}, kNoExecute);
+		test.Graph.AddRasterPass("Overlay", [&](FrameGraphBuilder& builder, FGNoData&)
+			{
+				color.push_back(builder.ColorAttachment(color.back(), FGLoad::Load, {}));
+			}, kNoExecute);
+		test.Graph.AddComputePass("Fog", [&](FrameGraphBuilder& builder, FGNoData&)
+			{
+				color.push_back(builder.WriteTexture(color.back(), FGUsage::StorageCompute));
+			}, kNoExecute);
+
+		for (const std::vector<FGTextureHandle>* versions : { &color, &depth, &imported })
+		{
+			const FGTextureEntry& entry = test.Graph.GetTexture(versions->front());
+			for (uint32_t version = 0; version < versions->size(); ++version)
+			{
+				const FGTextureHandle handle = (*versions)[version];
+				CDL_EXPECT_MSG(handle.IsSameResource(versions->front()), std::format("{} version {} names another texture", entry.Name, version));
+				CDL_EXPECT_EQ(handle.Version, version);
+			}
+			CDL_EXPECT_EQ(entry.LatestVersion, versions->back().Version);
+		}
+	}
+	ExpectNoVulkanDebugMessages(logs);
+}
+
+// Several passes sample the GBuffer in a row. A read that moved its version on would leave every reader after the first
+// holding a stale handle.
+CDL_TEST_CASE(FrameGraph, ReadingLeavesTheVersionAlone, Gpu)
+{
+	LoggerFixture logs(LogLevel::Warn, kRenderChannelMask);
+	{
+		TestFrameGraph test;
+		test.Graph.Reset({ 4, 4 });
+
+		FGTextureHandle gbuffer;
+		test.Graph.AddRasterPass("GBuffer", [&](FrameGraphBuilder& builder, FGNoData&)
+			{
+				gbuffer = builder.ColorAttachment(builder.CreateTexture("GBuffer", { .Size = { .Mode = FGSizeMode::RelativeToOutput }, .Format = kFormat }),
+					FGLoad::Clear, {});
+			}, kNoExecute);
+		for (const std::string_view reader : { "SSAO", "Lighting" })
+			test.Graph.AddComputePass(reader, [&](FrameGraphBuilder& builder, FGNoData&) { builder.ReadTexture(gbuffer, FGUsage::SampledCompute); }, kNoExecute);
+
+		CDL_EXPECT_EQ(test.Graph.GetTexture(gbuffer).LatestVersion, gbuffer.Version);
 	}
 	ExpectNoVulkanDebugMessages(logs);
 }

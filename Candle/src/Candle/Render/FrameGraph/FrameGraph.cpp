@@ -108,7 +108,8 @@ namespace Candle {
 			livePasses.pop_back();
 
 			FrameGraphPassNode& passNode = m_Passes[passIndex];
-			CDL_CORE_ASSERT(!passNode.IsLive, "Pass was already marked as live");
+			if (passNode.IsLive)
+				continue;	// Already marked as live, no need to process again
 
 			passNode.IsLive = true;
 
@@ -154,8 +155,8 @@ namespace Candle {
 			FGTextureEntry& texture = m_Textures[i];
 			if (texture.Imported)
 				continue;
-			if (!m_Passes[texture.LastWritePassIndex].IsLive)
-				continue;	// If the pass that created this transient texture was culled, we don't need to create a resource for it
+			if (!texture.Desc.Usage)
+				continue;	// Only live passes add usage, so none uses it. A culled last writer isn't enough, earlier writers may be live.
 
 			FGTextureKey key{
 				.Format{ texture.Desc.Format },
@@ -305,7 +306,7 @@ namespace Candle {
 		// also covers last frame's command buffer; a second queue would need a semaphore instead.
 		for (const FGTextureEntry& texture : m_Textures)
 		{
-			if (!texture.Imported && m_Passes[texture.LastWritePassIndex].IsLive)
+			if (!texture.Imported && texture.Desc.Usage)
 				m_ResourceCache.SetTextureState(texture.CacheIndex, texture.FinalState);
 		}
 	}
