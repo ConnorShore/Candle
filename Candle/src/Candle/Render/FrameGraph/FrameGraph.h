@@ -6,6 +6,7 @@
 #include "ResourceCache.h"
 #include "FrameGraphCompilerResources.h"
 #include "FrameGraphContext.h"
+#include "Blackboard.h"
 
 #include "Candle/Render/Resources/GPUHandles.h"
 #include "Candle/Render/Vulkan/Image.h"
@@ -26,6 +27,7 @@ namespace Candle {
 	class SwapChainImage;
 	class BindlessTable;
 	class TexturePool;
+	class PipelineStore;
 	class GPUAllocator;
 	class RenderDevice;
 
@@ -34,6 +36,7 @@ namespace Candle {
 		Candle::GPUAllocator& Allocator;
 		Candle::BindlessTable& BindlessTable;
 		Candle::TexturePool& TexturePool;
+		Candle::PipelineStore& PipelineStore;
 	};
 
 	// Empty (default) type for PassData
@@ -99,6 +102,8 @@ namespace Candle {
 
 		// Valid from Compile until the next Reset
 		inline const FGCompiledGraph& GetCompiledGraph() const { return m_CompiledGraph; }
+		inline Blackboard& GetBlackboard() { return m_Blackboard; }
+
 
 	private:
 		friend class FrameGraphBuilder;
@@ -131,9 +136,11 @@ namespace Candle {
 
 	private:
 		TexturePool& m_TexturePool;
+		PipelineStore& m_PipelineStore;
 		ArenaAllocator m_FrameArena;
 		ResourceCache m_ResourceCache;
 		FGCompiledGraph m_CompiledGraph;
+		Blackboard m_Blackboard;
 
 		glm::uvec2 m_OutputExtent{ 0, 0 };
 		std::vector<FrameGraphPassNode> m_Passes;

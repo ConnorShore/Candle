@@ -2,13 +2,15 @@
 #include "FrameGraphContext.h"
 #include "FrameGraph.h"
 
+#include "Candle/Render/Pipelines/PipelineStore.h"
+
 #include <glm/glm.hpp>
 
 namespace Candle {
 
 	// Private
-	FrameGraphContext::FrameGraphContext(const FrameGraph& frameGraph, vk::CommandBuffer commandBuffer, uint32_t passIndex)
-		: m_FrameGraph(frameGraph), m_CommandBuffer(commandBuffer), m_PassIndex(passIndex)
+	FrameGraphContext::FrameGraphContext(const FrameGraph& frameGraph, const PipelineStore& pipelineStore, vk::CommandBuffer commandBuffer, uint32_t passIndex)
+		: m_FrameGraph(frameGraph), m_GlobalPipelineLayout(pipelineStore.GetGlobalLayout()), m_CommandBuffer(commandBuffer), m_PassIndex(passIndex)
 	{
 	}
 
@@ -38,6 +40,11 @@ namespace Candle {
 	std::string_view FrameGraphContext::GetPassName() const
 	{
 		return m_FrameGraph.m_Passes[m_PassIndex].Name;
+	}
+
+	void FrameGraphContext::BindPipeline(vk::PipelineBindPoint bindPoint, vk::Pipeline pipeline)
+	{
+		m_CommandBuffer.bindPipeline(bindPoint, pipeline);
 	}
 
 }

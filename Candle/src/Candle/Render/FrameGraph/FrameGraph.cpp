@@ -61,6 +61,7 @@ namespace Candle {
 
 	FrameGraph::FrameGraph(FrameGraphSpec spec)
 		: m_TexturePool(spec.TexturePool)
+		, m_PipelineStore(spec.PipelineStore)
 		, m_FrameArena(kFrameArenaSize)
 		, m_ResourceCache(spec.Allocator, spec.BindlessTable)
 	{
@@ -417,7 +418,7 @@ namespace Candle {
 			// Execute pass' exec func 
 			// (pass is responsible for binding a pipeline, descriptor sets, and issuing draw/dispatch commands)
 			FrameGraphPassNode& passNode = m_Passes[pass.PassIndex];
-			FrameGraphContext passContext(*this, commandBuffer, pass.PassIndex);
+			FrameGraphContext passContext(*this, m_PipelineStore, commandBuffer, pass.PassIndex);
 			(*passNode.Pass)(passContext);	// Execute the pass' execute function with the pass context
 
 			// End rendering

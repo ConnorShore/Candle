@@ -33,6 +33,8 @@
 #include <atomic>
 #include <ranges>
 #include <expected>
+#include <cmath>
+#include <span>
 
 #ifdef CDL_PLATFORM_WINDOWS
 	#include <Windows.h>

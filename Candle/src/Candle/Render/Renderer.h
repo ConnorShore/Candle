@@ -6,6 +6,7 @@
 #include "Candle/Render/Resources/DeletionQueue.h"
 #include "Candle/Render/ShaderInterop/GlobalPushConstants.h"
 #include "Candle/Render/FrameGraph/FrameGraph.h"
+#include "Candle/Render/FrameGraph/RenderModule.h"
 
 #include <glm/glm.hpp>
 
@@ -85,8 +86,6 @@ namespace Candle {
 		const ScenePassData& AddScenePass(const FramePacket& packet, FGTextureHandle target, const ComputePassData& computeData, const GPU::GlobalPushConstants& global);
 		DebugDrawPassData AddDebugDrawPass(const FramePacket& packet, FrameContext& frame, const ScenePassData& scene, const GPU::GlobalPushConstants& global);
 		GuiPassData AddGuiPass(const FramePacket& packet, FrameContext& frame, FGTextureHandle swapChain, FGTextureHandle sceneColor, const GPU::GlobalPushConstants& global);
-
-		void EnsureCapacity(GPUBuffer& buffer, size_t size, vk::BufferUsageFlags usage, std::string_view name);
 	private:
 		RenderDevice& m_RenderDevice;
 		GeometryPool& m_GeometryPool;
@@ -99,11 +98,12 @@ namespace Candle {
 		bool m_RenderToSwapChain;
 		vk::Format m_TargetFormat;
 		vk::Format m_DepthFormat;	// Chosen once, before m_DepthImage; the depth image and every pipeline's spec both take it
-		glm::vec2 m_LineWidthRange;
 
 		// Temporary till frame graph modules are implemented
 		GPUPipelineHandle m_TrianglePipeline, m_DebugDrawPipeline, m_GuiPipeline;
 		GPUPipelineHandle m_ComputePipeline;
+
+		std::vector<ScopedPtr<RenderModule>> m_RenderModules;
 	};
 
 }
