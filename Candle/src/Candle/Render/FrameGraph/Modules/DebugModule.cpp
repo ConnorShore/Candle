@@ -108,13 +108,13 @@ namespace Candle {
 							continue;
 						}
 
-						commandBuffer.setDepthTestEnable(depthEnabled);
+						ctx.EnableDepthTest(depthEnabled);
 						currentBucket = batch.Bucket;
 
 						// TODO: Some way to use world ViewProj matrix or a screen space matrix
 					}
 
-					commandBuffer.setLineWidth(std::clamp(batch.LineWidth, m_LineWidthRange.x, m_LineWidthRange.y));
+					ctx.SetLineWidth(std::clamp(batch.LineWidth, m_LineWidthRange.x, m_LineWidthRange.y));
 
 					const GPU::DebugDrawPushConstants pushConstants{
 						.Global = inputs.Global,
@@ -122,7 +122,7 @@ namespace Candle {
 					};
 					ctx.PushConstants(pushConstants);
 
-					commandBuffer.draw(batch.VertexCount, 1, 0, 0);
+					ctx.Draw(batch.VertexCount, 1, 0, 0);
 				}
 			}
 		);

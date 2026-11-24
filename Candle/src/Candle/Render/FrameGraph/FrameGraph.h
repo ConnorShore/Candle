@@ -148,7 +148,7 @@ namespace Candle {
 		// The frame graph owns the textures, which are either imported from the pool or swapchain, or created as transients. The passes only have handles to them.
 		std::vector<FGTextureEntry> m_Textures;
 
-		// TODO: Once FG is working, optimize this nested vector (probably to single vector)
+		// TODO NOW: Once FG is working, optimize this nested vector (probably to single vector)
 		std::vector<std::vector<FGTextureAccessEntry>> m_TextureAccesses;	// Indexed by pass, so each pass has a list of the textures it reads and writes
 		//std::vector<FGBufferHandle> m_Buffers;
 

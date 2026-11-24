@@ -68,9 +68,6 @@ namespace Candle {
 				}
 
 				const FGTextureEntry& texture = ctx.GetTexture(data.Output);
-				vk::CommandBuffer commandBuffer = ctx.GetCommandBuffer();
-				//commandBuffer.bindPipeline(vk::PipelineBindPoint::eCompute, computePipeline);
-				//ApplyPushConstants(commandBuffer, m_PipelineStore.GetGlobalLayout(), inputs.Global);
 				const GPU::ComputePushConstants pushConstants{
 					.Global = inputs.Global,
 					.TextureIndex = texture.BindlessIndex,
@@ -80,7 +77,7 @@ namespace Candle {
 				ctx.PushConstants(pushConstants);
 
 				const LocalGroupSize& groupSize = entryPoint->LocalSize;
-				commandBuffer.dispatch((texture.Desc.Extent.x + groupSize.X - 1) / groupSize.X, (texture.Desc.Extent.y + groupSize.Y - 1) / groupSize.Y, 1);
+				ctx.Dispatch2D((texture.Desc.Extent.x + groupSize.X - 1) / groupSize.X, (texture.Desc.Extent.y + groupSize.Y - 1) / groupSize.Y);
 			});
 	}
 
@@ -106,8 +103,8 @@ namespace Candle {
 					return;
 				}
 
-				vk::CommandBuffer commandBuffer = ctx.GetCommandBuffer();
 				ctx.BindPipeline(vk::PipelineBindPoint::eGraphics, trianglePipeline);
+				ctx.EnableDepthTest(true);
 
 				const uint32_t computeTextureIndex = ctx.GetTexture(computeData.Output).BindlessIndex;
 				for (const DrawItem& item : inputs.Packet.DrawItems)
@@ -131,9 +128,8 @@ namespace Candle {
 					};
 
 					ctx.PushConstants(pushConstants);
-
-					commandBuffer.bindIndexBuffer(drawInfo.Indices, 0, vk::IndexType::eUint32);
-					commandBuffer.drawIndexed(drawInfo.IndexCount, 1, 0, 0, 0);
+					ctx.BindIndexBuffer(drawInfo.Indices, 0, vk::IndexType::eUint32);
+					ctx.DrawIndexed(drawInfo.IndexCount, 1, 0, 0, 0);
 				}
 			}, true);
 	}

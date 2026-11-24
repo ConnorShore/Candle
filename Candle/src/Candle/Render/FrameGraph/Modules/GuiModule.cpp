@@ -91,14 +91,17 @@ namespace Candle {
 				vk::CommandBuffer commandBuffer = ctx.GetCommandBuffer();
 				ctx.BindPipeline(vk::PipelineBindPoint::eGraphics, guiPipeline);
 
+				ctx.EnableDepthTest(false);
+
 				// Override viewport so not upside down
 				const vk::Extent2D extent = ctx.GetRenderExtent();
 				commandBuffer.setViewport(0, vk::Viewport(0.0f, 0.0f, static_cast<float>(extent.width), static_cast<float>(extent.height), 0.0f, 1.0f));
+				ctx.SetViewport(0, 0, extent.width, extent.height, 0.0f, 1.0f);
 
 				const glm::vec2 scale = 2.0f / gui.DisplaySize;
 				const glm::vec2 translate = -1.0f - gui.DisplayPos * scale;
 
-				commandBuffer.bindIndexBuffer(inputs.Frame.GuiIndices.GetBuffer(), 0, vk::IndexType::eUint16);
+				ctx.BindIndexBuffer(inputs.Frame.GuiIndices.GetBuffer(), 0, vk::IndexType::eUint16);
 				const vk::DeviceAddress vertexBase = inputs.Frame.GuiVertices.GetDeviceAddress();
 
 				const uint32_t samplerIndex = static_cast<uint32_t>(SamplerType::LinearClamp);
@@ -109,9 +112,7 @@ namespace Candle {
 					if (clipMax.x <= clipMin.x || clipMax.y <= clipMin.y)
 						continue;
 
-					commandBuffer.setScissor(0, vk::Rect2D(
-						vk::Offset2D(static_cast<int32_t>(clipMin.x), static_cast<int32_t>(clipMin.y)),
-						vk::Extent2D(static_cast<uint32_t>(clipMax.x - clipMin.x), static_cast<uint32_t>(clipMax.y - clipMin.y))));
+					ctx.SetScissor(clipMin, clipMax - clipMin);
 
 					const GPU::GuiDrawPushConstants pushConstants{
 						.Global = inputs.Global,
@@ -123,7 +124,7 @@ namespace Candle {
 					};
 					ctx.PushConstants(pushConstants);
 
-					commandBuffer.drawIndexed(cmd.IndexCount, 1, cmd.IndexOffset, 0, 0);
+					ctx.DrawIndexed(cmd.IndexCount, 1, cmd.IndexOffset, 0, 0);
 				}
 			}
 		);

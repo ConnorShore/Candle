@@ -418,7 +418,6 @@ namespace Candle {
 				// Set viewport, scissor, depth test
 				commandBuffer.setViewport(0, vk::Viewport(0.0f, static_cast<float>(renderExtent.height), static_cast<float>(renderExtent.width), -static_cast<float>(renderExtent.height), 0.0f, 1.0f));
 				commandBuffer.setScissor(0, vk::Rect2D(vk::Offset2D{ 0, 0 }, renderExtent));
-				commandBuffer.setDepthTestEnable(pass.HasDepthAttachment);
 			}
 
 			// Execute pass' exec func 

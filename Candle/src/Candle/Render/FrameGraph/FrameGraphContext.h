@@ -9,6 +9,7 @@
 #include <vulkan/vulkan_raii.hpp>
 
 #include <string_view>
+#include <cstdint>
 
 namespace Candle {
 
@@ -24,10 +25,22 @@ namespace Candle {
 		vk::Extent2D GetRenderExtent() const;   // Of this pass's attachments, for viewport and scissor
 		std::string_view GetPassName() const;
 
+		void EnableDepthTest(bool enable);
+		void SetLineWidth(float width);
+		void SetViewport(uint32_t minX, uint32_t minY, uint32_t width, uint32_t height, float minDepth, float maxDepth);
+		void SetScissor(uint32_t minX, uint32_t minY, uint32_t width, uint32_t height);
+		void SetScissor(glm::vec2 offset, glm::vec2 extent);
+
 		void BindPipeline(vk::PipelineBindPoint bindPoint, vk::Pipeline pipeline);
+		void BindIndexBuffer(vk::Buffer buffer, vk::DeviceSize offset, vk::IndexType indexType);
+
+		void Draw(uint32_t vertexCount, uint32_t instanceCount, uint32_t firstVertex, uint32_t firstInstance);
+		void DrawIndexed(uint32_t indexCount, uint32_t instanceCount, uint32_t firstIndex, int32_t vertexOffset, uint32_t firstInstance);
+
+		void Dispatch2D(uint32_t groupCountX, uint32_t groupCountY);
+		void Dispatch3D(uint32_t groupCountX, uint32_t groupCountY, uint32_t groupCountZ);
 
 		inline vk::CommandBuffer GetCommandBuffer() const { return m_CommandBuffer; }
-
 
 		template<typename T>
 		inline void PushConstants(const T& data)
