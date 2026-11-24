@@ -618,8 +618,9 @@ CDL_TEST_CASE(FrameGraphCompile, WriteAfterReadWaitsForTheRead, Gpu)
 	ExpectNoVulkanDebugMessages(logs);
 }
 
-// Reads don't conflict, so a second read in the same layout needs no barrier. This one is an optimisation rather than
-// a correctness rule; WriteAfterSeveralReadsWaitsForEveryOne is what keeps skipping it safe.
+// Reads don't conflict, so a second read in the same layout needs no barrier once the write is visible to it, and an
+// import starts visible to every sampling stage. This one is an optimisation rather than a correctness rule;
+// WriteAfterSeveralReadsWaitsForEveryOne is what keeps skipping it safe.
 CDL_TEST_CASE(FrameGraphCompile, ReadAfterReadInTheSameLayoutAddsNoBarrier, Gpu)
 {
 	LoggerFixture logs(LogLevel::Warn, kRenderChannelMask);
@@ -638,8 +639,7 @@ CDL_TEST_CASE(FrameGraphCompile, ReadAfterReadInTheSameLayoutAddsNoBarrier, Gpu)
 	ExpectNoVulkanDebugMessages(logs);
 }
 
-// With no barrier between the two reads, the second reader's stage has to be merged into the texture's state, or the
-// write would wait for only one of them
+// Each reader's stage has to be merged into the texture's state, or the write would wait for only the last of them
 CDL_TEST_CASE(FrameGraphCompile, WriteAfterSeveralReadsWaitsForEveryOne, Gpu)
 {
 	LoggerFixture logs(LogLevel::Warn, kRenderChannelMask);
@@ -663,6 +663,82 @@ CDL_TEST_CASE(FrameGraphCompile, WriteAfterSeveralReadsWaitsForEveryOne, Gpu)
 		CDL_CHECK(barrier);
 		ExpectWaitsFor(barrier->FromState, {}, vk::PipelineStageFlagBits2::eFragmentShader | vk::PipelineStageFlagBits2::eComputeShader,
 			"The redraw's barrier source");
+	}
+	ExpectNoVulkanDebugMessages(logs);
+}
+
+// The fragment read's barrier makes the draw visible to fragment sampling only, so the compute read needs one of its own.
+// It waits on the fragment stage, which chains it through that earlier barrier to the draw.
+CDL_TEST_CASE(FrameGraphCompile, ReadInAStageTheWriteIsntVisibleToYetGetsABarrier, Gpu)
+{
+	LoggerFixture logs(LogLevel::Warn, kRenderChannelMask);
+	{
+		TestFrameGraph test;
+		NotePlanOnFailure dump(test.Graph);
+		test.Graph.Reset(kOutputExtent);
+
+		FGTextureHandle transient;
+		DeclarePass(test.Graph, "Draw", [&](FrameGraphBuilder& builder)
+			{
+				transient = builder.CreateTexture("Transient", OutputSized(kColorFormat));
+				transient = builder.ColorAttachment(transient, FGLoad::Clear, kClearColor);
+			});
+		DeclarePass(test.Graph, "FragmentRead", [&](FrameGraphBuilder& builder) { builder.ReadTexture(transient, FGUsage::SampledFragment); });
+		DeclarePass(test.Graph, "ComputeRead", [&](FrameGraphBuilder& builder) { builder.ReadTexture(transient, FGUsage::SampledCompute); });
+		test.Graph.Compile(1);
+
+		const FGBarrier* barrier = FindBarrier(BarriersOf(test.Graph.GetCompiledGraph(), 2), transient);
+		CDL_CHECK(barrier);
+		ExpectWaitsFor(barrier->FromState, {}, vk::PipelineStageFlagBits2::eFragmentShader, "The compute read's barrier source");
+		ExpectWaitsFor(barrier->ToState, vk::AccessFlagBits2::eShaderSampledRead, vk::PipelineStageFlagBits2::eComputeShader,
+			"The compute read's barrier destination");
+	}
+	ExpectNoVulkanDebugMessages(logs);
+}
+
+// The compute read's barrier adds compute to where the draw is visible rather than replacing fragment, so going back to
+// fragment sampling needs nothing more
+CDL_TEST_CASE(FrameGraphCompile, ReadInAStageTheWriteIsAlreadyVisibleToAddsNoBarrier, Gpu)
+{
+	LoggerFixture logs(LogLevel::Warn, kRenderChannelMask);
+	{
+		TestFrameGraph test;
+		NotePlanOnFailure dump(test.Graph);
+		test.Graph.Reset(kOutputExtent);
+
+		FGTextureHandle transient;
+		DeclarePass(test.Graph, "Draw", [&](FrameGraphBuilder& builder)
+			{
+				transient = builder.CreateTexture("Transient", OutputSized(kColorFormat));
+				transient = builder.ColorAttachment(transient, FGLoad::Clear, kClearColor);
+			});
+		DeclarePass(test.Graph, "FragmentRead", [&](FrameGraphBuilder& builder) { builder.ReadTexture(transient, FGUsage::SampledFragment); });
+		DeclarePass(test.Graph, "ComputeRead", [&](FrameGraphBuilder& builder) { builder.ReadTexture(transient, FGUsage::SampledCompute); });
+		DeclarePass(test.Graph, "FragmentReadAgain", [&](FrameGraphBuilder& builder) { builder.ReadTexture(transient, FGUsage::SampledFragment); });
+		test.Graph.Compile(1);
+
+		CDL_EXPECT(!FindBarrier(BarriersOf(test.Graph.GetCompiledGraph(), 3), transient));
+	}
+	ExpectNoVulkanDebugMessages(logs);
+}
+
+// The pool, and last frame's final barrier, publish an import to sampling only. A storage read in the same layout still
+// has to wait for whatever wrote it.
+CDL_TEST_CASE(FrameGraphCompile, ImportIsVisibleToSamplingButNotToStorageReads, Gpu)
+{
+	LoggerFixture logs(LogLevel::Warn, kRenderChannelMask);
+	{
+		TestFrameGraph test;
+		NotePlanOnFailure dump(test.Graph);
+		test.Graph.Reset(kOutputExtent);
+
+		const FGTextureHandle storage = test.ImportStorageTarget("Storage");
+		DeclarePass(test.Graph, "Sample", [&](FrameGraphBuilder& builder) { builder.ReadTexture(storage, FGUsage::SampledCompute); });
+		DeclarePass(test.Graph, "StorageRead", [&](FrameGraphBuilder& builder) { builder.ReadTexture(storage, FGUsage::StorageReadCompute); });
+		test.Graph.Compile(1);
+
+		CDL_EXPECT(!FindBarrier(BarriersOf(test.Graph.GetCompiledGraph(), 0), storage));
+		CDL_EXPECT(FindBarrier(BarriersOf(test.Graph.GetCompiledGraph(), 1), storage));
 	}
 	ExpectNoVulkanDebugMessages(logs);
 }

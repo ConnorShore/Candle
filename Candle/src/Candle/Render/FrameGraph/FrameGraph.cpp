@@ -232,8 +232,12 @@ namespace Candle {
 				if (usageInfo.ImageUsage & vk::ImageUsageFlagBits::eSampled)
 					usageInfo.State.Layout = texture.SampledLayout;	// The layout its bindless descriptor was written with
 
-				// Create a barrier for this texture access if necessary (can skip if it's a read, the texture is already in the correct layout and nothing has written it since its last barrier)
-				bool canSkipBarrier = (!textureAccess.Write && !(texture.FinalState.Access & kWriteAccesses) && texture.FinalState.Layout == usageInfo.State.Layout);
+				// A read can skip its barrier if the texture is already in its layout and an earlier barrier made the last write visible to
+				// its stage and access. Nothing having written since isn't enough: a barrier for a fragment read leaves compute unsynchronised.
+				const bool sameLayout = texture.FinalState.Layout == usageInfo.State.Layout;
+				const bool alreadyVisible = (usageInfo.State.Stage & ~texture.VisibleStages) == vk::PipelineStageFlags2{}
+					&& (usageInfo.State.Access & ~texture.VisibleAccess) == vk::AccessFlags2{};
+				bool canSkipBarrier = !textureAccess.Write && sameLayout && alreadyVisible;
 				if (canSkipBarrier)
 				{
 					// If the texture is already in the correct layout for a read, we can skip creating a barrier, 
@@ -252,8 +256,23 @@ namespace Candle {
 
 					m_CompiledGraph.Barriers.push_back(barrier);
 
-					// Update the texture's final state for the next pass
-					m_Textures[textureIndex].FinalState = usageInfo.State;
+					// Only widening where the last write is visible: this chains off the earlier readers' stages, which already wait for
+					// the write, and keeps them, so the next write still waits for every reader
+					const bool widensVisibility = !textureAccess.Write && sameLayout && !(texture.FinalState.Access & kWriteAccesses);
+					if (widensVisibility)
+					{
+						texture.FinalState.Stage |= usageInfo.State.Stage;
+						texture.FinalState.Access |= usageInfo.State.Access;
+						texture.VisibleStages |= usageInfo.State.Stage;
+						texture.VisibleAccess |= usageInfo.State.Access;
+					}
+					else
+					{
+						// Nothing sees a write until a later barrier, and a layout change reaches only this barrier's destination
+						texture.FinalState = usageInfo.State;
+						texture.VisibleStages = textureAccess.Write ? vk::PipelineStageFlags2{} : usageInfo.State.Stage;
+						texture.VisibleAccess = textureAccess.Write ? vk::AccessFlags2{} : usageInfo.State.Access;
+					}
 				}
 
 				// If this is a color or depth attachment, create a compiled attachment
@@ -491,7 +510,10 @@ namespace Candle {
 			.SampledLayout = info.SampledLayout,
 			// Earlier reads only have to finish before a write, so no access; later reads have to see the writes
 			.InitialState = { .Layout = info.SampledLayout, .Access = vk::AccessFlagBits2::eNone, .Stage = kSampledStages },
-			.FinalState = { .Layout = info.SampledLayout, .Access = vk::AccessFlagBits2::eShaderSampledRead, .Stage = kSampledStages }
+			.FinalState = { .Layout = info.SampledLayout, .Access = vk::AccessFlagBits2::eShaderSampledRead, .Stage = kSampledStages },
+			// Last frame's final barrier, or the pool when it made the texture, published it to sampling only
+			.VisibleStages = kSampledStages,
+			.VisibleAccess = vk::AccessFlagBits2::eShaderSampledRead
 		});
 		return { .Index = static_cast<uint32_t>(m_Textures.size() - 1), .Version = 0 };
 	}

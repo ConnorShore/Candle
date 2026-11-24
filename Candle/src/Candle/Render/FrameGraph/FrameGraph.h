@@ -54,6 +54,8 @@ namespace Candle {
 		uint32_t BindlessIndex{ std::numeric_limits<uint32_t>::max() };	// None for the swapchain
 		vk::ImageLayout SampledLayout{ vk::ImageLayout::eShaderReadOnlyOptimal };
 		ImageState InitialState, FinalState;
+		vk::PipelineStageFlags2 VisibleStages{};	// Where the last write, or layout change, has been made visible: a read anywhere else needs a barrier
+		vk::AccessFlags2 VisibleAccess{};
 		uint32_t CacheIndex{ std::numeric_limits<uint32_t>::max() };	// Transients only
 		uint32_t LatestVersion{ 0 };	// Bumped by every write, so a handle from before the last write is caught as stale
 		uint32_t LastWritePassIndex{ std::numeric_limits<uint32_t>::max() };	// Set by the builder during setup: the last pass so far to write it, or a transient's creator
