@@ -518,4 +518,62 @@ namespace Candle {
 		return { .Index = static_cast<uint32_t>(m_Textures.size() - 1), .Version = 0 };
 	}
 
+	std::optional<FGTextureHandle> FrameGraph::FindTexture(std::string_view name) const
+	{
+		const auto it = std::ranges::find(m_Textures, name, &FGTextureEntry::Name);
+		if (it == m_Textures.end())
+			return std::nullopt;
+
+		return FGTextureHandle{ .Index = static_cast<uint32_t>(std::distance(m_Textures.begin(), it)), .Version = it->LatestVersion };
+	}
+
+	void FrameGraph::CaptureSnapshot(FrameGraphSnapshot& out) const
+	{
+		CDL_PROFILE_SCOPE("FrameGraph CaptureSnapshot");
+		CDL_CORE_ASSERT(!m_ResetBeforeCompile, "FrameGraph must be compiled before capturing a snapshot");
+
+		out.OutputExtent = m_OutputExtent;
+
+		// Assigned rather than rebuilt, so the strings and vectors keep the capacity earlier frames gave them
+		out.Passes.resize(m_Passes.size());
+		for (size_t i = 0; i < m_Passes.size(); ++i)
+		{
+			const FrameGraphPassNode& node = m_Passes[i];
+			FrameGraphSnapshot::Pass& pass = out.Passes[i];
+			pass.Name = node.Name;
+			pass.Compute = node.IsComputePass;
+			pass.NeverCull = node.NeverCull;
+			pass.Live = node.IsLive;
+			pass.AccessStart = node.AccessStart;
+			pass.AccessCount = node.AccessCount;
+			pass.BarrierStart = 0;
+			pass.BarrierCount = 0;
+		}
+
+		for (const FGCompiledPass& compiled : m_CompiledGraph.Passes)
+		{
+			out.Passes[compiled.PassIndex].BarrierStart = compiled.BarrierStartIndex;
+			out.Passes[compiled.PassIndex].BarrierCount = compiled.BarrierCount;
+		}
+
+		out.Textures.resize(m_Textures.size());
+		for (size_t i = 0; i < m_Textures.size(); ++i)
+		{
+			const FGTextureEntry& entry = m_Textures[i];
+			FrameGraphSnapshot::Texture& texture = out.Textures[i];
+			texture.Name = entry.Name;
+			texture.Imported = entry.Imported;
+			texture.Extent = entry.Desc.Extent;
+			texture.Format = entry.Desc.Format;
+			texture.Usage = entry.Desc.Usage;
+			texture.LatestVersion = entry.LatestVersion;
+			texture.CacheIndex = entry.CacheIndex;
+			texture.BindlessIndex = entry.BindlessIndex;
+		}
+
+		out.Accesses = m_Accesses;
+		out.Barriers = m_CompiledGraph.Barriers;
+		out.FinalBarriers = m_CompiledGraph.FinalBarriers;
+	}
+
 }

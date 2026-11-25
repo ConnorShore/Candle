@@ -19,6 +19,7 @@
 #include "Candle/Render/FrameGraph/Modules/SceneModule.h"
 #include "Candle/Render/FrameGraph/Modules/DebugModule.h"
 #include "Candle/Render/FrameGraph/Modules/GuiModule.h"
+#include "Candle/Render/FrameGraph/Modules/FrameGraphPreviewModule.h"
 #include "Candle/Render/FrameGraph/Modules/GlobalModuleData.h"
 
 namespace Candle {
@@ -67,6 +68,7 @@ namespace Candle {
 		};
 		m_RenderModules.emplace_back(ScopedPtr<SceneModule>::Create(sceneModuleSpec, geometryPool, texturePool));
 		m_RenderModules.emplace_back(ScopedPtr<DebugModule>::Create(sceneModuleSpec, renderDevice, allocator));
+		m_RenderModules.emplace_back(ScopedPtr<FrameGraphPreviewModule>::Create(sceneModuleSpec));
 		m_RenderModules.emplace_back(ScopedPtr<GuiModule>::Create(sceneModuleSpec, texturePool, renderDevice, allocator));
 
 		// Save the pipeline cache to disk so that it can be loaded next time the engine is run

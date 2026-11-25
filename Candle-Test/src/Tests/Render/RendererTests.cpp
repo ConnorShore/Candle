@@ -933,3 +933,144 @@ CDL_TEST_CASE(Renderer, DebugLinesDrawIntoTheOutputTarget, Gpu)
 	}
 	ExpectNoVulkanDebugMessages(logs);
 }
+
+//////////////////////////////////////////////////////////////////////////
+// The render graph viewer: its snapshot and the preview pass
+//////////////////////////////////////////////////////////////////////////
+
+namespace {
+
+	constexpr Texel kMidGrey{ 128, 128, 128, 255 };
+
+	// Depth as the viewer previews it: a quad at 0.5 over the top half, and the scene pass's clear of 1 below
+	FramePacket MakeDepthPreviewPacket(TestRenderer& test, GPUTextureHandle previewTarget, glm::vec2 range)
+	{
+		const glm::mat4 topHalf = glm::translate(glm::mat4(1.0f), glm::vec3(0.0f, 0.5f, 0.5f)) * glm::scale(glm::mat4(1.0f), glm::vec3(1.0f, 0.5f, 1.0f));
+		FramePacket packet = MakePacket(test.CreateQuad(), { { test.CreateSolidTexture(kBright), topHalf } });
+		packet.FrameGraphCapture = { .Snapshot = true, .PreviewTexture = "Depth", .CapturePreview = true, .PreviewRange = range, .PreviewTarget = previewTarget };
+		return packet;
+	}
+
+	bool HasPreviewPass(const FrameGraphSnapshot& snapshot)
+	{
+		return std::ranges::any_of(snapshot.Passes, [](const FrameGraphSnapshot::Pass& pass) { return pass.Name == kFrameGraphPreviewPassName; });
+	}
+
+}
+
+// Depth has one channel, so it previews as grey, the right way up: the scene pass flips its viewport and the preview mustn't
+CDL_TEST_CASE(Renderer, PreviewDrawsTheTransientItWasAskedFor, Gpu)
+{
+	SkipUnlessRendererShadersCompiled();
+	SkipUnlessCompiled(kBindlessFixturePath);
+
+	LoggerFixture logs(LogLevel::Warn, kRenderChannelMask);
+	{
+		TestRenderer test(kExtent);
+		TestTarget target = CreateTarget(test.Device, kExtent);
+		const GPUTextureHandle preview = test.CreateOutputTarget({ kExtent.width, kExtent.height });
+		RenderFrame(test, target, MakeDepthPreviewPacket(test, preview, { 0.0f, 1.0f }));
+
+		std::vector<Texel> expected = Solid(kWhite);
+		Paint(expected, { 0, 0 }, { kExtent.width, 2 }, kMidGrey);
+		ExpectImage(SampleRenderTarget(test, preview), expected, "depth 0.5 over the top half, 1 below", 1);
+	}
+	ExpectNoVulkanDebugMessages(logs);
+}
+
+CDL_TEST_CASE(Renderer, PreviewRangeSpreadsItsValuesFromBlackToWhite, Gpu)
+{
+	SkipUnlessRendererShadersCompiled();
+	SkipUnlessCompiled(kBindlessFixturePath);
+
+	LoggerFixture logs(LogLevel::Warn, kRenderChannelMask);
+	{
+		TestRenderer test(kExtent);
+		TestTarget target = CreateTarget(test.Device, kExtent);
+		const GPUTextureHandle preview = test.CreateOutputTarget({ kExtent.width, kExtent.height });
+		RenderFrame(test, target, MakeDepthPreviewPacket(test, preview, { 0.5f, 1.0f }));
+
+		std::vector<Texel> expected = Solid(kWhite);
+		Paint(expected, { 0, 0 }, { kExtent.width, 2 }, kCleared);
+		ExpectImage(SampleRenderTarget(test, preview), expected, "0.5 at the bottom of the range, 1 at its top", 1);
+	}
+	ExpectNoVulkanDebugMessages(logs);
+}
+
+// The preview pass hands its target to the GUI through the blackboard, so the GUI shows this frame's preview, and the graph
+// puts the barrier between them that synchronization validation would otherwise flag
+CDL_TEST_CASE(Renderer, GuiShowsThePreviewDrawnThatFrame, Gpu)
+{
+	SkipUnlessRendererShadersCompiled();
+
+	LoggerFixture logs(LogLevel::Warn, kRenderChannelMask);
+	{
+		TestRenderer test(kExtent);
+		TestTarget target = CreateTarget(test.Device, kExtent);
+		const GPUTextureHandle preview = test.CreateOutputTarget({ kExtent.width, kExtent.height });
+
+		FramePacket packet = MakeDepthPreviewPacket(test, preview, { 0.0f, 1.0f });
+		packet.GuiDrawData = MakeGuiDrawData(kDisplaySize);
+		AddGuiQuad(packet.GuiDrawData, { 0.0f, 0.0f }, kDisplaySize, preview);
+
+		std::vector<Texel> expected = Solid(kWhite);
+		Paint(expected, { 0, 0 }, { kExtent.width, 2 }, kMidGrey);
+		ExpectImage(RenderFrame(test, target, packet), expected, "the GUI over the whole target, showing the preview", 1);
+	}
+	ExpectNoVulkanDebugMessages(logs);
+}
+
+// Imports are in the texture inspector, and a name the graph doesn't have may just be from a frame that had it
+CDL_TEST_CASE(Renderer, PreviewSkipsImportsAndNamesNotInTheGraph, Gpu)
+{
+	SkipUnlessRendererShadersCompiled();
+
+	LoggerFixture logs(LogLevel::Warn, kRenderChannelMask);
+	{
+		TestRenderer test(kExtent);
+		TestTarget target = CreateTarget(test.Device, kExtent);
+		const GPUTextureHandle preview = test.CreateOutputTarget({ kExtent.width, kExtent.height });
+
+		for (const char* name : { "SwapChain", "Missing" })
+		{
+			CDL_NOTE(name);
+			FramePacket packet = MakeDepthPreviewPacket(test, preview, { 0.0f, 1.0f });
+			packet.FrameGraphCapture.PreviewTexture = name;
+			RenderFrame(test, target, packet);
+
+			FrameGraphSnapshot snapshot;
+			test.SceneRenderer.CaptureFrameGraph(snapshot);
+			CDL_EXPECT_FALSE(HasPreviewPass(snapshot));
+		}
+	}
+	ExpectNoVulkanDebugMessages(logs);
+}
+
+// With no preview asked for, the module adds nothing, rather than a pass for culling to throw away
+CDL_TEST_CASE(Renderer, CaptureFrameGraphListsTheFramesPasses, Gpu)
+{
+	SkipUnlessRendererShadersCompiled();
+
+	LoggerFixture logs(LogLevel::Warn, kRenderChannelMask);
+	{
+		TestRenderer test(kExtent);
+		TestTarget target = CreateTarget(test.Device, kExtent);
+		const GPUTextureHandle texture = test.CreateSolidTexture(kBright);
+		FramePacket packet = MakeScenePacket(test.CreateQuad(), texture);
+		AddGuiQuad(packet.GuiDrawData, { 0.0f, 0.0f }, { 1.0f, 1.0f }, texture);	// With nothing to draw, the GUI adds no pass
+		RenderFrame(test, target, packet);
+
+		FrameGraphSnapshot snapshot;
+		test.SceneRenderer.CaptureFrameGraph(snapshot);
+
+		for (const std::string_view name : { "ComputePass", "TrianglePass", "GuiPass" })
+		{
+			const auto pass = std::ranges::find(snapshot.Passes, name, &FrameGraphSnapshot::Pass::Name);
+			CDL_EXPECT_MSG(pass != snapshot.Passes.end() && pass->Live, std::format("{} isn't a live pass in the snapshot", name));
+		}
+		for (const std::string_view name : { "ComputeOutput", "Depth", "SwapChain" })
+			CDL_EXPECT_MSG(std::ranges::contains(snapshot.Textures, name, &FrameGraphSnapshot::Texture::Name), std::format("{} isn't in the snapshot", name));
+		CDL_EXPECT_FALSE(HasPreviewPass(snapshot));
+	}
+	ExpectNoVulkanDebugMessages(logs);
+}

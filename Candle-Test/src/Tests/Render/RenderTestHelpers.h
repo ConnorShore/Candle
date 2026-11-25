@@ -454,6 +454,7 @@ namespace Candle::Test {
 	inline const std::filesystem::path kTriangleShaderPath = kEngineShaderDirectory / "Triangle.spv";
 	inline const std::filesystem::path kGuiShaderPath = kEngineShaderDirectory / "Gui.spv";	// The name Renderer loads
 	inline const std::filesystem::path kDebugDrawShaderPath = kEngineShaderDirectory / "DebugDraw.spv";	// The name Renderer loads
+	inline const std::filesystem::path kFrameGraphPreviewShaderPath = kEngineShaderDirectory / "FrameGraphPreview.spv";	// The name Renderer loads
 
 	// A Renderer builds every engine pipeline up front, so it needs all their shaders compiled, not just the one a test draws with
 	inline void SkipUnlessRendererShadersCompiled()
@@ -461,6 +462,7 @@ namespace Candle::Test {
 		SkipUnlessCompiled(kTriangleShaderPath);
 		SkipUnlessCompiled(kGuiShaderPath);
 		SkipUnlessCompiled(kDebugDrawShaderPath);
+		SkipUnlessCompiled(kFrameGraphPreviewShaderPath);
 	}
 
 	// One sample as a shader takes it: the texture's slot of set 0, through one of the bindless samplers, at UV.

@@ -5,6 +5,7 @@
 #include "Candle/Render/GUI/GuiDrawData.h"
 #include "Candle/Render/RenderStats.h"
 #include "Candle/Render/Camera.h"
+#include "Candle/Render/FrameGraph/FrameGraphSnapshot.h"
 #include "Candle/Debug/DebugDrawData.h"
 
 #include <vector>
@@ -33,6 +34,7 @@ namespace Candle {
 		GPUTextureHandle OutputTarget;			// What the scene renders into when not rendering to the swapchain, for the GUI to show; invalid otherwise
 
 		DebugDrawData DebugDraw;				// Debug draw data for the frame
+		FrameGraphCaptureRequest FrameGraphCapture;	// What the render graph viewer wants from this frame; written by FrameGraphCapture
 
 		bool Minimized{ false };				// Whether the surface is minimized; the renderer may skip rendering if true
 		glm::uvec2 SurfaceSize{ 0, 0 };			// The  size of the surface for this frame; the renderer may need to recreate the swapchain if changed
@@ -42,6 +44,7 @@ namespace Candle {
 		// The only fields the render thread writes, read when the packet is next acquired for writing
 		std::vector<GPUSlotRef> RecycledSlots;	// Freed slots
 		Candle::RenderStats RenderStats;		// The render thread's last completed frame; not this packet's, which is released before it presents
+		Candle::FrameGraphSnapshot FrameGraphSnapshot;	// This packet's compiled graph, when FrameGraphCapture asked for it
 
 		uint64_t FrameIndex{ 0 };				// The index of the frame for this packet; used for debugging and profiling
 	};

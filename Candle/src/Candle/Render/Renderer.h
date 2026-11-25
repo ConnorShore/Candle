@@ -50,6 +50,9 @@ namespace Candle {
 
 		void Render(const FramePacket& packet, FrameContext& frame, SwapChainImage& target);
 
+		// The last Render's compiled graph; only until the next Render resets it
+		inline void CaptureFrameGraph(FrameGraphSnapshot& out) const { m_FrameGraph.CaptureSnapshot(out); }
+
 		// Fixed at construction, so readable from any thread; a render target the scene draws into must have this format
 		inline vk::Format GetTargetFormat() const { return m_TargetFormat; }
 

@@ -52,6 +52,7 @@ namespace Candle {
 			.ShaderDirectory = engineAssetDir / "shaders/bin",
 			.PipelineCacheDirectory = savedDir / "pipelines",
 			.RenderToSwapChain = renderSpec.RenderToSwapChain })
+		, m_FrameGraphCapture(m_TexturePool, m_Renderer.GetTargetFormat())
 		, m_CommandPoolManager(m_RenderDevice, jobSystem.GetNumWorkers())
 		, m_RenderThread({
 			.Name = "Candle-RenderThread",
@@ -128,6 +129,7 @@ namespace Candle {
 		m_GPUUploader.FreeCompletedStagingBuffers();
 		m_ResourceRegistry.ReturnRecycledSlotsToPools(packet);
 		m_ResourceRegistry.MoveReleasedSlotsIntoPacket(packet);
+		m_FrameGraphCapture.ExchangeWithPacket(packet);
 		return packet;
 	}
 
@@ -175,6 +177,9 @@ namespace Candle {
 		stats.Timings.PumpWaitMs = static_cast<float>(pumpWaitTimer.ElapsedMilliseconds());
 		if (!packet)
 			return;	// Closed by JoinRenderThread
+
+		// Cleared up front, so a frame that returns early draws nothing and doesn't hand back the last snapshot this packet carried
+		packet->FrameGraphSnapshot.Captured = false;
 
 		CDL_PROFILE_SCOPE_METADATA(packet->FrameIndex);
 		m_GPUAllocator.UpdateFrameCount(packet->FrameIndex);
@@ -226,6 +231,13 @@ namespace Candle {
 
 		// Record command buffers for rendering
 		m_Renderer.Render(*packet, frameContext, m_SwapChain.GetImage(imageIndex));
+
+		if (packet->FrameGraphCapture.Snapshot)
+		{
+			m_Renderer.CaptureFrameGraph(packet->FrameGraphSnapshot);
+			packet->FrameGraphSnapshot.FrameIndex = packet->FrameIndex;
+			packet->FrameGraphSnapshot.Captured = true;
+		}
 
 		// Submit the command buffer to the graphics queue, waiting on the acquire semaphore and signaling the present semaphore
 		vk::CommandBufferSubmitInfo commandBufferInfo{ .commandBuffer = *frameContext.CommandBuffer };

@@ -2,10 +2,12 @@
 
 #include "FrameGraphPass.h"
 #include "FrameGraphHandles.h"
+#include "FrameGraphAccess.h"
 #include "FrameGraphBuilder.h"
 #include "ResourceCache.h"
 #include "FrameGraphCompilerResources.h"
 #include "FrameGraphContext.h"
+#include "FrameGraphSnapshot.h"
 #include "Blackboard.h"
 
 #include "Candle/Render/Resources/GPUHandles.h"
@@ -16,6 +18,7 @@
 #include <glm/glm.hpp>
 
 #include <limits>
+#include <optional>
 #include <span>
 #include <string>
 #include <string_view>
@@ -61,26 +64,6 @@ namespace Candle {
 		uint32_t LastWritePassIndex{ std::numeric_limits<uint32_t>::max() };	// Set by the builder during setup: the last pass so far to write it, or a transient's creator
 	};
 
-	enum class FGResourceType : uint8_t { Texture, Buffer };
-
-	struct FGAccessEntry
-	{
-		FGResourceType Type{ FGResourceType::Texture };
-		uint32_t ResourceIndex{ std::numeric_limits<uint32_t>::max() };	// Into m_Textures or m_Buffers, by Type
-		uint32_t Version{ 0 };
-		FGUsage Usage;
-		bool Write{ false };				// If true, the pass writes to the resource, so it needs a barrier
-		FGLoad LoadOp{ FGLoad::DontCare };	// Attachments only
-		vk::ClearValue ClearValue;			// Attachments only
-		uint32_t SrcPassIndex{ std::numeric_limits<uint32_t>::max() };	// Set by the builder during setup: the pass that wrote what this access reads. None for a Clear or DontCare.
-
-		inline FGTextureHandle GetTextureHandle() const
-		{
-			CDL_CORE_ASSERT(Type == FGResourceType::Texture, "Access is not to a texture");
-			return { .Index = ResourceIndex, .Version = Version };
-		}
-	};
-
 	class FrameGraph
 	{
 	public:
@@ -113,9 +96,15 @@ namespace Candle {
 			return m_Textures[handle.Index];
 		}
 
+		// The latest version of the first texture with this name, which any pass added after this point can read
+		std::optional<FGTextureHandle> FindTexture(std::string_view name) const;
+
 		// Valid from Compile until the next Reset
 		inline const FGCompiledGraph& GetCompiledGraph() const { return m_CompiledGraph; }
 		inline Blackboard& GetBlackboard() { return m_Blackboard; }
+
+		// From Compile until the next Reset. Reuses out's storage, so capturing every frame doesn't allocate once it has grown.
+		void CaptureSnapshot(FrameGraphSnapshot& out) const;
 
 
 	private:

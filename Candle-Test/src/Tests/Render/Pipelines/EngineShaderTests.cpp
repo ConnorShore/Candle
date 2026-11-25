@@ -8,6 +8,7 @@
 
 #include <Candle/Render/GUI/GuiInterop.h>
 #include <Candle/Render/Pipelines/DebugDrawInterop.h>
+#include <Candle/Render/Pipelines/FrameGraphPreviewInterop.h>
 #include <Candle/Render/Pipelines/TriangleInterop.h>
 #include <Candle/Render/Pipelines/Shader.h>
 
@@ -45,7 +46,7 @@ CDL_TEST_CASE(EngineShaders, EachHasTheEntryPointsTheRendererNames, Unit)
 {
 	SkipUnlessRendererShadersCompiled();
 
-	for (const std::filesystem::path& shaderPath : { kTriangleShaderPath, kGuiShaderPath, kDebugDrawShaderPath })
+	for (const std::filesystem::path& shaderPath : { kTriangleShaderPath, kGuiShaderPath, kDebugDrawShaderPath, kFrameGraphPreviewShaderPath })
 	{
 		const SharedPtr<Shader> shader = LoadTestShader(shaderPath.stem().string(), shaderPath);
 		const std::vector<ShaderEntryPoint>& entryPoints = shader->GetEntryPoints();
@@ -64,7 +65,7 @@ CDL_TEST_CASE(EngineShaders, CompiledShadersAreNamedExactlyAsTheyAreLoaded, Unit
 {
 	SkipUnlessRendererShadersCompiled();
 
-	for (const std::filesystem::path& shaderPath : { kTriangleShaderPath, kGuiShaderPath, kDebugDrawShaderPath })
+	for (const std::filesystem::path& shaderPath : { kTriangleShaderPath, kGuiShaderPath, kDebugDrawShaderPath, kFrameGraphPreviewShaderPath })
 	{
 		const std::string loaded = shaderPath.filename().string();
 		std::string onDisk;
@@ -149,6 +150,31 @@ CDL_TEST_CASE(EngineShaders, DebugDrawPushBlockMatchesDebugDrawPushConstants, Un
 	for (const ShaderEntryPoint& entryPoint : shader->GetEntryPoints())
 	{
 		// FragMain never touches the block, so the compiler is free to drop it there
+		if (entryPoint.PushConstants.Members.empty())
+			continue;
+
+		CDL_NOTE(entryPoint.Name);
+		ExpectPushBlockMatches<PushConstants>(entryPoint.PushConstants, members);
+	}
+}
+
+// The Renderer pushes GPU::FrameGraphPreviewPushConstants into the preview pipeline, so the compiled shader must agree with it byte for byte
+CDL_TEST_CASE(EngineShaders, FrameGraphPreviewPushBlockMatchesItsPushConstants, Unit)
+{
+	SkipUnlessCompiled(kFrameGraphPreviewShaderPath);
+
+	const SharedPtr<Shader> shader = LoadTestShader("FrameGraphPreview", kFrameGraphPreviewShaderPath);
+
+	using PushConstants = GPU::FrameGraphPreviewPushConstants;
+	const std::array members = {
+		CDL_INTEROP_MEMBER(PushConstants, Global),
+		CDL_INTEROP_MEMBER(PushConstants, TextureIndex),
+		CDL_INTEROP_MEMBER(PushConstants, SamplerIndex),
+		CDL_INTEROP_MEMBER(PushConstants, Range),
+		CDL_INTEROP_MEMBER(PushConstants, IsDepth) };
+	for (const ShaderEntryPoint& entryPoint : shader->GetEntryPoints())
+	{
+		// VertMain builds its triangle from the vertex index alone, so the compiler is free to drop the block there
 		if (entryPoint.PushConstants.Members.empty())
 			continue;
 

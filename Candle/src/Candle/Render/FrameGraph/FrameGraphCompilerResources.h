@@ -1,7 +1,13 @@
 #pragma once
 
+#include "FrameGraphHandles.h"
 #include "FrameGraphResources.h"
-#include "FrameGraph.h"
+
+#include <vulkan/vulkan.hpp>
+
+#include <cstdint>
+#include <string_view>
+#include <vector>
 
 namespace Candle {
 

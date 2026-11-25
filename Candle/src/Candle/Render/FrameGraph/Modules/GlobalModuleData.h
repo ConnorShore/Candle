@@ -16,4 +16,9 @@ namespace Candle {
 		FGTextureHandle Depth;
 	};
 
+	struct FrameGraphPreviewData
+	{
+		FGTextureHandle Target;
+	};
+
 }

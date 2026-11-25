@@ -66,6 +66,10 @@ namespace Candle {
 				if (!drawsOverScene)
 					builder.ReadTexture(sceneData.Color, FGUsage::SampledFragment);
 
+				// The render graph viewer shows the preview the same way
+				if (const FrameGraphPreviewData* preview = blackboard.TryGet<FrameGraphPreviewData>())
+					builder.ReadTexture(preview->Target, FGUsage::SampledFragment);
+
 				// When drawing over the scene, sceneColor is the same image as swapChain but carries the latest version
 				FGTextureHandle target = drawsOverScene ? sceneData.Color : frameTargets.SwapChain;
 				data.Color = builder.ColorAttachment(target, drawsOverScene ? FGLoad::Load : FGLoad::Clear, vk::ClearColorValue(0.0f, 0.0f, 0.0f, 1.0f));
