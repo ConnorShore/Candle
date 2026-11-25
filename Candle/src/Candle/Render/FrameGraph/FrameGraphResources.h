@@ -1,5 +1,6 @@
 #pragma once
 
+#include "Candle/Core/Core.h"
 #include "Candle/Render/Vulkan/Image.h"
 
 #include <cstdint>

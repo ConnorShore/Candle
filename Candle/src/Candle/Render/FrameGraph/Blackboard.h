@@ -14,8 +14,8 @@ namespace Candle {
 		template<typename T> [[nodiscard]] T& Get();
 		template<typename T> [[nodiscard]] T* TryGet();
 
-		template<typename T> [[nodiscard]] T& Get() const;
-		template<typename T> [[nodiscard]] T* TryGet() const;
+		template<typename T> [[nodiscard]] const T& Get() const;
+		template<typename T> [[nodiscard]] const T* TryGet() const;
 
 		void Clear();
 

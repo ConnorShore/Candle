@@ -34,6 +34,12 @@ namespace {
 		uint32_t Value{ 0 };
 	};
 
+	// No initializer, so only the graph can zero it
+	struct BareData
+	{
+		uint32_t Value;
+	};
+
 	constexpr auto kNoSetup = [](FrameGraphBuilder&, auto&) {};
 	constexpr auto kNoExecute = [](const auto&, FrameGraphContext&) {};
 
@@ -133,6 +139,40 @@ CDL_TEST_CASE(FrameGraph, ResetFreesTheArenaAndTheFramesTextures, Gpu)
 
 		CDL_EXPECT(thisFrame == lastFrame);
 		CDL_EXPECT_EQ(imported.Index, 0u);
+	}
+	ExpectNoVulkanDebugMessages(logs);
+}
+
+// The arena hands the same pass last frame's memory, so a field setup leaves alone would otherwise keep last frame's value
+CDL_TEST_CASE(FrameGraph, PassDataSetupLeavesAloneStartsZeroed, Gpu)
+{
+	LoggerFixture logs(LogLevel::Warn, kRenderChannelMask);
+	{
+		TestFrameGraph test;
+		test.Graph.Reset({ 4, 4 });
+		const BareData* lastFrame = &test.Graph.AddRasterPass<BareData>("Pass",
+			[](FrameGraphBuilder&, BareData& passData) { passData.Value = 7; }, kNoExecute);
+
+		test.Graph.Reset({ 4, 4 });
+		const BareData& thisFrame = test.Graph.AddRasterPass<BareData>("Pass", kNoSetup, kNoExecute);
+
+		CDL_CHECK(&thisFrame == lastFrame);	// Otherwise it isn't reading last frame's memory at all
+		CDL_EXPECT_EQ(thisFrame.Value, 0u);
+	}
+	ExpectNoVulkanDebugMessages(logs);
+}
+
+// GuiModule only reads the preview on a frame that Set one, so last frame's mustn't carry over
+CDL_TEST_CASE(FrameGraph, ResetClearsTheBlackboard, Gpu)
+{
+	LoggerFixture logs(LogLevel::Warn, kRenderChannelMask);
+	{
+		TestFrameGraph test;
+		test.Graph.Reset({ 4, 4 });
+		test.Graph.GetBlackboard().Set<ValueData>(ValueData{ .Value = 7 });
+
+		test.Graph.Reset({ 4, 4 });
+		CDL_EXPECT(test.Graph.GetBlackboard().TryGet<ValueData>() == nullptr);
 	}
 	ExpectNoVulkanDebugMessages(logs);
 }

@@ -1,8 +1,13 @@
 #pragma once
 
+#include "Candle/Core/Core.h"
+
 #include <concepts>
-#include <type_traits>
+#include <cstddef>
+#include <cstdint>
 #include <new>
+#include <type_traits>
+#include <utility>
 
 namespace Candle {
 
@@ -37,10 +42,7 @@ namespace Candle {
 		{
 			void* memory = Allocate(sizeof(T), alignof(T));
 			if (!memory)
-			{
-				CDL_CORE_ASSERT(false, "ArenaAllocator out of memory");
-				return nullptr;
-			}
+				CDL_CORE_PANIC(LogChannel::Memory, "ArenaAllocator is out of memory: {} more bytes with {} of {} used; raise its capacity", sizeof(T), m_Offset, m_Capacity);
 
 			return ::new (memory) T(std::forward<Args>(args)...);
 		}

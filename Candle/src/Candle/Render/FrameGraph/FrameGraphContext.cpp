@@ -16,6 +16,10 @@ namespace Candle {
 
 	const FGTextureEntry& FrameGraphContext::GetTexture(FGTextureHandle handle) const
 	{
+		// By resource, not version: the handle a write hands back is a version past the access that declared it
+		CDL_CORE_ASSERT(std::ranges::any_of(m_FrameGraph.GetPassAccesses(m_PassIndex), [handle](const FGAccessEntry& access) {
+			return access.Type == FGResourceType::Texture && access.ResourceIndex == handle.Index; }),
+			"A pass asked for a texture it didn't read or write in setup, so the graph has no barrier for it");
 		return m_FrameGraph.m_Textures[handle.Index];
 	}
 

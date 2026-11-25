@@ -7,6 +7,7 @@
 #include "RenderTestHelpers.h"
 
 #include <Candle/Render/Resources/GPUHandles.h>
+#include <Candle/Render/RenderConstants.h>
 #include <Candle/Render/Vulkan/SamplerType.h>
 #include <Candle/Render/Assets/TextureData.h>
 #include <Candle/Render/Resources/TexturePool.h>
@@ -425,6 +426,18 @@ CDL_TEST_CASE(TexturePool, HandlesDieWithTheirTexture, Gpu)
 		CDL_CHECK_EQ(reused.Index, texture.Index);
 		CDL_EXPECT(gpu.Pool.IsAlive(reused));
 		CDL_EXPECT_FALSE(gpu.Pool.IsAlive(texture));
+	}
+	ExpectNoVulkanDebugMessages(logs);
+}
+
+// A texture's slot is its bindless index, so the pool has to end where the frame graph's share of the binding starts. Released
+// slots still waiting to retire take up indices too, so nothing short of the pool's own size can keep them out of it.
+CDL_TEST_CASE(TexturePool, SlotsStopShortOfTheFrameGraphsBindlessRange, Gpu)
+{
+	LoggerFixture logs(LogLevel::Warn, kRenderChannelMask);
+	{
+		TestTextures gpu;
+		CDL_EXPECT_EQ(gpu.Pool.CaptureStats().PoolStats.TotalSlots, kMaxTextures - kMaxFrameGraphTextures);
 	}
 	ExpectNoVulkanDebugMessages(logs);
 }

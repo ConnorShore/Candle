@@ -27,18 +27,18 @@ namespace Candle {
 	}
 
 	template<typename T>
-	inline 	T& Blackboard::Get() const
+	inline const T& Blackboard::Get() const
 	{
 		CDL_CORE_ASSERT(m_Values.find(std::type_index(typeid(T))) != m_Values.end(), "Blackboard does not contain a value of type {}", typeid(T).name());
-		return std::any_cast<T&>(m_Values.at(std::type_index(typeid(T))));
+		return std::any_cast<const T&>(m_Values.at(std::type_index(typeid(T))));
 	}
 
 	template<typename T>
-	inline T* Blackboard::TryGet() const
+	inline const T* Blackboard::TryGet() const
 	{
 		auto it = m_Values.find(std::type_index(typeid(T)));
 		if (it != m_Values.end())
-			return &std::any_cast<T&>(it->second);
+			return &std::any_cast<const T&>(it->second);
 		else
 			return nullptr;
 	}

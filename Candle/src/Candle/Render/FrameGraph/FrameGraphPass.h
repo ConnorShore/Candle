@@ -25,7 +25,7 @@ namespace Candle {
 			Execute(Data, context);
 		}
 
-		PassData Data;
+		PassData Data{};	// Zeroed, or a field setup leaves alone keeps what last frame's pass left in the arena
 		ExecuteFunc Execute;
 	};
 
