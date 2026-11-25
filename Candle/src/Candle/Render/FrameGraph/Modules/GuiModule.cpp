@@ -4,7 +4,6 @@
 
 #include "Candle/Render/FrameGraph/FrameGraph.h"
 #include "Candle/Render/Pipelines/PipelineStore.h"
-#include "Candle/Render/Vulkan/RenderDevice.h"
 #include "Candle/Render/Vulkan/GPUAllocator.h"
 #include "Candle/Render/Resources/TexturePool.h"
 #include "Candle/Render/GUI/GuiInterop.h"
@@ -29,11 +28,10 @@ namespace Candle {
 
 	}
 
-	GuiModule::GuiModule(const RenderModuleSpec& spec, TexturePool& texturePool, RenderDevice& renderDevice, GPUAllocator& allocator)
+	GuiModule::GuiModule(const RenderModuleSpec& spec, TexturePool& texturePool, GPUAllocator& allocator)
 		: m_FrameGraph(spec.Graph)
 		, m_PipelineStore(spec.Pipelines)
 		, m_TexturePool(texturePool)
-		, m_RenderDevice(renderDevice)
 		, m_GPUAllocator(allocator)
 	{
 		m_GuiPipeline = m_PipelineStore.CreatePipeline(GraphicsPipelineSpecification{
@@ -92,14 +90,12 @@ namespace Candle {
 				inputs.Frame.GuiVertices.Write(std::as_bytes(std::span(gui.Vertices)));
 				inputs.Frame.GuiIndices.Write(std::as_bytes(std::span(gui.Indices)));
 
-				vk::CommandBuffer commandBuffer = ctx.GetCommandBuffer();
 				ctx.BindPipeline(vk::PipelineBindPoint::eGraphics, guiPipeline);
 
 				ctx.EnableDepthTest(false);
 
 				// Override viewport so not upside down
 				const vk::Extent2D extent = ctx.GetRenderExtent();
-				commandBuffer.setViewport(0, vk::Viewport(0.0f, 0.0f, static_cast<float>(extent.width), static_cast<float>(extent.height), 0.0f, 1.0f));
 				ctx.SetViewport(0, 0, extent.width, extent.height, 0.0f, 1.0f);
 
 				const glm::vec2 scale = 2.0f / gui.DisplaySize;

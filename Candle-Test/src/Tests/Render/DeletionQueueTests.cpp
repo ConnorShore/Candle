@@ -95,7 +95,7 @@ CDL_TEST_CASE(DeletionQueue, DrainAllAndDestructionFreeEverything, Gpu)
 	ExpectNoVulkanDebugMessages(logs);
 }
 
-// Renderer queues the depth image MatchDepthToOutput replaces, so an image waits for its retire value as a buffer does.
+// An image waits for its retire value as a buffer does.
 CDL_TEST_CASE(DeletionQueue, HoldsAnImageUntilItsRetireValueIsReached, Gpu)
 {
 	LoggerFixture logs(LogLevel::Warn, kRenderChannelMask);

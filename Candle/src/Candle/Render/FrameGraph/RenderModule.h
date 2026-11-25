@@ -3,27 +3,20 @@
 #include "Candle/Render/FramePacket.h"
 #include "Candle/Render/FrameContext.h"
 #include "Candle/Render/ShaderInterop/GlobalPushConstants.h"
-#include "Candle/Render/Pipelines/ShaderLoader.h"
+#include "Candle/Core/Memory/SharedPtr.h"
 
 #include <filesystem>
+#include <string>
 
 namespace Candle {
 
-	namespace {
-
-		// TODO: Temporary until the asset manager loads shaders
-		SharedPtr<Shader> LoadEngineShader(const std::string& name, const std::filesystem::path& filePath)
-		{
-			auto shader = ShaderLoader::LoadShader(name, filePath);
-			if (!shader)
-				CDL_CORE_PANIC(LogChannel::Render, "{}", shader.error());
-
-			return std::move(*shader);
-		}
-	}
-
 	class FrameGraph;
 	class PipelineStore;
+	class Shader;
+
+	// Panics on failure, since the renderer can't run without its own shaders.
+	// TODO: Temporary until the asset manager loads shaders
+	SharedPtr<Shader> LoadEngineShader(const std::string& name, const std::filesystem::path& filePath);
 
 	struct RenderFrameInputs
 	{

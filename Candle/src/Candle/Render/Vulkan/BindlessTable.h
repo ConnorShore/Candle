@@ -14,14 +14,15 @@ namespace Candle {
 
 	class RenderDevice;
 
-	// Set 0 of every pipeline layout. Binding 0 is Texture2D[kMaxTextures], element i being TexturePool slot i;
-	// binding 1 is SamplerState[SamplerType::Count], written once at construction; binding 2 is RWTexture2D[kMaxTextures],
-	// indexed by the same slots and written only for images with storage usage.
-	// Threading: construct before the render thread starts. WriteTexture and WriteStorageImage on the main thread while the
-	//   render thread binds the set, which UPDATE_AFTER_BIND on bindings 0 and 2 permits. The caller must never write an
-	//   element a pending command buffer may read; TexturePool guarantees it, since a slot is only reissued once the GPU has
-	//   retired it. GetSet and GetLayout from any thread.
-	//	 WriteFrameGraph* methods run on the render thread.
+	// Set 0 of every pipeline layout. Binding 0 is Texture2D[kMaxTextures]: element i is TexturePool slot i, except the last
+	// kMaxFrameGraphTextures elements, which hold ResourceCache slots for frame graph transients in the same order.
+	// Binding 1 is SamplerState[SamplerType::Count], written once at construction; binding 2 is RWTexture2D[kMaxTextures],
+	// split the same way and written only for images with storage usage.
+	// Threading: construct before the render thread starts. WriteTexture and WriteStorageImage on the main thread, and the
+	//   WriteFrameGraph* methods on the render thread, while the render thread binds the set. UPDATE_AFTER_BIND on bindings
+	//   0 and 2 permits that, as long as no element is written by two threads at once, which the split ranges guarantee.
+	//   The caller must never write an element a pending command buffer may read; TexturePool and ResourceCache both
+	//   guarantee it, since each only reissues a slot once the GPU has retired it. GetSet and GetLayout from any thread.
 	class BindlessTable
 	{
 	public:

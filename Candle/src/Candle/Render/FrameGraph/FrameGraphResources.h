@@ -30,11 +30,11 @@ namespace Candle {
 		uint32_t Size{ 0 };
 	};
 
-	enum FGLoad { Load, Clear, DontCare };
+	enum class FGLoad { Load, Clear, DontCare };
 
-	// FGUsage is a higher-level concept than Vulkan's image and buffer usage flags, so it can be used to describe both. 
+	// FGUsage is a higher-level concept than Vulkan's image and buffer usage flags, so it can be used to describe both.
 	// It also describes the access pattern, which is needed for the frame graph to insert the right barriers.
-	enum FGUsage
+	enum class FGUsage
 	{
 		TransferSrc,
 		TransferDst,

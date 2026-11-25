@@ -30,8 +30,8 @@ namespace Candle {
 
 		vk::Format FindDepthFormat(RenderDevice& device)
 		{
-			// Depth-only, so the depth-aspect view and barrier stay valid without separateDepthStencilLayouts. The spec requires
-			// D16 and one of the first two as attachments, so the panic below can't be reached on a conformant device.
+			// Depth-only: nothing uses stencil, and a view with both aspects can't be sampled. The spec requires D16 and one of
+			// the first two as attachments, so the panic below can't be reached on a conformant device.
 			const std::vector<vk::Format> preferredFormats = {
 				vk::Format::eD32Sfloat,
 				vk::Format::eX8D24UnormPack32,
@@ -69,7 +69,7 @@ namespace Candle {
 		m_RenderModules.emplace_back(ScopedPtr<SceneModule>::Create(sceneModuleSpec, geometryPool, texturePool));
 		m_RenderModules.emplace_back(ScopedPtr<DebugModule>::Create(sceneModuleSpec, renderDevice, allocator));
 		m_RenderModules.emplace_back(ScopedPtr<FrameGraphPreviewModule>::Create(sceneModuleSpec));
-		m_RenderModules.emplace_back(ScopedPtr<GuiModule>::Create(sceneModuleSpec, texturePool, renderDevice, allocator));
+		m_RenderModules.emplace_back(ScopedPtr<GuiModule>::Create(sceneModuleSpec, texturePool, allocator));
 
 		// Save the pipeline cache to disk so that it can be loaded next time the engine is run
 		m_PipelineStore.SaveCache();
@@ -133,7 +133,7 @@ namespace Candle {
 			m_RenderDevice.GetLastSubmittedTimelineValue(QueueType::Graphics),
 			m_RenderDevice.GetCompletedTimelineValue(QueueType::Graphics));
 
-		// Execute the frame graph in the command buffer, which is already begun and will be submitted by the RenderManager
+		// Recorded into the frame's command buffer, which RenderManager submits
 		frame.CommandBuffer.begin({ .flags = vk::CommandBufferUsageFlagBits::eOneTimeSubmit });
 
 		m_BindlessTable.BindSet(*frame.CommandBuffer, vk::PipelineBindPoint::eGraphics, m_PipelineStore.GetGlobalLayout());

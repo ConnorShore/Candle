@@ -148,6 +148,29 @@ CDL_TEST_CASE(FrameGraphExecute, LoadedAttachmentKeepsWhatThePassBeforeWrote, Gp
 	ExpectNoVulkanDebugMessages(logs);
 }
 
+// Without separateDepthStencilLayouts a barrier on a depth-stencil image has to name both aspects, so one naming only
+// depth fails validation as it's recorded
+CDL_TEST_CASE(FrameGraphExecute, DepthStencilTransientIsBarrieredOnBothAspects, Gpu)
+{
+	LoggerFixture logs(LogLevel::Warn, kRenderChannelMask);
+	{
+		TestFrameGraph test;
+		test.Graph.Reset(kOutputExtent);
+
+		// The spec requires one of the two as a depth-stencil attachment
+		const vk::FormatFeatureFlags d24s8Features = test.Device.GetPhysicalDevice().getFormatProperties(vk::Format::eD24UnormS8Uint).optimalTilingFeatures;
+		const vk::Format format = (d24s8Features & vk::FormatFeatureFlagBits::eDepthStencilAttachment) ? vk::Format::eD24UnormS8Uint : vk::Format::eD32SfloatS8Uint;
+
+		test.Graph.AddRasterPass("Scene", [format](FrameGraphBuilder& builder, FGNoData&)
+			{
+				const FGTextureHandle depth = builder.CreateTexture("DepthStencil", { .Size = { .Mode = FGSizeMode::RelativeToOutput }, .Format = format });
+				(void)builder.DepthAttachment(depth, FGLoad::Clear);
+			}, kNoExecute, true);
+		test.RunFrame(1);
+	}
+	ExpectNoVulkanDebugMessages(logs);
+}
+
 // A half-resolution pass sets its viewport from this, so it's the size of the pass's attachments rather than the output
 CDL_TEST_CASE(FrameGraphExecute, ContextGivesThePassItsAttachmentsExtent, Gpu)
 {

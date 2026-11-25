@@ -91,10 +91,9 @@ namespace {
 		Renderer SceneRenderer;
 		FrameContext Frame = CreateFrameContext(*this);
 
-		explicit TestRenderer(vk::Extent2D extent, RenderTo renderTo = RenderTo::SwapChain)
+		explicit TestRenderer(RenderTo renderTo = RenderTo::SwapChain)
 			: SceneRenderer(Device, Geometry, Pool, Bindless, Allocator, {
 				.TargetFormat = kTargetFormat,
-				.TargetExtent = extent,
 				.ShaderDirectory = kEngineShaderDirectory,
 				.PipelineCacheDirectory = CacheDirectory.Path(),
 				.RenderToSwapChain = renderTo == RenderTo::SwapChain }) {}
@@ -280,7 +279,7 @@ CDL_TEST_CASE(Renderer, NearerDrawHidesFartherWhicheverIsDrawnLast, Gpu)
 
 	LoggerFixture logs(LogLevel::Warn, kRenderChannelMask);
 	{
-		TestRenderer test(kExtent);
+		TestRenderer test;
 		TestTarget target = CreateTarget(test.Device, kExtent);
 		const GPUMeshHandle quad = test.CreateQuad();
 		const GPUTextureHandle nearTexture = test.CreateSolidTexture(kBright);
@@ -305,7 +304,7 @@ CDL_TEST_CASE(Renderer, LaterDrawWinsAtEqualDepth, Gpu)
 
 	LoggerFixture logs(LogLevel::Warn, kRenderChannelMask);
 	{
-		TestRenderer test(kExtent);
+		TestRenderer test;
 		TestTarget target = CreateTarget(test.Device, kExtent);
 		const GPUMeshHandle quad = test.CreateQuad();
 		const GPUTextureHandle first = test.CreateSolidTexture(kBright);
@@ -328,7 +327,7 @@ CDL_TEST_CASE(Renderer, DrawsEveryItemWithItsOwnTransform, Gpu)
 
 	LoggerFixture logs(LogLevel::Warn, kRenderChannelMask);
 	{
-		TestRenderer test(kExtent);
+		TestRenderer test;
 		TestTarget target = CreateTarget(test.Device, kExtent);
 		const GPUMeshHandle quad = test.CreateQuad();
 		const GPUTextureHandle left = test.CreateSolidTexture(kBright);
@@ -367,7 +366,7 @@ CDL_TEST_CASE(Renderer, DepthFollowsTheTargetsSize, Gpu)
 
 	LoggerFixture logs(LogLevel::Warn, kRenderChannelMask);
 	{
-		TestRenderer test(kExtent);
+		TestRenderer test;
 		const GPUMeshHandle quad = test.CreateQuad();
 		const GPUTextureHandle nearTexture = test.CreateSolidTexture(kBright);
 		const GPUTextureHandle farTexture = test.CreateSolidTexture(kDim);
@@ -397,7 +396,7 @@ CDL_TEST_CASE(Renderer, GuiDrawsOverTheScene, Gpu)
 
 	LoggerFixture logs(LogLevel::Warn, kRenderChannelMask);
 	{
-		TestRenderer test(kExtent);
+		TestRenderer test;
 		TestTarget target = CreateTarget(test.Device, kExtent);
 		const GPUMeshHandle quad = test.CreateQuad();
 		const GPUTextureHandle sceneTexture = test.CreateSolidTexture(kBright);
@@ -423,7 +422,7 @@ CDL_TEST_CASE(Renderer, GuiQuadLandsWhereImGuiPlacedIt, Gpu)
 
 	LoggerFixture logs(LogLevel::Warn, kRenderChannelMask);
 	{
-		TestRenderer test(kExtent);
+		TestRenderer test;
 		TestTarget target = CreateTarget(test.Device, kExtent);
 		const GPUTextureHandle guiTexture = test.CreateSolidTexture(kGreen);
 
@@ -446,7 +445,7 @@ CDL_TEST_CASE(Renderer, ClipRectScissorsTheGui, Gpu)
 
 	LoggerFixture logs(LogLevel::Warn, kRenderChannelMask);
 	{
-		TestRenderer test(kExtent);
+		TestRenderer test;
 		TestTarget target = CreateTarget(test.Device, kExtent);
 		const GPUTextureHandle guiTexture = test.CreateSolidTexture(kGreen);
 
@@ -469,7 +468,7 @@ CDL_TEST_CASE(Renderer, ClipRectsOutsideTheTargetAreClampedOrSkipped, Gpu)
 
 	LoggerFixture logs(LogLevel::Warn, kRenderChannelMask);
 	{
-		TestRenderer test(kExtent);
+		TestRenderer test;
 		TestTarget target = CreateTarget(test.Device, kExtent);
 		const GPUTextureHandle green = test.CreateSolidTexture(kGreen);
 		const GPUTextureHandle blue = test.CreateSolidTexture(kBlue);
@@ -499,7 +498,7 @@ CDL_TEST_CASE(Renderer, GuiVertexColourIsDecodedFromSrgbAndTintsTheTexture, Gpu)
 
 	LoggerFixture logs(LogLevel::Warn, kRenderChannelMask);
 	{
-		TestRenderer test(kExtent);
+		TestRenderer test;
 		TestTarget target = CreateTarget(test.Device, kExtent);
 		constexpr Texel kGrey{ 128, 128, 128, 255 };
 		constexpr Texel kLeftVertex{ 255, 188, 0, 255 };
@@ -534,7 +533,7 @@ CDL_TEST_CASE(Renderer, GuiBlendsOverTheSceneByVertexAlpha, Gpu)
 
 	LoggerFixture logs(LogLevel::Warn, kRenderChannelMask);
 	{
-		TestRenderer test(kExtent);
+		TestRenderer test;
 		TestTarget target = CreateTarget(test.Device, kExtent);
 		const GPUMeshHandle quad = test.CreateQuad();
 		const GPUTextureHandle sceneTexture = test.CreateSolidTexture(kBright);
@@ -568,7 +567,7 @@ CDL_TEST_CASE(Renderer, DrawsEachGuiCommandFromItsOwnOffsets, Gpu)
 
 	LoggerFixture logs(LogLevel::Warn, kRenderChannelMask);
 	{
-		TestRenderer test(kExtent);
+		TestRenderer test;
 		TestTarget target = CreateTarget(test.Device, kExtent);
 		const GPUTextureHandle green = test.CreateSolidTexture(kGreen);
 		const GPUTextureHandle blue = test.CreateSolidTexture(kBlue);
@@ -604,7 +603,7 @@ CDL_TEST_CASE(Renderer, GuiBuffersGrowByDoublingAndAreReusedWhileTheGuiFits, Gpu
 
 	LoggerFixture logs(LogLevel::Warn, kRenderChannelMask);
 	{
-		TestRenderer test(kExtent);
+		TestRenderer test;
 		TestTarget target = CreateTarget(test.Device, kExtent);
 		const GPUTextureHandle white = test.CreateSolidTexture(kWhite);
 		constexpr vk::DeviceSize kQuadVertexBytes = 4 * sizeof(GPU::GuiVertex);
@@ -649,7 +648,7 @@ CDL_TEST_CASE(Renderer, RenderToTextureDrawsTheSceneIntoTheOutputTarget, Gpu)
 
 	LoggerFixture logs(LogLevel::Warn, kRenderChannelMask);
 	{
-		TestRenderer test(kExtent, RenderTo::OutputTarget);
+		TestRenderer test(RenderTo::OutputTarget);
 		TestTarget target = CreateTarget(test.Device, kExtent);
 		const GPUTextureHandle output = test.CreateOutputTarget({ kExtent.width, kExtent.height });
 		const GPUMeshHandle quad = test.CreateQuad();
@@ -676,7 +675,7 @@ CDL_TEST_CASE(Renderer, GuiShowsTheOutputTargetTheSceneDrewThatFrame, Gpu)
 
 	LoggerFixture logs(LogLevel::Warn, kRenderChannelMask);
 	{
-		TestRenderer test(kExtent, RenderTo::OutputTarget);
+		TestRenderer test(RenderTo::OutputTarget);
 		TestTarget target = CreateTarget(test.Device, kExtent);
 		const GPUTextureHandle output = test.CreateOutputTarget({ kExtent.width, kExtent.height });
 		const GPUMeshHandle quad = test.CreateQuad();
@@ -707,7 +706,7 @@ CDL_TEST_CASE(Renderer, DepthFollowsTheOutputTargetsSize, Gpu)
 
 	LoggerFixture logs(LogLevel::Warn, kRenderChannelMask);
 	{
-		TestRenderer test(kExtent, RenderTo::OutputTarget);
+		TestRenderer test(RenderTo::OutputTarget);
 		TestTarget target = CreateTarget(test.Device, kExtent);
 		const GPUMeshHandle quad = test.CreateQuad();
 		const GPUTextureHandle nearTexture = test.CreateSolidTexture(kBright);
@@ -739,7 +738,7 @@ CDL_TEST_CASE(Renderer, OutputTargetDepthIgnoresTheSwapChainsSize, Gpu)
 
 	LoggerFixture logs(LogLevel::Warn, kRenderChannelMask);
 	{
-		TestRenderer test(kExtent, RenderTo::OutputTarget);
+		TestRenderer test(RenderTo::OutputTarget);
 		TestTarget small = CreateTarget(test.Device, kExtent);
 		const GPUTextureHandle output = test.CreateOutputTarget({ kExtent.width, kExtent.height });
 		const GPUMeshHandle quad = test.CreateQuad();
@@ -793,7 +792,7 @@ CDL_TEST_CASE(Renderer, DebugLineDrawsInTheColourItWasGiven, Gpu)
 
 	LoggerFixture logs(LogLevel::Warn, kRenderChannelMask);
 	{
-		TestRenderer test(kExtent);
+		TestRenderer test;
 		TestTarget target = CreateTarget(test.Device, kExtent);
 		ConsoleManager console;
 		DebugDrawManager debugDraw(console);
@@ -822,7 +821,7 @@ CDL_TEST_CASE(Renderer, OnlyDebugLinesSkippingTheDepthTestShowThroughTheScene, G
 
 	LoggerFixture logs(LogLevel::Warn, kRenderChannelMask);
 	{
-		TestRenderer test(kExtent);
+		TestRenderer test;
 		TestTarget target = CreateTarget(test.Device, kExtent);
 		const GPUMeshHandle quad = test.CreateQuad();
 		const GPUTextureHandle sceneTexture = test.CreateSolidTexture(kBright);
@@ -853,7 +852,7 @@ CDL_TEST_CASE(Renderer, EachDebugBatchDrawsAtItsOwnLineWidth, Gpu)
 
 	LoggerFixture logs(LogLevel::Warn, kRenderChannelMask);
 	{
-		TestRenderer test(kWideExtent);
+		TestRenderer test;
 		if (!test.Device.HasWideLines() || test.Device.GetPhysicalDevice().getProperties().limits.lineWidthRange[1] < 5.0f)
 			CDL_SKIP("the device can't draw 5 pixel wide lines");
 
@@ -886,7 +885,7 @@ CDL_TEST_CASE(Renderer, GuiDrawsOverDebugLines, Gpu)
 
 	LoggerFixture logs(LogLevel::Warn, kRenderChannelMask);
 	{
-		TestRenderer test(kExtent);
+		TestRenderer test;
 		TestTarget target = CreateTarget(test.Device, kExtent);
 		const GPUTextureHandle guiTexture = test.CreateSolidTexture(kGreen);
 		ConsoleManager console;
@@ -915,7 +914,7 @@ CDL_TEST_CASE(Renderer, DebugLinesDrawIntoTheOutputTarget, Gpu)
 
 	LoggerFixture logs(LogLevel::Warn, kRenderChannelMask);
 	{
-		TestRenderer test(kExtent, RenderTo::OutputTarget);
+		TestRenderer test(RenderTo::OutputTarget);
 		TestTarget target = CreateTarget(test.Device, kExtent);
 		const GPUTextureHandle output = test.CreateOutputTarget({ kExtent.width, kExtent.height });
 		ConsoleManager console;
@@ -966,7 +965,7 @@ CDL_TEST_CASE(Renderer, PreviewDrawsTheTransientItWasAskedFor, Gpu)
 
 	LoggerFixture logs(LogLevel::Warn, kRenderChannelMask);
 	{
-		TestRenderer test(kExtent);
+		TestRenderer test;
 		TestTarget target = CreateTarget(test.Device, kExtent);
 		const GPUTextureHandle preview = test.CreateOutputTarget({ kExtent.width, kExtent.height });
 		RenderFrame(test, target, MakeDepthPreviewPacket(test, preview, { 0.0f, 1.0f }));
@@ -985,7 +984,7 @@ CDL_TEST_CASE(Renderer, PreviewRangeSpreadsItsValuesFromBlackToWhite, Gpu)
 
 	LoggerFixture logs(LogLevel::Warn, kRenderChannelMask);
 	{
-		TestRenderer test(kExtent);
+		TestRenderer test;
 		TestTarget target = CreateTarget(test.Device, kExtent);
 		const GPUTextureHandle preview = test.CreateOutputTarget({ kExtent.width, kExtent.height });
 		RenderFrame(test, target, MakeDepthPreviewPacket(test, preview, { 0.5f, 1.0f }));
@@ -1005,7 +1004,7 @@ CDL_TEST_CASE(Renderer, GuiShowsThePreviewDrawnThatFrame, Gpu)
 
 	LoggerFixture logs(LogLevel::Warn, kRenderChannelMask);
 	{
-		TestRenderer test(kExtent);
+		TestRenderer test;
 		TestTarget target = CreateTarget(test.Device, kExtent);
 		const GPUTextureHandle preview = test.CreateOutputTarget({ kExtent.width, kExtent.height });
 
@@ -1027,7 +1026,7 @@ CDL_TEST_CASE(Renderer, PreviewSkipsImportsAndNamesNotInTheGraph, Gpu)
 
 	LoggerFixture logs(LogLevel::Warn, kRenderChannelMask);
 	{
-		TestRenderer test(kExtent);
+		TestRenderer test;
 		TestTarget target = CreateTarget(test.Device, kExtent);
 		const GPUTextureHandle preview = test.CreateOutputTarget({ kExtent.width, kExtent.height });
 
@@ -1053,7 +1052,7 @@ CDL_TEST_CASE(Renderer, CaptureFrameGraphListsTheFramesPasses, Gpu)
 
 	LoggerFixture logs(LogLevel::Warn, kRenderChannelMask);
 	{
-		TestRenderer test(kExtent);
+		TestRenderer test;
 		TestTarget target = CreateTarget(test.Device, kExtent);
 		const GPUTextureHandle texture = test.CreateSolidTexture(kBright);
 		FramePacket packet = MakeScenePacket(test.CreateQuad(), texture);

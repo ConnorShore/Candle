@@ -24,23 +24,6 @@ namespace Candle {
 			}
 		}
 
-		// TODO NOW: Consolodate to common location for other files to use
-		bool IsDepthFormat(vk::Format format)
-		{
-			switch (format)
-			{
-			case vk::Format::eD16Unorm:
-			case vk::Format::eX8D24UnormPack32:
-			case vk::Format::eD32Sfloat:
-			case vk::Format::eD16UnormS8Uint:
-			case vk::Format::eD24UnormS8Uint:
-			case vk::Format::eD32SfloatS8Uint:
-				return true;
-			default:
-				return false;
-			}
-		}
-
 	}
 
 	FrameGraphBuilder::FrameGraphBuilder(FrameGraph& graph, uint32_t passIndex)
@@ -58,7 +41,6 @@ namespace Candle {
 
 		// During compilation, we will walk the textures (non imported) to create resource cache
 		// and bindless table entries for them
-		bool isDepthFormat = IsDepthFormat(spec.Format);
 		m_Graph.m_Textures.emplace_back(FGTextureEntry{
 			.Name = name,
 			.Desc = {

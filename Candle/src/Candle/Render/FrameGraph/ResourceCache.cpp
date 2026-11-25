@@ -7,27 +7,6 @@
 
 namespace Candle {
 
-	namespace {
-
-		vk::ImageAspectFlags GetAspectFlags(vk::Format format)
-		{
-			switch (format)
-			{
-			case vk::Format::eD16Unorm:
-			case vk::Format::eX8D24UnormPack32:
-			case vk::Format::eD32Sfloat:
-				return vk::ImageAspectFlagBits::eDepth;
-			case vk::Format::eD16UnormS8Uint:
-			case vk::Format::eD24UnormS8Uint:
-			case vk::Format::eD32SfloatS8Uint:
-				return vk::ImageAspectFlagBits::eDepth | vk::ImageAspectFlagBits::eStencil;
-			default:
-				return vk::ImageAspectFlagBits::eColor;
-			}
-		}
-
-	}
-
 	ResourceCache::ResourceCache(GPUAllocator& allocator, BindlessTable& bindlessTable)
 		: m_Allocator(allocator), m_BindlessTable(bindlessTable)
 	{
@@ -74,7 +53,7 @@ namespace Candle {
 			.Extent{ key.Extent.width, key.Extent.height },
 			.Format{ key.Format },
 			.Usage{ key.Usage },
-			.Aspect{ GetAspectFlags(key.Format) },
+			.Aspect{ GetAspectMask(key.Format) },
 			.Flags{ VMA_ALLOCATION_CREATE_DEDICATED_MEMORY_BIT },
 			.DebugName{ std::format("FrameGraph Transient Texture {}", slot) }
 		});

@@ -17,7 +17,7 @@ namespace Candle {
 		constexpr vk::PipelineStageFlags2 kSampledStages = vk::PipelineStageFlagBits2::eVertexShader
 			| vk::PipelineStageFlagBits2::eFragmentShader | vk::PipelineStageFlagBits2::eComputeShader;
 
-		// Presentation reads it outside our command stream, so the present semaphore does the waiting, as in OldRender
+		// Presentation reads it outside our command stream, so the present semaphore does the waiting
 		constexpr ImageState kPresentState{ .Layout = vk::ImageLayout::ePresentSrcKHR, .Access = vk::AccessFlagBits2::eNone };
 
 		constexpr vk::AccessFlags2 kWriteAccesses = vk::AccessFlagBits2::eShaderWrite | vk::AccessFlagBits2::eShaderStorageWrite
@@ -37,23 +37,6 @@ namespace Candle {
 			default:
 				CDL_CORE_ASSERT(false, "Unknown FGLoad value");
 				return vk::AttachmentLoadOp::eDontCare;
-			}
-		}
-
-		// TODO NOW: Consolodate to common location for other files to use
-		bool IsDepthFormat(vk::Format format)
-		{
-			switch (format)
-			{
-			case vk::Format::eD16Unorm:
-			case vk::Format::eX8D24UnormPack32:
-			case vk::Format::eD32Sfloat:
-			case vk::Format::eD16UnormS8Uint:
-			case vk::Format::eD24UnormS8Uint:
-			case vk::Format::eD32SfloatS8Uint:
-				return true;
-			default:
-				return false;
 			}
 		}
 
@@ -369,7 +352,7 @@ namespace Candle {
 						barrier.FromState,
 						barrier.ToState,
 						{
-							.aspectMask = IsDepthFormat(texture.Desc.Format) ? vk::ImageAspectFlagBits::eDepth : vk::ImageAspectFlagBits::eColor,
+							.aspectMask = GetAspectMask(texture.Desc.Format),
 							.levelCount = 1,
 							.layerCount = 1
 						}	// TODO: Handle and support subresources (CAN-37)
@@ -469,7 +452,7 @@ namespace Candle {
 					barrier.FromState,
 					barrier.ToState,
 					{
-						.aspectMask = IsDepthFormat(texture.Desc.Format) ? vk::ImageAspectFlagBits::eDepth : vk::ImageAspectFlagBits::eColor,
+						.aspectMask = GetAspectMask(texture.Desc.Format),
 						.levelCount = 1,
 						.layerCount = 1
 					}

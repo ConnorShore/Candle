@@ -48,7 +48,6 @@ namespace Candle {
 		, m_TexturePool(m_GPUAllocator, m_GPUUploader, m_ResourceRegistry, m_BindlessTable)
 		, m_Renderer(m_RenderDevice, m_GeometryPool, m_TexturePool, m_BindlessTable, m_GPUAllocator, {
 			.TargetFormat = m_SwapChain.GetSurfaceFormat().format,
-			.TargetExtent = m_SwapChain.GetExtent(),
 			.ShaderDirectory = engineAssetDir / "shaders/bin",
 			.PipelineCacheDirectory = savedDir / "pipelines",
 			.RenderToSwapChain = renderSpec.RenderToSwapChain })
@@ -218,15 +217,6 @@ namespace Candle {
 		{
 			// Error codes already threw inside acquireNextImage, and eTimeout or eNotReady can't happen with no timeout
 			CDL_CORE_PANIC(LogChannel::Render, "Failed to acquire swap chain image: {}", vk::to_string(result));
-		}
-
-		// The application resizes the output target, and depth must cover it. The newest retire value is the last frame that could
-		// still be using the old depth image, so it is freed once the GPU passes that rather than waited on here.
-		if (!m_Specification.RenderToSwapChain)
-		{
-			uint64_t lastUseValue = 0;
-			for (const FrameContext& context : m_FrameContexts)
-				lastUseValue = std::max(lastUseValue, context.RetireValue);
 		}
 
 		// Record command buffers for rendering

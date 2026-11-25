@@ -75,13 +75,20 @@ Main thread (Application::Run)
     GPUUploader::FreeCompletedStagingBuffers
     GPUResourceRegistry::ReturnRecycledSlotsToPools     step 7
     GPUResourceRegistry::MoveReleasedSlotsIntoPacket    step 4
+    FrameGraphCapture::ExchangeWithPacket               takes the snapshot back, writes this frame's capture request
   fill the packet (Meshes, Time, ...)
   RenderManager::SubmitFramePacket                      FramePump::Submit
 
 Render thread (RenderManager::RenderThreadMain)
-  RenderDevice::WaitFor(frame slot's RetireValue)
   FramePump::AquireForReading                           nullptr once closed: return
-  acquire the swapchain image, Renderer::Render, RenderDevice::Submit   → V
+  RenderDevice::WaitFor(frame slot's RetireValue)
+  acquire the swapchain image
+  Renderer::Render
+    FrameGraph::Compile                                 ResourceCache::CreateOrGetTexture for each transient in use
+    FrameGraph::EvictUnusedResources                    retires and frees cache entries, see "Frame graph transients"
+    FrameGraph::Execute
+  Renderer::CaptureFrameGraph                           only when the packet's request asks for a snapshot
+  RenderDevice::Submit                                  → V
   RenderManager::RetireAndReleasePacket(packet, V)
     GPUResourceRegistry::RetireReleasedSlots(V)         step 5
     GPUResourceRegistry::FreeRetiredSlots(completed)    step 6
@@ -102,7 +109,49 @@ GPU is running, or will ever run, can reference the mesh.
 
 The obvious alternative, "the value last submitted when `Release` was called", is wrong here: it misses packets that
 were built but not yet recorded, which would then draw a freed mesh. The vertex buffer is read by device address, so
-validation wouldn't catch it.
+validation wouldn't catch it. Frame graph transients do use the last submitted value, and are right to; see below.
+
+## Frame graph transients
+
+The frame graph's transient textures don't go through a pool or the registry. They belong to the render thread
+alone, so nothing about them crosses the pump.
+
+- `ResourceCache` keeps each image between frames, keyed by format, extent and usage. Each entry has a bindless element
+  in the frame graph range at the end of the texture and storage bindings. `FrameGraph::Compile` asks it for one per
+  transient a live pass uses.
+- An entry no frame has used for more than `kMaxUnusedFramesBeforeEviction` frames starts retiring. Its retire value is
+  the **last submitted value** at that moment. Once the GPU reaches it, `EvictUnusedEntries` destroys the image and puts
+  the slot on the free list. Until then the slot can't be reissued, since a pending frame may still read its bindless
+  element.
+- If a frame asks for a retiring entry's key before it's freed, the entry goes straight back to live. Its image and
+  descriptor were never touched.
+
+### Why the last submitted value is right here
+
+The mesh rule exists because the main thread releases a mesh while packets that name it are still waiting to be
+recorded. Neither half of that holds for a transient:
+
+- Only the graph names a transient, and the render thread rebuilds the graph every frame. No packet carries one, so no
+  packet that is built but not yet recorded can use it.
+- Eviction runs on the render thread, after `Compile` and before this frame's submit. This frame didn't take the
+  entry, or it wouldn't be unused, and every frame that did was recorded and submitted earlier on the same queue.
+
+So the last submitted value covers every use the image will ever have. Uploads advance the graphics timeline too, which
+only makes the value later than it needs to be.
+
+## Frame graph capture
+
+The render graph viewer adds a second pair of mailboxes to the packet:
+
+- `FramePacket::FrameGraphCapture` (main → render) is what the viewer wants from this frame.
+  `FrameGraphCapture::ExchangeWithPacket` writes it in `BeginFramePacket`, for that packet only, so a viewer that stops
+  asking stops costing anything.
+- `FramePacket::FrameGraphSnapshot` (render → main) is a copy of the compiled graph. The render thread clears its
+  `Captured` flag as soon as it acquires the packet, then fills it after `Renderer::Render` when the request asks. The
+  next `ExchangeWithPacket` on that packet takes it, so a snapshot arrives a few frames late, like `RenderStats`.
+- The preview target is an ordinary `TexturePool` render target that `FrameGraphCapture` creates and releases on the main
+  thread. Releasing it follows a mesh's life above, so frames in flight that still draw into it or show it finish
+  first. When the previewed texture changes size, the target is released and a new one made rather than resized.
 
 ## Who touches what
 
@@ -111,7 +160,8 @@ validation wouldn't catch it.
 | Handle state (generation, live flag, size), free list, stats counters, registry's pending releases | Main thread only |
 | A slot's payload and generation copy | Main writes it in `Insert`, before the handle is ever in a packet. Render reads it, and destroys it in `FreeRetiredSlots`. The index goes back to main through the packet. One writer at a time. |
 | Each pool's retiring list | Render thread only |
-| `ReleasedSlots` / `RecycledSlots` | Handed between threads by `FramePump` |
+| `ResourceCache` entries, and their bindless elements in the frame graph range | Render thread only |
+| `ReleasedSlots` / `RecycledSlots`, `FrameGraphCapture` / `FrameGraphSnapshot` | Handed between threads by `FramePump` |
 
 There are no locks. Each piece of state either belongs to one thread, or changes owner at a hand-off that the pump's
 mutex already orders. Slot storage is sized once and never resized, so a render-thread read never sees a reallocation.
@@ -131,10 +181,14 @@ a packet that still draws the mesh.
 ## Edge cases
 
 - **A packet that isn't drawn** (swapchain out of date): its releases still retire. The retire value comes from an
-  empty submit, which orders after all earlier work on the queue.
+  empty submit, which orders after all earlier work on the queue. `Renderer::Render` doesn't run, so nothing is evicted
+  from the `ResourceCache`, and retiring entries wait for the next frame that draws.
 - **Shutdown**: `JoinRenderThread` closes the pump, the render thread wakes with no packet and exits, then the device
   goes idle. When the pools are destroyed they free everything they still hold, including releases that never retired.
+  The `ResourceCache` does the same when the `Renderer` is destroyed.
 - **Pool full**: a fatal log and an abort, in every configuration (`kMaxMeshes` is in `RenderConstants.h`).
+- **Cache full**: there are only `kMaxFrameGraphTextures` bindless elements for transients, and today only an assert in
+  `BindlessTable` guards it.
 - **Staging buffers** aren't in a pool. `GPUUploader` keeps them in its own `DeletionQueue`, keyed on the upload's
   timeline value, and `FreeCompletedStagingBuffers` (called from `BeginFramePacket`) frees them once the GPU has
   finished the copy.
@@ -155,10 +209,12 @@ The packet, the registry and `RenderManager`'s frame loop don't change.
 
 | File | Contents |
 |---|---|
-| `Render/GPUHandles.h` | `GPUHandle<Tag>`, `GPUSlotRef` |
-| `Render/GPUResourcePool.{h,cpp}` | `GPUResourcePoolBase`, `GPUResourcePool<T, Tag>` |
-| `Render/GPUResourceRegistry.{h,cpp}` | The registry |
+| `Render/Resources/GPUHandles.h` | `GPUHandle<Tag>`, `GPUSlotRef` |
+| `Render/Resources/GPUResourcePool.{h,cpp}` | `GPUResourcePoolBase`, `GPUResourcePool<T, Tag>` |
+| `Render/Resources/GPUResourceRegistry.{h,cpp}` | The registry |
 | `Render/FramePacket.h`, `Render/FramePump.{h,cpp}` | The packet mailboxes and the hand-off |
 | `Render/RenderManager.cpp` | `BeginFramePacket`, `RenderThreadMain`, `RetireAndReleasePacket`, `JoinRenderThread` |
-| `Render/GeometryPool.{h,cpp}` | The mesh owner |
-| `Render/DeletionQueue.{h,cpp}`, `Render/GPUUploader.cpp` | Staging buffer lifetime |
+| `Render/Resources/GeometryPool.{h,cpp}` | The mesh owner |
+| `Render/Resources/DeletionQueue.{h,cpp}`, `Render/Resources/GPUUploader.cpp` | Staging buffer lifetime |
+| `Render/FrameGraph/ResourceCache.{h,cpp}` | Frame graph transients and their bindless slots |
+| `Render/FrameGraph/FrameGraphCapture.{h,cpp}`, `Render/FrameGraph/FrameGraphSnapshot.h` | The viewer's request, the snapshot and the preview target |

@@ -49,8 +49,7 @@ namespace Candle {
 	struct FGTextureEntry
 	{
 		std::string_view Name;	// Must outlive the frame, e.g. a string literal
-		ImageDesc Desc;			// Imports: from the pool or swapchain. Transients: resolved from Spec at compile
-		FGTextureSpec Spec;		// Transients only
+		ImageDesc Desc;			// Imports: from the pool or swapchain. Transients: sized by CreateTexture, with Usage gathered at compile
 		bool Imported{ false };
 		vk::Image Image{ nullptr };
 		vk::ImageView ImageView{ nullptr };

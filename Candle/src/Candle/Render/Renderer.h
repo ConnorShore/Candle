@@ -2,9 +2,6 @@
 
 #include "Candle/Render/Pipelines/PipelineStore.h"
 #include "Candle/Render/Vulkan/BindlessTable.h"
-#include "Candle/Render/Vulkan/GPUImage.h"
-#include "Candle/Render/Resources/DeletionQueue.h"
-#include "Candle/Render/ShaderInterop/GlobalPushConstants.h"
 #include "Candle/Render/FrameGraph/FrameGraph.h"
 #include "Candle/Render/FrameGraph/RenderModule.h"
 
@@ -34,7 +31,6 @@ namespace Candle {
 	struct RendererCreationInfo
 	{
 		vk::Format TargetFormat;
-		vk::Extent2D TargetExtent;
 		std::filesystem::path ShaderDirectory;			// Until shaders come through the asset system
 		std::filesystem::path PipelineCacheDirectory;	// Where to read/write the pipeline cache file	
 		bool RenderToSwapChain = true;					// If false, the scene renders into each packet's OutputTarget and only the GUI reaches the target
