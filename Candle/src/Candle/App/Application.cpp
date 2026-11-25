@@ -217,10 +217,10 @@ namespace Candle {
 
 	void Application::ExtractToFramePacket(FramePacket& packet)
 	{
-		std::vector<DrawItem> drawItems;
-		std::vector<glm::mat4> transforms;
-		drawItems.reserve(m_ActiveWorld.Entities.size());
-		transforms.reserve(m_ActiveWorld.Entities.size());
+		// Clear and push directly into the packet's vectors, since we don't need to keep the data around after submission and we want to avoid a copy
+		// plus clear will not free the capacity, so we can reuse it next frame
+		packet.TransformData.clear();
+		packet.DrawItems.clear();
 
 		for (size_t i = 0; i < m_ActiveWorld.Entities.size(); ++i)
 		{
@@ -228,17 +228,15 @@ namespace Candle {
 			auto mesh = m_AssetManager.GetAsset<MeshAsset>(entity.MeshID);
 			auto texture = m_AssetManager.GetAsset<Texture>(entity.TextureID);
 
-			transforms.push_back(entity.Transform);
-			drawItems.push_back({
+			packet.TransformData.push_back(entity.Transform);
+			packet.DrawItems.push_back({
 				.Mesh = mesh->GetGPUHandle(),
 				.Texture = texture ? texture->GetGPUHandle() : GPUTextureHandle{},
 				.Sampler = SamplerType::LinearClamp,
-				.TransformIndex = static_cast<uint32_t>(drawItems.size())
+				.TransformIndex = static_cast<uint32_t>(packet.TransformData.size() - 1)
 			});
 		}
 
-		packet.DrawItems = drawItems;
-		packet.TransformData = transforms;
 		packet.RenderView = m_ActiveWorld.RenderView;
 		packet.Time = m_FrameStats.TotalTime;
 		packet.GuiDrawData = m_GuiSystem ? m_GuiSystem->ExtractDrawData() : GuiDrawData{};

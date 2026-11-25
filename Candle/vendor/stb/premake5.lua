@@ -17,6 +17,7 @@ project "stb"
    includedirs
    {
       "stb",
+      "../../src",   -- Only for Candle/Core/Memory/GlobalAllocation.h, which is self-contained
    }
 
    files

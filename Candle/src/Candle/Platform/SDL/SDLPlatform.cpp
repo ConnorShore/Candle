@@ -3,6 +3,7 @@
 #include "Candle/Platform/Platform.h"
 #include "Candle/Platform/Window.h"
 #include "Candle/Render/Vulkan/RenderInstance.h"
+#include "Candle/Core/Memory/GlobalAllocation.h"
 
 #include <SDL3/SDL_vulkan.h>
 #include <vulkan/vulkan_raii.hpp>
@@ -39,6 +40,11 @@ namespace Candle {
 
 		s_RawEventHook = hook;
 		s_RawEventHookData = userData;
+	}
+
+	void Platform::InitWindowingAllocator()
+	{
+		SDL_SetMemoryFunctions(Memory::Allocate, Memory::AllocateZeroed, Memory::Reallocate, Memory::Free);
 	}
 
 	std::expected<void, std::string> Platform::InitWindowing()

@@ -76,7 +76,7 @@ namespace Candle {
 				ctx.BindPipeline(vk::PipelineBindPoint::eCompute, computePipeline);
 				ctx.PushConstants(pushConstants);
 
-				const LocalGroupSize& groupSize = entryPoint->LocalSize;
+				const LocalGroupSize& groupSize = (*entryPoint)->LocalSize;
 				ctx.Dispatch2D((texture.Desc.Extent.x + groupSize.X - 1) / groupSize.X, (texture.Desc.Extent.y + groupSize.Y - 1) / groupSize.Y);
 			});
 	}

@@ -144,6 +144,9 @@ namespace Candle {
 		// Defined per platform alongside the tick queries
 		static void InitTime();
 
+		// Defined by the windowing backend
+		static void InitWindowingAllocator();
+
 		// Split into whole seconds plus remainder so the multiply cannot overflow
 		inline static uint64_t TicksToMicroseconds(uint64_t ticks)
 		{

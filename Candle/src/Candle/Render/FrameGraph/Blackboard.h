@@ -2,7 +2,8 @@
 
 #include <typeindex>
 #include <any>
-#include <unordered_map>
+#include <vector>
+#include <utility>
 
 namespace Candle {
 
@@ -20,7 +21,8 @@ namespace Candle {
 		void Clear();
 
 	private:
-		std::unordered_map<std::type_index, std::any> m_Values;
+		//std::unordered_map<std::type_index, std::any> m_Values;
+		std::vector<std::pair<std::type_index, std::any>> m_Values;
 	};
 
 }

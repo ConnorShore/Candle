@@ -222,6 +222,7 @@ namespace Candle {
 		// Record command buffers for rendering
 		m_Renderer.Render(*packet, frameContext, m_SwapChain.GetImage(imageIndex));
 
+		// Capture the frame graph if requested by the main thread, which will be read back on the main thread after this frame is presented
 		if (packet->FrameGraphCapture.Snapshot)
 		{
 			m_Renderer.CaptureFrameGraph(packet->FrameGraphSnapshot);

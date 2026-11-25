@@ -18,6 +18,7 @@ project "VMA"
    {
       "VMA/include",
       "$(VULKAN_SDK)/Include",
+      "../../src",   -- Only for Candle/Core/Memory/GlobalAllocation.h, which is self-contained
    }
 
    files

@@ -5,42 +5,46 @@ namespace Candle {
 	template<typename T, typename... Args>
 	inline T& Blackboard::Set(Args&&... args)
 	{
-		m_Values[std::type_index(typeid(T))] = T(std::forward<Args>(args)...);
-		return std::any_cast<T&>(m_Values[std::type_index(typeid(T))]);
+		m_Values.emplace_back(std::type_index(typeid(T)), T(std::forward<Args>(args)...));
+		return std::any_cast<T&>(m_Values.back().second);
 	}
 
 	template<typename T>
 	inline T& Blackboard::Get()
 	{
-		CDL_CORE_ASSERT(m_Values.find(std::type_index(typeid(T))) != m_Values.end(), "Blackboard does not contain a value of type {}", typeid(T).name());
-		return std::any_cast<T&>(m_Values[std::type_index(typeid(T))]);
+		if (auto* value = TryGet<T>())
+			return *value;
+		else
+			CDL_CORE_ASSERT(false, "Blackboard does not contain a value of type {}", typeid(T).name());
 	}
 
 	template<typename T>
 	inline T* Blackboard::TryGet()
 	{
-		auto it = m_Values.find(std::type_index(typeid(T)));
-		if (it != m_Values.end())
-			return &std::any_cast<T&>(it->second);
-		else
-			return nullptr;
+		for (auto& [type, value] : m_Values)
+		{
+			if (type == std::type_index(typeid(T)))
+				return &std::any_cast<T&>(value);
+		}
 	}
 
 	template<typename T>
 	inline const T& Blackboard::Get() const
 	{
-		CDL_CORE_ASSERT(m_Values.find(std::type_index(typeid(T))) != m_Values.end(), "Blackboard does not contain a value of type {}", typeid(T).name());
-		return std::any_cast<const T&>(m_Values.at(std::type_index(typeid(T))));
+		if (auto* value = TryGet<T>())
+			return *value;
+		else
+			CDL_CORE_ASSERT(false, "Blackboard does not contain a value of type {}", typeid(T).name());
 	}
 
 	template<typename T>
 	inline const T* Blackboard::TryGet() const
 	{
-		auto it = m_Values.find(std::type_index(typeid(T)));
-		if (it != m_Values.end())
-			return &std::any_cast<const T&>(it->second);
-		else
-			return nullptr;
+		for (const auto& [type, value] : m_Values)
+		{
+			if (type == std::type_index(typeid(T)))
+				return &std::any_cast<const T&>(value);
+		}
 	}
 
 	inline void Blackboard::Clear()

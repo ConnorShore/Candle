@@ -11,7 +11,8 @@
 namespace Candle {
 
 	namespace {
-		constexpr size_t kFrameArenaSize = 1024 * 1024;	// 1 MB for now, may need to be larger if passes have a lot of data
+		constexpr size_t kFrameArenaSize = 1024 * 1024;		// 1 MB for now, may need to be larger if passes have a lot of data
+		constexpr size_t kExecuteArenaSize = 1024 * 1024;	// 1 MB for now, may need to be larger if passes have a lot of barriers and attachments
 
 		// Every stage a pool texture may be sampled in outside the graph, the same ones GPUUploader publishes uploads to
 		constexpr vk::PipelineStageFlags2 kSampledStages = vk::PipelineStageFlagBits2::eVertexShader
@@ -46,6 +47,7 @@ namespace Candle {
 		: m_TexturePool(spec.TexturePool)
 		, m_PipelineStore(spec.PipelineStore)
 		, m_FrameArena(kFrameArenaSize)
+		, m_ExecuteArena(kExecuteArenaSize)
 		, m_ResourceCache(spec.Allocator, spec.BindlessTable)
 	{
 	}
@@ -60,6 +62,7 @@ namespace Candle {
 		m_Passes.clear();
 		m_Textures.clear();
 		m_FrameArena.Reset();
+		m_ExecuteArena.Reset();
 		m_Accesses.clear();
 		m_CompiledGraph.Reset();
 		m_Blackboard.Clear();
@@ -71,8 +74,8 @@ namespace Candle {
 	{
 		CDL_PROFILE_SCOPE("FrameGraph CullPasses");
 
-		std::vector<uint32_t> livePasses;
-		livePasses.reserve(m_Passes.size());
+		std::span<uint32_t> livePasses = m_ExecuteArena.NewArray<uint32_t>(m_Passes.size());
+		uint32_t livePassCount = 0;
 
 		// Walk the passes and mark any that are NeverCull or write to an imported texture as live. The rest will be culled.
 		for (size_t i = 0; i < m_Passes.size(); ++i)
@@ -83,16 +86,16 @@ namespace Candle {
 				});
 			if (passNode.NeverCull || isLastImportWrite)
 			{
-				livePasses.push_back(static_cast<uint32_t>(i));
+				livePasses[livePassCount++] = static_cast<uint32_t>(i);
 				continue;
 			}
 		}
 
 		// Walk the live passes and mark any passes that wrote to the textures they read from as live, since they are needed to produce the inputs for the live passes
-		while (!livePasses.empty())
+		while (livePassCount > 0)
 		{
-			uint32_t passIndex = livePasses.back();
-			livePasses.pop_back();
+			uint32_t passIndex = livePasses[livePassCount - 1];
+			livePassCount--;
 
 			FrameGraphPassNode& passNode = m_Passes[passIndex];
 			if (passNode.IsLive)
@@ -105,7 +108,7 @@ namespace Candle {
 			{
 				uint32_t srcPassIndex = access.SrcPassIndex;
 				if (srcPassIndex < m_Passes.size() && !m_Passes[srcPassIndex].IsLive)
-					livePasses.push_back(srcPassIndex);
+					livePasses[livePassCount++] = srcPassIndex;
 			}
 		}
 	}
@@ -339,15 +342,14 @@ namespace Candle {
 			// Create barriers
 			if (pass.BarrierCount > 0)
 			{
-				std::vector<vk::ImageMemoryBarrier2> barriers;
-				barriers.reserve(pass.BarrierCount);
+				std::span<vk::ImageMemoryBarrier2> barriers = m_ExecuteArena.NewArray<vk::ImageMemoryBarrier2>(pass.BarrierCount);
 				for (uint32_t i = 0; i < pass.BarrierCount; ++i)
 				{
 					uint32_t barrierIndex = pass.BarrierStartIndex + i;
 					const FGBarrier& barrier = m_CompiledGraph.Barriers[barrierIndex];
 					const FGTextureEntry& texture = m_Textures[barrier.Texture.Index];
 
-					barriers.push_back(MakeImageBarrier(
+					barriers[i] = MakeImageBarrier(
 						texture.Image,
 						barrier.FromState,
 						barrier.ToState,
@@ -355,8 +357,9 @@ namespace Candle {
 							.aspectMask = GetAspectMask(texture.Desc.Format),
 							.levelCount = 1,
 							.layerCount = 1
-						}	// TODO: Handle and support subresources (CAN-37)
-					));
+							// TODO: Handle and support subresources (CAN-37)
+						}
+					);
 				}
 
 				commandBuffer.pipelineBarrier2({ .imageMemoryBarrierCount = pass.BarrierCount, .pImageMemoryBarriers = barriers.data() });
@@ -364,8 +367,7 @@ namespace Candle {
 			
 			// Create attachments
 			vk::RenderingAttachmentInfo depthAttachment;
-			std::vector<vk::RenderingAttachmentInfo> colorAttachments;
-			colorAttachments.reserve(pass.AttachmentCount - (pass.HasDepthAttachment ? 1 : 0));
+			std::span<vk::RenderingAttachmentInfo> colorAttachments = m_ExecuteArena.NewArray<vk::RenderingAttachmentInfo>(pass.AttachmentCount - (pass.HasDepthAttachment ? 1 : 0));
 			vk::Extent2D renderExtent{ 0, 0 };
 
 			for (uint32_t i = 0; i < pass.AttachmentCount; ++i)
@@ -391,14 +393,13 @@ namespace Candle {
 				}
 				else
 				{
-					// Create the color attachment
-					colorAttachments.push_back(vk::RenderingAttachmentInfo{
+					colorAttachments[i] = vk::RenderingAttachmentInfo{
 						.imageView = texture.ImageView,
 						.imageLayout = compiledAttachment.Layout,
 						.loadOp = compiledAttachment.LoadOp,
 						.storeOp = compiledAttachment.StoreOp,
 						.clearValue = compiledAttachment.ClearValue
-					});
+					};
 				}
 			}
 
@@ -441,8 +442,7 @@ namespace Candle {
 		// Perform final barriers for imported images
 		if (!m_CompiledGraph.FinalBarriers.empty())
 		{
-			std::vector<vk::ImageMemoryBarrier2> finalBarriers;
-			finalBarriers.resize(m_CompiledGraph.FinalBarriers.size());
+			std::span<vk::ImageMemoryBarrier2> finalBarriers = m_ExecuteArena.NewArray<vk::ImageMemoryBarrier2>(m_CompiledGraph.FinalBarriers.size());
 			for (size_t i = 0; i < m_CompiledGraph.FinalBarriers.size(); ++i)
 			{
 				const FGBarrier& barrier = m_CompiledGraph.FinalBarriers[i];

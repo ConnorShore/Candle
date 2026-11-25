@@ -4,6 +4,7 @@
 #include "Candle/Platform/SDL/SDLPlatform.h"
 #include "Candle/Render/Resources/TexturePool.h"
 #include "Candle/Render/GUI/GuiTextureID.h"
+#include "Candle/Core/Memory/GlobalAllocation.h"
 
 #include <imgui.h>
 #include <imgui_internal.h>
@@ -45,6 +46,10 @@ namespace Candle {
 		CDL_STATIC_ASSERT(offsetof(Candle::GPU::GuiVertex, Color) == offsetof(ImDrawVert, col));
 		CDL_STATIC_ASSERT(sizeof(GuiIndex) == sizeof(ImDrawIdx));
 
+		// Process-wide in ImGui, and a context frees through whatever is set when it's destroyed, so it goes in before the context exists
+		ImGui::SetAllocatorFunctions(
+			[](size_t size, void*) { return Memory::Allocate(size); },
+			[](void* ptr, void*) { Memory::Free(ptr); });
 		ImGui::CreateContext();
 		ImGuiIO& io = ImGui::GetIO(); (void)io;
 		io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;       // Enable Keyboard Controls

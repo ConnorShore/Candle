@@ -147,6 +147,7 @@ namespace Candle {
 		TexturePool& m_TexturePool;
 		PipelineStore& m_PipelineStore;
 		ArenaAllocator m_FrameArena;
+		ArenaAllocator m_ExecuteArena;
 		ResourceCache m_ResourceCache;
 		FGCompiledGraph m_CompiledGraph;
 		Blackboard m_Blackboard;
