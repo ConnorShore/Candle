@@ -14,6 +14,13 @@ namespace Candle {
 
 		using DefaultTexel = std::array<std::byte, 4>;	// One linear RGBA8 texel, so its bytes are exactly what a shader samples
 
+		// A slot is its bindless index, and the frame graph owns the binding's tail. Capping the pool rather than the live
+		// count, since released slots still waiting to retire take up indices too.
+		constexpr uint32_t kMaxPoolTextures = kMaxTextures - kMaxFrameGraphTextures;
+
+		constexpr vk::PipelineStageFlags2 kSampledStages = vk::PipelineStageFlagBits2::eVertexShader
+			| vk::PipelineStageFlagBits2::eComputeShader | vk::PipelineStageFlagBits2::eFragmentShader;
+
 		constexpr DefaultTexel GetDefaultTexel(DefaultTexture texture)
 		{
 			switch (texture)
@@ -34,7 +41,7 @@ namespace Candle {
 	}
 
 	TexturePool::TexturePool(GPUAllocator& allocator, GPUUploader& uploader, GPUResourceRegistry& registry, BindlessTable& bindlessTable)
-		: m_Allocator(allocator), m_Uploader(uploader), m_BindlessTable(bindlessTable), m_Textures(registry, kMaxTextures)
+		: m_Allocator(allocator), m_Uploader(uploader), m_BindlessTable(bindlessTable), m_Textures(registry, kMaxPoolTextures)
 	{
 		for (size_t i = 0; i < kDefaultTexels.size(); ++i)
 		{
@@ -49,6 +56,7 @@ namespace Candle {
 
 	GPUTextureHandle TexturePool::CreateTexture(TextureCreateSpec spec)
 	{
+		CDL_CORE_ASSERT(Platform::IsMainThread(), "TexturePool textures are created on the main thread");
 		CDL_CORE_ASSERT(spec.Extent.x > 0 && spec.Extent.y > 0, "A texture must have an area > 0");
 		CDL_CORE_ASSERT(spec.Data.size_bytes() == static_cast<size_t>(spec.Extent.x) * spec.Extent.y * BytesPerTexel(spec.Format),
 			"Texture data must be Extent.x * Extent.y tightly packed texels of its format");
@@ -66,12 +74,10 @@ namespace Candle {
 			.Extent = spec.Extent
 		};
 
-		m_Uploader.UploadImage(uploadSpec,
-			vk::PipelineStageFlagBits2::eVertexShader | vk::PipelineStageFlagBits2::eComputeShader | vk::PipelineStageFlagBits2::eFragmentShader,
-			vk::AccessFlagBits2::eShaderSampledRead);
+		m_Uploader.UploadImage(uploadSpec, kSampledStages, vk::AccessFlagBits2::eShaderSampledRead);
 
 		vk::ImageView view = image.GetImageView();
-		GPUTextureHandle handle = m_Textures.Insert(TextureEntry{ .Image = std::move(image), .Extent = spec.Extent });
+		GPUTextureHandle handle = m_Textures.Insert(TextureEntry{ .Image = std::move(image) });
 		StoreDebugName(handle, std::move(spec.DebugName));
 
 		// Published here so no texture can be handed out before a shader can sample it
@@ -83,7 +89,6 @@ namespace Candle {
 	{
 		CDL_CORE_ASSERT(spec.Extent.x > 0 && spec.Extent.y > 0, "A render target must have an area > 0");
 
-		// No upload: the renderer transitions it out of Undefined, since each frame's clear replaces the contents anyway
 		GPUImage image = m_Allocator.CreateImage(GPUImageSpec{
 			.Extent = spec.Extent,
 			.Format = spec.Format,
@@ -95,9 +100,11 @@ namespace Candle {
 		const bool isStorage = static_cast<bool>(spec.Usage & vk::ImageUsageFlagBits::eStorage);
 		const vk::ImageLayout sampledLayout = isStorage ? vk::ImageLayout::eGeneral : vk::ImageLayout::eShaderReadOnlyOptimal;
 
+		// Nothing to upload, but the frame graph imports every pool texture as already in its sampled layout
+		m_Uploader.TransitionImage(image.GetImage(), sampledLayout, kSampledStages, vk::AccessFlagBits2::eShaderSampledRead);
+
 		vk::ImageView view = image.GetImageView();
-		GPUTextureHandle handle = m_Textures.Insert(TextureEntry{
-			.Image = std::move(image), .Extent = spec.Extent, .SampledLayout = sampledLayout });
+		GPUTextureHandle handle = m_Textures.Insert(TextureEntry{ .Image = std::move(image), .SampledLayout = sampledLayout });
 		StoreDebugName(handle, std::move(spec.DebugName));
 
 		if (spec.Usage & vk::ImageUsageFlagBits::eSampled)
@@ -138,12 +145,9 @@ namespace Candle {
 			.Index = handle.Index,
 			.ImageView = entry->Image.GetImageView(),
 			.Image = entry->Image.GetImage(),
-			.Format = entry->Image.GetFormat(),
-			.Extent = entry->Extent,
+			.Desc = entry->Image.GetDesc(),
 			.SizeBytes = entry->Image.GetSizeBytes(),
-			.MipLevels = entry->Image.GetMipLevels(),
-			.SampledLayout = entry->SampledLayout,
-			.Usage = entry->Image.GetUsage()
+			.SampledLayout = entry->SampledLayout
 		};
 	}
 
@@ -162,10 +166,10 @@ namespace Candle {
 				.Handle = handle,
 				.DebugName = m_DebugNames[handle.Index],
 				.SizeBytes = info.SizeBytes,
-				.Extent = info.Extent,
-				.MipLevels = info.MipLevels,
-				.Format = info.Format,
-				.Usage = info.Usage });
+				.Extent = info.Desc.Extent,
+				.MipLevels = info.Desc.MipLevels,
+				.Format = info.Desc.Format,
+				.Usage = info.Desc.Usage });
 		}
 
 		return TexturePoolStats{

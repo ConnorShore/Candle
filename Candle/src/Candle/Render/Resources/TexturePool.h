@@ -1,5 +1,6 @@
 #pragma once
 
+#include "Candle/Render/TextureInfo.h"
 #include "Candle/Render/Resources/GPUHandles.h"
 #include "Candle/Render/Vulkan/GPUImage.h"
 #include "Candle/Render/Resources/GPUResourcePool.h"
@@ -21,20 +22,6 @@ namespace Candle {
 	class GPUUploader;
 	class GPUResourceRegistry;
 	class BindlessTable;
-
-	// Values, not references into the pool, so an info stays safe to hold after its texture is released
-	struct TextureInfo
-	{
-		uint32_t Index{ std::numeric_limits<uint32_t>::max() };
-		vk::ImageView ImageView{ nullptr };
-		vk::Image Image{ nullptr };		// For barriers, when the renderer draws into a render target
-		vk::Format Format{ vk::Format::eUndefined };
-		glm::uvec2 Extent{ 0, 0 };
-		uint32_t SizeBytes{ 0 };
-		uint8_t MipLevels{ 1 };
-		vk::ImageLayout SampledLayout{ vk::ImageLayout::eShaderReadOnlyOptimal };	// What its bindless descriptor expects, so it must be in this whenever it's sampled
-		vk::ImageUsageFlags Usage{};	// eColorAttachment is what lets the scene draw into it
-	};
 
 	struct TextureCreateSpec
 	{
@@ -88,8 +75,8 @@ namespace Candle {
 		// Also writes the texture into the bindless table at its handle's index.
 		GPUTextureHandle CreateTexture(TextureCreateSpec spec);
 
-		// A texture the renderer draws or dispatches into and shaders then sample. Nothing is uploaded, so it must not be
-		// sampled before a frame renders into it. Published at its handle's slot of each binding its usage allows.
+		// A texture the renderer draws or dispatches into and shaders then sample. Nothing is uploaded, so its contents are
+		// undefined until a frame renders into it, but it starts in its sampled layout. Published at its handle's slot of each binding its usage allows.
 		// Released like any other texture.
 		GPUTextureHandle CreateRenderTarget(RenderTargetCreateSpec spec);
 		void ReleaseTexture(GPUTextureHandle handle);
@@ -111,7 +98,6 @@ namespace Candle {
 		struct TextureEntry
 		{
 			GPUImage Image;
-			glm::uvec2 Extent;
 			vk::ImageLayout SampledLayout{ vk::ImageLayout::eShaderReadOnlyOptimal };
 
 			uint64_t GetSizeBytes() const { return Image.GetSizeBytes(); }

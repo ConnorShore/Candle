@@ -8,15 +8,21 @@
 
 namespace Candle {
 
+	constexpr uint8_t kTextureBindlessIndex = 0;
+	constexpr uint8_t kSamplerBindlessIndex = 1;
+	constexpr uint8_t kStorageImageBindlessIndex = 2;
+
 	class RenderDevice;
 
-	// Set 0 of every pipeline layout. Binding 0 is Texture2D[kMaxTextures], element i being TexturePool slot i;
-	// binding 1 is SamplerState[SamplerType::Count], written once at construction; binding 2 is RWTexture2D[kMaxTextures],
-	// indexed by the same slots and written only for images with storage usage.
-	// Threading: construct before the render thread starts. WriteTexture and WriteStorageImage on the main thread while the
-	//   render thread binds the set, which UPDATE_AFTER_BIND on bindings 0 and 2 permits. The caller must never write an
-	//   element a pending command buffer may read; TexturePool guarantees it, since a slot is only reissued once the GPU has
-	//   retired it. GetSet and GetLayout from any thread.
+	// Set 0 of every pipeline layout. Binding 0 is Texture2D[kMaxTextures]: element i is TexturePool slot i, except the last
+	// kMaxFrameGraphTextures elements, which hold ResourceCache slots for frame graph transients in the same order.
+	// Binding 1 is SamplerState[SamplerType::Count], written once at construction; binding 2 is RWTexture2D[kMaxTextures],
+	// split the same way and written only for images with storage usage.
+	// Threading: construct before the render thread starts. WriteTexture and WriteStorageImage on the main thread, and the
+	//   WriteFrameGraph* methods on the render thread, while the render thread binds the set. UPDATE_AFTER_BIND on bindings
+	//   0 and 2 permits that, as long as no element is written by two threads at once, which the split ranges guarantee.
+	//   The caller must never write an element a pending command buffer may read; TexturePool and ResourceCache both
+	//   guarantee it, since each only reissues a slot once the GPU has retired it. GetSet and GetLayout from any thread.
 	class BindlessTable
 	{
 	public:
@@ -28,8 +34,11 @@ namespace Candle {
 		BindlessTable& operator=(const BindlessTable&) = delete;
 
 		// layout is the one the image is in whenever it's sampled, not its layout now
-		void WriteTexture(uint32_t index, vk::ImageView view, vk::ImageLayout layout = vk::ImageLayout::eShaderReadOnlyOptimal);
-		void WriteStorageImage(uint32_t index, vk::ImageView view);	// Storage images are always accessed in General
+		uint32_t WriteTexture(uint32_t index, vk::ImageView view, vk::ImageLayout layout = vk::ImageLayout::eShaderReadOnlyOptimal);
+		uint32_t WriteFrameGraphTexture(uint32_t index, vk::ImageView view, vk::ImageLayout layout = vk::ImageLayout::eShaderReadOnlyOptimal);
+		uint32_t WriteStorageImage(uint32_t index, vk::ImageView view);	// Storage images are always accessed in General
+		uint32_t WriteFrameGraphStorageImage(uint32_t index, vk::ImageView view);	// Storage images are always accessed in General
+
 		void BindSet(vk::CommandBuffer commandBuffer, vk::PipelineBindPoint bindPoint, vk::PipelineLayout pipelineLayout);
 
 		inline vk::DescriptorSet GetSet() const { return *m_DescriptorSet; }
@@ -41,7 +50,7 @@ namespace Candle {
 		void CreateDescriptorSet(RenderDevice& renderDevice);
 		void CreateSamplers(RenderDevice& renderDevice);
 
-		void WriteImage(uint32_t binding, vk::DescriptorType type, uint32_t index, vk::ImageView view, vk::ImageLayout layout);
+		uint32_t WriteImage(uint32_t binding, vk::DescriptorType type, uint32_t index, vk::ImageView view, vk::ImageLayout layout, bool frameGraphTexture);
 
 	private:
 		RenderDevice& m_RenderDevice;

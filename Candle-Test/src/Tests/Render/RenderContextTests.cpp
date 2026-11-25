@@ -131,8 +131,8 @@ CDL_TEST_CASE(RenderContext, CreatesAnOutputTargetOfTheInitialSize, Gpu)
 
 		const TextureInfo info = test.Pool().GetTextureInfo(target);
 		CDL_EXPECT(test.Pool().IsAlive(target));
-		CDL_EXPECT(info.Usage & vk::ImageUsageFlagBits::eColorAttachment);
-		CDL_EXPECT(info.Extent == kInitialSize);
+		CDL_EXPECT(info.Desc.Usage & vk::ImageUsageFlagBits::eColorAttachment);
+		CDL_EXPECT(info.Desc.Extent == kInitialSize);
 		CDL_EXPECT_EQ(context.GetOutputTextureID(), ToGuiTextureID(target));	// What the application hands ImGui::Image
 	}
 	ExpectNoVulkanDebugMessages(logs);
@@ -148,7 +148,7 @@ CDL_TEST_CASE(RenderContext, ZeroInitialSizeGetsAOnePixelTarget, Gpu)
 		TestOutputManager test;
 		const RenderContext context(&test.Manager, false, { 0, 0 });
 		CDL_CHECK(context.GetOutputTexture().IsValid());
-		CDL_EXPECT(test.Pool().GetTextureInfo(context.GetOutputTexture()).Extent == glm::uvec2(1, 1));
+		CDL_EXPECT(test.Pool().GetTextureInfo(context.GetOutputTexture()).Desc.Extent == glm::uvec2(1, 1));
 	}
 	ExpectNoVulkanDebugMessages(logs);
 }
@@ -170,7 +170,7 @@ CDL_TEST_CASE(RenderContext, NewSizeReplacesTheOutputTarget, Gpu)
 		CDL_EXPECT_FALSE(SameHandle(before, after));
 		CDL_EXPECT_FALSE(test.Pool().IsAlive(before));
 		CDL_EXPECT(test.Pool().IsAlive(after));
-		CDL_EXPECT(test.Pool().GetTextureInfo(after).Extent == glm::uvec2(300, 200));
+		CDL_EXPECT(test.Pool().GetTextureInfo(after).Desc.Extent == glm::uvec2(300, 200));
 		CDL_EXPECT(context.GetOutputSize() == glm::uvec2(300, 200));
 	}
 	ExpectNoVulkanDebugMessages(logs);

@@ -7,6 +7,7 @@
 #include "RenderTestHelpers.h"
 
 #include <Candle/Render/Resources/GPUHandles.h>
+#include <Candle/Render/RenderConstants.h>
 #include <Candle/Render/Vulkan/SamplerType.h>
 #include <Candle/Render/Assets/TextureData.h>
 #include <Candle/Render/Resources/TexturePool.h>
@@ -17,6 +18,7 @@
 #include <cstddef>
 #include <format>
 #include <span>
+#include <utility>
 #include <vector>
 
 using namespace Candle;
@@ -61,7 +63,7 @@ namespace {
 			.imageView = info.ImageView, .imageLayout = vk::ImageLayout::eColorAttachmentOptimal,
 			.loadOp = vk::AttachmentLoadOp::eClear, .storeOp = vk::AttachmentStoreOp::eStore,
 			.clearValue = vk::ClearColorValue(colour[0] / 255.0f, colour[1] / 255.0f, colour[2] / 255.0f, colour[3] / 255.0f) };
-		commands.Buffer.beginRendering({ .renderArea = { { 0, 0 }, { info.Extent.x, info.Extent.y } }, .layerCount = 1,
+		commands.Buffer.beginRendering({ .renderArea = { { 0, 0 }, { info.Desc.Extent.x, info.Desc.Extent.y } }, .layerCount = 1,
 			.colorAttachmentCount = 1, .pColorAttachments = &attachment });
 		commands.Buffer.endRendering();
 
@@ -99,7 +101,7 @@ namespace {
 			.Colour = glm::vec4(colour[0], colour[1], colour[2], colour[3]) / 255.0f,
 			.TextureIndex = info.Index };
 		commands.Buffer.pushConstants(store.GetGlobalLayout(), kPushConstantStages, 0, sizeof(pushConstants), &pushConstants);
-		commands.Buffer.dispatch(info.Extent.x, info.Extent.y, 1);
+		commands.Buffer.dispatch(info.Desc.Extent.x, info.Desc.Extent.y, 1);
 
 		const vk::ImageMemoryBarrier2 toSampled = MakeImageBarrier(info.Image, kStorageWriteState, SampledState(info), kColorSubresourceRange);
 		commands.Buffer.pipelineBarrier2({ .imageMemoryBarrierCount = 1, .pImageMemoryBarriers = &toSampled });
@@ -166,9 +168,9 @@ CDL_TEST_CASE(TexturePool, TextureInfoReportsItsExtentAndThatItIsNoColorAttachme
 		const std::vector<Texel> texels(3 * 2, kWhite);
 		const TextureInfo info = gpu.Pool.GetTextureInfo(CreateBoundTexture(gpu, { 3, 2 }, texels));
 
-		CDL_EXPECT(info.Extent == glm::uvec2(3, 2));
+		CDL_EXPECT(info.Desc.Extent == glm::uvec2(3, 2));
 		CDL_EXPECT(info.Image);
-		CDL_EXPECT_FALSE(info.Usage & vk::ImageUsageFlagBits::eColorAttachment);
+		CDL_EXPECT_FALSE(info.Desc.Usage & vk::ImageUsageFlagBits::eColorAttachment);
 	}
 	ExpectNoVulkanDebugMessages(logs);
 }
@@ -187,8 +189,8 @@ CDL_TEST_CASE(TexturePool, CreateRenderTargetReturnsAValidHandleAndItsInfo, Gpu)
 		CDL_EXPECT_EQ(info.Index, target.Index);	// The bindless element the target is published at, for the GUI to sample
 		CDL_EXPECT(info.ImageView);
 		CDL_EXPECT(info.Image);
-		CDL_EXPECT(info.Extent == glm::uvec2(5, 3));
-		CDL_EXPECT(info.Usage == (vk::ImageUsageFlagBits::eColorAttachment | vk::ImageUsageFlagBits::eSampled));	// The spec's default
+		CDL_EXPECT(info.Desc.Extent == glm::uvec2(5, 3));
+		CDL_EXPECT(info.Desc.Usage == (vk::ImageUsageFlagBits::eColorAttachment | vk::ImageUsageFlagBits::eSampled));	// The spec's default
 		CDL_EXPECT_EQ(LiveAllocations(gpu.Allocator), kDefaultTextureAllocations + 1u);
 	}
 	ExpectNoVulkanDebugMessages(logs);
@@ -203,8 +205,8 @@ CDL_TEST_CASE(TexturePool, StorageTargetReportsOnlyTheUsageItWasCreatedWith, Gpu
 		constexpr vk::ImageUsageFlags kStorageUsage = vk::ImageUsageFlagBits::eStorage | vk::ImageUsageFlagBits::eSampled;
 		const TextureInfo info = gpu.Pool.GetTextureInfo(gpu.Pool.CreateRenderTarget({ .Extent = { 1, 1 }, .Format = kRenderTargetFormat, .Usage = kStorageUsage }));
 
-		CDL_EXPECT(info.Usage == kStorageUsage);
-		CDL_EXPECT_FALSE(info.Usage & vk::ImageUsageFlagBits::eColorAttachment);
+		CDL_EXPECT(info.Desc.Usage == kStorageUsage);
+		CDL_EXPECT_FALSE(info.Desc.Usage & vk::ImageUsageFlagBits::eColorAttachment);
 	}
 	ExpectNoVulkanDebugMessages(logs);
 }
@@ -252,6 +254,37 @@ CDL_TEST_CASE(TexturePool, SampledLayoutIsGeneralOnlyForStorageTargets, Gpu)
 		CDL_EXPECT_EQ(gpu.Pool.GetTextureInfo(texture).SampledLayout, vk::ImageLayout::eShaderReadOnlyOptimal);
 		CDL_EXPECT_EQ(gpu.Pool.GetTextureInfo(target).SampledLayout, vk::ImageLayout::eShaderReadOnlyOptimal);
 		CDL_EXPECT_EQ(gpu.Pool.GetTextureInfo(storage).SampledLayout, vk::ImageLayout::eGeneral);
+	}
+	ExpectNoVulkanDebugMessages(logs);
+}
+
+// The frame graph imports pool textures as already in their sampled layout. At submit, validation checks the old layout of a
+// barrier that changes layout against the image's real one, so each target moves out and this fails if it started in Undefined.
+CDL_TEST_CASE(TexturePool, RenderTargetStartsInItsSampledLayout, Gpu)
+{
+	LoggerFixture logs(LogLevel::Warn, kRenderChannelMask);
+	{
+		TestTextures gpu;
+		const GPUTextureHandle target = CreateRenderTarget(gpu.Pool, { 1, 1 });
+		const GPUTextureHandle storage = gpu.Pool.CreateRenderTarget({
+			.Extent = { 1, 1 }, .Format = kRenderTargetFormat, .Usage = vk::ImageUsageFlagBits::eStorage | vk::ImageUsageFlagBits::eSampled });
+
+		TestCommands commands(gpu.Device);
+		commands.Buffer.begin({ .flags = vk::CommandBufferUsageFlagBits::eOneTimeSubmit });
+		const std::pair<GPUTextureHandle, vk::ImageLayout> moves[] = {
+			{ target, vk::ImageLayout::eGeneral },
+			{ storage, vk::ImageLayout::eShaderReadOnlyOptimal } };
+		for (const auto& [handle, layout] : moves)
+		{
+			const TextureInfo info = gpu.Pool.GetTextureInfo(handle);
+			ImageState moved = SampledState(info);
+			moved.Layout = layout;
+
+			const vk::ImageMemoryBarrier2 barrier = MakeImageBarrier(info.Image, SampledState(info), moved, kColorSubresourceRange);
+			commands.Buffer.pipelineBarrier2({ .imageMemoryBarrierCount = 1, .pImageMemoryBarriers = &barrier });
+		}
+		commands.Buffer.end();
+		SubmitAndWait(gpu.Device, commands.Buffer);
 	}
 	ExpectNoVulkanDebugMessages(logs);
 }
@@ -393,6 +426,18 @@ CDL_TEST_CASE(TexturePool, HandlesDieWithTheirTexture, Gpu)
 		CDL_CHECK_EQ(reused.Index, texture.Index);
 		CDL_EXPECT(gpu.Pool.IsAlive(reused));
 		CDL_EXPECT_FALSE(gpu.Pool.IsAlive(texture));
+	}
+	ExpectNoVulkanDebugMessages(logs);
+}
+
+// A texture's slot is its bindless index, so the pool has to end where the frame graph's share of the binding starts. Released
+// slots still waiting to retire take up indices too, so nothing short of the pool's own size can keep them out of it.
+CDL_TEST_CASE(TexturePool, SlotsStopShortOfTheFrameGraphsBindlessRange, Gpu)
+{
+	LoggerFixture logs(LogLevel::Warn, kRenderChannelMask);
+	{
+		TestTextures gpu;
+		CDL_EXPECT_EQ(gpu.Pool.CaptureStats().PoolStats.TotalSlots, kMaxTextures - kMaxFrameGraphTextures);
 	}
 	ExpectNoVulkanDebugMessages(logs);
 }

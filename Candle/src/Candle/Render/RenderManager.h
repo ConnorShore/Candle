@@ -20,6 +20,8 @@
 #include "Candle/Render/Resources/GeometryPool.h"
 #include "Candle/Render/Resources/TexturePool.h"
 
+#include "Candle/Render/FrameGraph/FrameGraphCapture.h"
+
 #include "Candle/Core/ApplicationInfo.h"
 #include "Candle/Core/Threading/Thread.h"
 
@@ -67,6 +69,9 @@ namespace Candle {
 		// Main thread only. The render thread's last completed frame to come back in a packet; a few frames behind the main thread
 		inline const RenderStats& GetRenderStats() const { return m_LatestRenderStats; }
 
+		// Main thread only
+		inline FrameGraphCapture& GetFrameGraphCapture() { return m_FrameGraphCapture; }
+
 	private:
 		void RenderThreadMain(RenderStats& stats);   // Wait for a frame slot → acquire → Renderer::Render → submit → present; fills in what it measures
 		void RetireAndReleasePacket(FramePacket& packet, uint64_t retireValue);	// Retires its releases, then hands it back to the main thread
@@ -87,6 +92,7 @@ namespace Candle {
 		GeometryPool m_GeometryPool;
 		TexturePool m_TexturePool;
 		Renderer m_Renderer;
+		FrameGraphCapture m_FrameGraphCapture;	// After the pool and renderer it makes preview targets with
 		RenderCommandPoolManager m_CommandPoolManager;
 		Thread m_RenderThread;
 

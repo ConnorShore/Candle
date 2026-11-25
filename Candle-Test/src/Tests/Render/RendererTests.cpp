@@ -91,10 +91,9 @@ namespace {
 		Renderer SceneRenderer;
 		FrameContext Frame = CreateFrameContext(*this);
 
-		explicit TestRenderer(vk::Extent2D extent, RenderTo renderTo = RenderTo::SwapChain)
+		explicit TestRenderer(RenderTo renderTo = RenderTo::SwapChain)
 			: SceneRenderer(Device, Geometry, Pool, Bindless, Allocator, {
 				.TargetFormat = kTargetFormat,
-				.TargetExtent = extent,
 				.ShaderDirectory = kEngineShaderDirectory,
 				.PipelineCacheDirectory = CacheDirectory.Path(),
 				.RenderToSwapChain = renderTo == RenderTo::SwapChain }) {}
@@ -124,7 +123,7 @@ namespace {
 		const vk::Image image = *owned.Handle;
 		vk::raii::ImageView view(device.GetDevice(), vk::ImageViewCreateInfo{
 			.image = image, .viewType = vk::ImageViewType::e2D, .format = kTargetFormat, .subresourceRange = SwapChainImage::kSubresourceRange });
-		return { std::move(owned), SwapChainImage(image, std::move(view), ImageDesc{ .Extent = extent, .Format = kTargetFormat }) };
+		return { std::move(owned), SwapChainImage(image, std::move(view), ImageDesc{ .Extent = { extent.width, extent.height }, .Format = kTargetFormat }) };
 	}
 
 	// One frame as RenderManager draws it, without the acquire and present: record, submit and wait, then read the target.
@@ -134,7 +133,8 @@ namespace {
 		test.SceneRenderer.Render(packet, test.Frame, target.Image);
 		SubmitAndWait(test.Device, test.Frame.CommandBuffer);
 
-		std::vector<Texel> texels = ToTexels(ReadBackImage(test, *target.Owned.Handle, target.Image.GetDesc().Extent, kPresentState));
+		const glm::uvec2 extent = target.Image.GetDesc().Extent;
+		std::vector<Texel> texels = ToTexels(ReadBackImage(test, *target.Owned.Handle, { extent.x, extent.y }, kPresentState));
 		target.Image.SetState(kTransferSrcState);	// Where the readback left it, so the next frame's first barrier starts from there
 		return texels;
 	}
@@ -230,7 +230,7 @@ namespace {
 	// Every texel of a render target, read through its bindless slot as the GUI samples it, in row order
 	std::vector<Texel> SampleRenderTarget(TestRenderer& test, GPUTextureHandle target)
 	{
-		return SampleTextures(test, ProbeEveryTexel(target, test.Pool.GetTextureInfo(target).Extent));
+		return SampleTextures(test, ProbeEveryTexel(target, test.Pool.GetTextureInfo(target).Desc.Extent));
 	}
 
 	// ShadeAlone for a renderer drawing into an output target: the texture drawn alone, read back from the target
@@ -279,7 +279,7 @@ CDL_TEST_CASE(Renderer, NearerDrawHidesFartherWhicheverIsDrawnLast, Gpu)
 
 	LoggerFixture logs(LogLevel::Warn, kRenderChannelMask);
 	{
-		TestRenderer test(kExtent);
+		TestRenderer test;
 		TestTarget target = CreateTarget(test.Device, kExtent);
 		const GPUMeshHandle quad = test.CreateQuad();
 		const GPUTextureHandle nearTexture = test.CreateSolidTexture(kBright);
@@ -304,7 +304,7 @@ CDL_TEST_CASE(Renderer, LaterDrawWinsAtEqualDepth, Gpu)
 
 	LoggerFixture logs(LogLevel::Warn, kRenderChannelMask);
 	{
-		TestRenderer test(kExtent);
+		TestRenderer test;
 		TestTarget target = CreateTarget(test.Device, kExtent);
 		const GPUMeshHandle quad = test.CreateQuad();
 		const GPUTextureHandle first = test.CreateSolidTexture(kBright);
@@ -327,7 +327,7 @@ CDL_TEST_CASE(Renderer, DrawsEveryItemWithItsOwnTransform, Gpu)
 
 	LoggerFixture logs(LogLevel::Warn, kRenderChannelMask);
 	{
-		TestRenderer test(kExtent);
+		TestRenderer test;
 		TestTarget target = CreateTarget(test.Device, kExtent);
 		const GPUMeshHandle quad = test.CreateQuad();
 		const GPUTextureHandle left = test.CreateSolidTexture(kBright);
@@ -356,16 +356,17 @@ CDL_TEST_CASE(Renderer, DrawsEveryItemWithItsOwnTransform, Gpu)
 	ExpectNoVulkanDebugMessages(logs);
 }
 
-// Built for a small target, then grown as RenderManager grows it on a resize; not square, so a swapped width and height
-// shows. A depth image smaller than the render area fails validation, and the pixels show depth testing holds across all of it.
-CDL_TEST_CASE(Renderer, RecreateTargetsSizesDepthToTheNewTarget, Gpu)
+// Drawn to a small target, then to a grown one as after a resize; not square, so a swapped width and height shows. Depth is
+// a graph transient sized from the target each frame, so one left at the old size fails validation, and the pixels show
+// depth testing holds across all of it.
+CDL_TEST_CASE(Renderer, DepthFollowsTheTargetsSize, Gpu)
 {
 	SkipUnlessRendererShadersCompiled();
 	constexpr vk::Extent2D kGrownExtent{ 16, 8 };
 
 	LoggerFixture logs(LogLevel::Warn, kRenderChannelMask);
 	{
-		TestRenderer test(kExtent);
+		TestRenderer test;
 		const GPUMeshHandle quad = test.CreateQuad();
 		const GPUTextureHandle nearTexture = test.CreateSolidTexture(kBright);
 		const GPUTextureHandle farTexture = test.CreateSolidTexture(kDim);
@@ -374,8 +375,6 @@ CDL_TEST_CASE(Renderer, RecreateTargetsSizesDepthToTheNewTarget, Gpu)
 		const Texel nearColour = ShadeAlone(test, small, quad, nearTexture);
 		CheckDistinguishable(nearColour, ShadeAlone(test, small, quad, farTexture));
 
-		// Every frame was waited on, as RenderManager idles the GPU before it rebuilds
-		test.SceneRenderer.RecreateTargets(kGrownExtent, test.Allocator);
 		TestTarget grown = CreateTarget(test.Device, kGrownExtent);
 
 		const FramePacket packet = MakePacket(quad, { { nearTexture, AtDepth(0.25f) }, { farTexture, AtDepth(0.75f) } });
@@ -397,7 +396,7 @@ CDL_TEST_CASE(Renderer, GuiDrawsOverTheScene, Gpu)
 
 	LoggerFixture logs(LogLevel::Warn, kRenderChannelMask);
 	{
-		TestRenderer test(kExtent);
+		TestRenderer test;
 		TestTarget target = CreateTarget(test.Device, kExtent);
 		const GPUMeshHandle quad = test.CreateQuad();
 		const GPUTextureHandle sceneTexture = test.CreateSolidTexture(kBright);
@@ -423,7 +422,7 @@ CDL_TEST_CASE(Renderer, GuiQuadLandsWhereImGuiPlacedIt, Gpu)
 
 	LoggerFixture logs(LogLevel::Warn, kRenderChannelMask);
 	{
-		TestRenderer test(kExtent);
+		TestRenderer test;
 		TestTarget target = CreateTarget(test.Device, kExtent);
 		const GPUTextureHandle guiTexture = test.CreateSolidTexture(kGreen);
 
@@ -446,7 +445,7 @@ CDL_TEST_CASE(Renderer, ClipRectScissorsTheGui, Gpu)
 
 	LoggerFixture logs(LogLevel::Warn, kRenderChannelMask);
 	{
-		TestRenderer test(kExtent);
+		TestRenderer test;
 		TestTarget target = CreateTarget(test.Device, kExtent);
 		const GPUTextureHandle guiTexture = test.CreateSolidTexture(kGreen);
 
@@ -469,7 +468,7 @@ CDL_TEST_CASE(Renderer, ClipRectsOutsideTheTargetAreClampedOrSkipped, Gpu)
 
 	LoggerFixture logs(LogLevel::Warn, kRenderChannelMask);
 	{
-		TestRenderer test(kExtent);
+		TestRenderer test;
 		TestTarget target = CreateTarget(test.Device, kExtent);
 		const GPUTextureHandle green = test.CreateSolidTexture(kGreen);
 		const GPUTextureHandle blue = test.CreateSolidTexture(kBlue);
@@ -499,7 +498,7 @@ CDL_TEST_CASE(Renderer, GuiVertexColourIsDecodedFromSrgbAndTintsTheTexture, Gpu)
 
 	LoggerFixture logs(LogLevel::Warn, kRenderChannelMask);
 	{
-		TestRenderer test(kExtent);
+		TestRenderer test;
 		TestTarget target = CreateTarget(test.Device, kExtent);
 		constexpr Texel kGrey{ 128, 128, 128, 255 };
 		constexpr Texel kLeftVertex{ 255, 188, 0, 255 };
@@ -534,7 +533,7 @@ CDL_TEST_CASE(Renderer, GuiBlendsOverTheSceneByVertexAlpha, Gpu)
 
 	LoggerFixture logs(LogLevel::Warn, kRenderChannelMask);
 	{
-		TestRenderer test(kExtent);
+		TestRenderer test;
 		TestTarget target = CreateTarget(test.Device, kExtent);
 		const GPUMeshHandle quad = test.CreateQuad();
 		const GPUTextureHandle sceneTexture = test.CreateSolidTexture(kBright);
@@ -568,7 +567,7 @@ CDL_TEST_CASE(Renderer, DrawsEachGuiCommandFromItsOwnOffsets, Gpu)
 
 	LoggerFixture logs(LogLevel::Warn, kRenderChannelMask);
 	{
-		TestRenderer test(kExtent);
+		TestRenderer test;
 		TestTarget target = CreateTarget(test.Device, kExtent);
 		const GPUTextureHandle green = test.CreateSolidTexture(kGreen);
 		const GPUTextureHandle blue = test.CreateSolidTexture(kBlue);
@@ -604,7 +603,7 @@ CDL_TEST_CASE(Renderer, GuiBuffersGrowByDoublingAndAreReusedWhileTheGuiFits, Gpu
 
 	LoggerFixture logs(LogLevel::Warn, kRenderChannelMask);
 	{
-		TestRenderer test(kExtent);
+		TestRenderer test;
 		TestTarget target = CreateTarget(test.Device, kExtent);
 		const GPUTextureHandle white = test.CreateSolidTexture(kWhite);
 		constexpr vk::DeviceSize kQuadVertexBytes = 4 * sizeof(GPU::GuiVertex);
@@ -649,7 +648,7 @@ CDL_TEST_CASE(Renderer, RenderToTextureDrawsTheSceneIntoTheOutputTarget, Gpu)
 
 	LoggerFixture logs(LogLevel::Warn, kRenderChannelMask);
 	{
-		TestRenderer test(kExtent, RenderTo::OutputTarget);
+		TestRenderer test(RenderTo::OutputTarget);
 		TestTarget target = CreateTarget(test.Device, kExtent);
 		const GPUTextureHandle output = test.CreateOutputTarget({ kExtent.width, kExtent.height });
 		const GPUMeshHandle quad = test.CreateQuad();
@@ -676,7 +675,7 @@ CDL_TEST_CASE(Renderer, GuiShowsTheOutputTargetTheSceneDrewThatFrame, Gpu)
 
 	LoggerFixture logs(LogLevel::Warn, kRenderChannelMask);
 	{
-		TestRenderer test(kExtent, RenderTo::OutputTarget);
+		TestRenderer test(RenderTo::OutputTarget);
 		TestTarget target = CreateTarget(test.Device, kExtent);
 		const GPUTextureHandle output = test.CreateOutputTarget({ kExtent.width, kExtent.height });
 		const GPUMeshHandle quad = test.CreateQuad();
@@ -697,9 +696,9 @@ CDL_TEST_CASE(Renderer, GuiShowsTheOutputTargetTheSceneDrewThatFrame, Gpu)
 	ExpectNoVulkanDebugMessages(logs);
 }
 
-// Depth starts at the renderer's target extent, and RenderManager matches it to each output target before drawing. The new
-// target is larger, so depth left at the old size fails validation, and not square, so a swapped width and height shows.
-CDL_TEST_CASE(Renderer, MatchDepthToOutputSizesDepthToTheOutputTarget, Gpu)
+// Depth is sized from each frame's output target rather than the renderer's target extent. The new target is larger, so
+// depth left at the old size fails validation, and not square, so a swapped width and height shows.
+CDL_TEST_CASE(Renderer, DepthFollowsTheOutputTargetsSize, Gpu)
 {
 	SkipUnlessRendererShadersCompiled();
 	SkipUnlessCompiled(kBindlessFixturePath);
@@ -707,7 +706,7 @@ CDL_TEST_CASE(Renderer, MatchDepthToOutputSizesDepthToTheOutputTarget, Gpu)
 
 	LoggerFixture logs(LogLevel::Warn, kRenderChannelMask);
 	{
-		TestRenderer test(kExtent, RenderTo::OutputTarget);
+		TestRenderer test(RenderTo::OutputTarget);
 		TestTarget target = CreateTarget(test.Device, kExtent);
 		const GPUMeshHandle quad = test.CreateQuad();
 		const GPUTextureHandle nearTexture = test.CreateSolidTexture(kBright);
@@ -717,10 +716,7 @@ CDL_TEST_CASE(Renderer, MatchDepthToOutputSizesDepthToTheOutputTarget, Gpu)
 		const Texel nearColour = ShadeAloneIntoOutput(test, target, small, quad, nearTexture);
 		CheckDistinguishable(nearColour, ShadeAloneIntoOutput(test, target, small, quad, farTexture));
 
-		// Every frame was waited on, so the old depth image is already free to go
 		const GPUTextureHandle grown = test.CreateOutputTarget(kOutputExtent);
-		test.SceneRenderer.MatchDepthToOutput(kOutputExtent, test.Device.GetCompletedTimelineValue(QueueType::Graphics));
-
 		FramePacket packet = MakePacket(quad, { { nearTexture, AtDepth(0.25f) }, { farTexture, AtDepth(0.75f) } });
 		packet.OutputTarget = grown;
 		RenderFrame(test, target, packet);
@@ -732,58 +728,9 @@ CDL_TEST_CASE(Renderer, MatchDepthToOutputSizesDepthToTheOutputTarget, Gpu)
 	ExpectNoVulkanDebugMessages(logs);
 }
 
-// RenderManager calls it every frame, so the common case, a target the size depth already is, must neither allocate a new
-// depth image nor queue the current one.
-CDL_TEST_CASE(Renderer, MatchDepthToOutputKeepsDepthWhenTheExtentIsUnchanged, Gpu)
-{
-	SkipUnlessRendererShadersCompiled();
-
-	LoggerFixture logs(LogLevel::Warn, kRenderChannelMask);
-	{
-		TestRenderer test(kExtent, RenderTo::OutputTarget);
-		const uint32_t before = LiveAllocations(test.Allocator);
-
-		test.SceneRenderer.MatchDepthToOutput({ kExtent.width, kExtent.height }, std::numeric_limits<uint64_t>::max());
-		CDL_EXPECT_EQ(LiveAllocations(test.Allocator), before);
-	}
-	ExpectNoVulkanDebugMessages(logs);
-}
-
-// Frames in flight may still test against the depth image MatchDepthToOutput replaces, so it lives until the GPU reaches the
-// value it was given, the newest frame's, and the first Render after that frees it.
-CDL_TEST_CASE(Renderer, ReplacedDepthImageIsFreedOnceItsLastFrameRetires, Gpu)
-{
-	SkipUnlessRendererShadersCompiled();
-	constexpr glm::uvec2 kGrownExtent{ 8, 8 };
-
-	LoggerFixture logs(LogLevel::Warn, kRenderChannelMask);
-	{
-		TestRenderer test(kExtent, RenderTo::OutputTarget);
-		TestTarget target = CreateTarget(test.Device, kExtent);
-		FramePacket packet = MakePacket(test.CreateQuad(), { { test.CreateSolidTexture(kBright), AtDepth(0.5f) } });
-		packet.OutputTarget = test.CreateOutputTarget({ kExtent.width, kExtent.height });
-		RenderFrame(test, target, packet);
-
-		packet.OutputTarget = test.CreateOutputTarget(kGrownExtent);
-		const uint32_t before = LiveAllocations(test.Allocator);
-
-		// Every submit so far has been waited on, so the GPU reaches this with the next one: the frame below
-		const uint64_t lastUse = test.Device.GetCompletedTimelineValue(QueueType::Graphics) + 1;
-		test.SceneRenderer.MatchDepthToOutput(kGrownExtent, lastUse);
-		CDL_EXPECT_EQ(LiveAllocations(test.Allocator), before + 1u);	// The new depth image, and the old one held
-
-		RenderFrame(test, target, packet);	// Drains before its own submit, so before lastUse is reached
-		CDL_EXPECT_EQ(LiveAllocations(test.Allocator), before + 1u);
-
-		RenderFrame(test, target, packet);	// Drains with lastUse reached
-		CDL_EXPECT_EQ(LiveAllocations(test.Allocator), before);
-	}
-	ExpectNoVulkanDebugMessages(logs);
-}
-
-// A swapchain resize says nothing about the output target, so depth stays at the target's size: nothing is reallocated,
-// and a frame at the old output extent still depth-tests, with the swapchain image now larger than it.
-CDL_TEST_CASE(Renderer, RecreateTargetsLeavesDepthAloneWhenRenderingToAnOutputTarget, Gpu)
+// A swapchain resize says nothing about the output target, so depth stays at the output's size, and a frame at the old
+// output extent still depth-tests with the swapchain image now larger than it.
+CDL_TEST_CASE(Renderer, OutputTargetDepthIgnoresTheSwapChainsSize, Gpu)
 {
 	SkipUnlessRendererShadersCompiled();
 	SkipUnlessCompiled(kBindlessFixturePath);
@@ -791,7 +738,7 @@ CDL_TEST_CASE(Renderer, RecreateTargetsLeavesDepthAloneWhenRenderingToAnOutputTa
 
 	LoggerFixture logs(LogLevel::Warn, kRenderChannelMask);
 	{
-		TestRenderer test(kExtent, RenderTo::OutputTarget);
+		TestRenderer test(RenderTo::OutputTarget);
 		TestTarget small = CreateTarget(test.Device, kExtent);
 		const GPUTextureHandle output = test.CreateOutputTarget({ kExtent.width, kExtent.height });
 		const GPUMeshHandle quad = test.CreateQuad();
@@ -800,11 +747,6 @@ CDL_TEST_CASE(Renderer, RecreateTargetsLeavesDepthAloneWhenRenderingToAnOutputTa
 
 		const Texel nearColour = ShadeAloneIntoOutput(test, small, output, quad, nearTexture);
 		CheckDistinguishable(nearColour, ShadeAloneIntoOutput(test, small, output, quad, farTexture));
-
-		// A check, not an expectation: Render asserts that depth matches the output target, which would end the whole run
-		const uint32_t before = LiveAllocations(test.Allocator);
-		test.SceneRenderer.RecreateTargets(kGrownExtent, test.Allocator);
-		CDL_CHECK_EQ(LiveAllocations(test.Allocator), before);
 
 		TestTarget grown = CreateTarget(test.Device, kGrownExtent);
 		FramePacket packet = MakePacket(quad, { { nearTexture, AtDepth(0.25f) }, { farTexture, AtDepth(0.75f) } });
@@ -850,7 +792,7 @@ CDL_TEST_CASE(Renderer, DebugLineDrawsInTheColourItWasGiven, Gpu)
 
 	LoggerFixture logs(LogLevel::Warn, kRenderChannelMask);
 	{
-		TestRenderer test(kExtent);
+		TestRenderer test;
 		TestTarget target = CreateTarget(test.Device, kExtent);
 		ConsoleManager console;
 		DebugDrawManager debugDraw(console);
@@ -879,7 +821,7 @@ CDL_TEST_CASE(Renderer, OnlyDebugLinesSkippingTheDepthTestShowThroughTheScene, G
 
 	LoggerFixture logs(LogLevel::Warn, kRenderChannelMask);
 	{
-		TestRenderer test(kExtent);
+		TestRenderer test;
 		TestTarget target = CreateTarget(test.Device, kExtent);
 		const GPUMeshHandle quad = test.CreateQuad();
 		const GPUTextureHandle sceneTexture = test.CreateSolidTexture(kBright);
@@ -910,7 +852,7 @@ CDL_TEST_CASE(Renderer, EachDebugBatchDrawsAtItsOwnLineWidth, Gpu)
 
 	LoggerFixture logs(LogLevel::Warn, kRenderChannelMask);
 	{
-		TestRenderer test(kWideExtent);
+		TestRenderer test;
 		if (!test.Device.HasWideLines() || test.Device.GetPhysicalDevice().getProperties().limits.lineWidthRange[1] < 5.0f)
 			CDL_SKIP("the device can't draw 5 pixel wide lines");
 
@@ -943,7 +885,7 @@ CDL_TEST_CASE(Renderer, GuiDrawsOverDebugLines, Gpu)
 
 	LoggerFixture logs(LogLevel::Warn, kRenderChannelMask);
 	{
-		TestRenderer test(kExtent);
+		TestRenderer test;
 		TestTarget target = CreateTarget(test.Device, kExtent);
 		const GPUTextureHandle guiTexture = test.CreateSolidTexture(kGreen);
 		ConsoleManager console;
@@ -972,7 +914,7 @@ CDL_TEST_CASE(Renderer, DebugLinesDrawIntoTheOutputTarget, Gpu)
 
 	LoggerFixture logs(LogLevel::Warn, kRenderChannelMask);
 	{
-		TestRenderer test(kExtent, RenderTo::OutputTarget);
+		TestRenderer test(RenderTo::OutputTarget);
 		TestTarget target = CreateTarget(test.Device, kExtent);
 		const GPUTextureHandle output = test.CreateOutputTarget({ kExtent.width, kExtent.height });
 		ConsoleManager console;
@@ -987,6 +929,147 @@ CDL_TEST_CASE(Renderer, DebugLinesDrawIntoTheOutputTarget, Gpu)
 		std::vector<Texel> expected = Solid(kCleared);
 		Paint(expected, { 1, 0 }, { 2, kExtent.height }, kWhite);
 		ExpectImage(SampleRenderTarget(test, output), expected, "output target, debug line in column 1");
+	}
+	ExpectNoVulkanDebugMessages(logs);
+}
+
+//////////////////////////////////////////////////////////////////////////
+// The render graph viewer: its snapshot and the preview pass
+//////////////////////////////////////////////////////////////////////////
+
+namespace {
+
+	constexpr Texel kMidGrey{ 128, 128, 128, 255 };
+
+	// Depth as the viewer previews it: a quad at 0.5 over the top half, and the scene pass's clear of 1 below
+	FramePacket MakeDepthPreviewPacket(TestRenderer& test, GPUTextureHandle previewTarget, glm::vec2 range)
+	{
+		const glm::mat4 topHalf = glm::translate(glm::mat4(1.0f), glm::vec3(0.0f, 0.5f, 0.5f)) * glm::scale(glm::mat4(1.0f), glm::vec3(1.0f, 0.5f, 1.0f));
+		FramePacket packet = MakePacket(test.CreateQuad(), { { test.CreateSolidTexture(kBright), topHalf } });
+		packet.FrameGraphCapture = { .Snapshot = true, .PreviewTexture = "Depth", .CapturePreview = true, .PreviewRange = range, .PreviewTarget = previewTarget };
+		return packet;
+	}
+
+	bool HasPreviewPass(const FrameGraphSnapshot& snapshot)
+	{
+		return std::ranges::any_of(snapshot.Passes, [](const FrameGraphSnapshot::Pass& pass) { return pass.Name == kFrameGraphPreviewPassName; });
+	}
+
+}
+
+// Depth has one channel, so it previews as grey, the right way up: the scene pass flips its viewport and the preview mustn't
+CDL_TEST_CASE(Renderer, PreviewDrawsTheTransientItWasAskedFor, Gpu)
+{
+	SkipUnlessRendererShadersCompiled();
+	SkipUnlessCompiled(kBindlessFixturePath);
+
+	LoggerFixture logs(LogLevel::Warn, kRenderChannelMask);
+	{
+		TestRenderer test;
+		TestTarget target = CreateTarget(test.Device, kExtent);
+		const GPUTextureHandle preview = test.CreateOutputTarget({ kExtent.width, kExtent.height });
+		RenderFrame(test, target, MakeDepthPreviewPacket(test, preview, { 0.0f, 1.0f }));
+
+		std::vector<Texel> expected = Solid(kWhite);
+		Paint(expected, { 0, 0 }, { kExtent.width, 2 }, kMidGrey);
+		ExpectImage(SampleRenderTarget(test, preview), expected, "depth 0.5 over the top half, 1 below", 1);
+	}
+	ExpectNoVulkanDebugMessages(logs);
+}
+
+CDL_TEST_CASE(Renderer, PreviewRangeSpreadsItsValuesFromBlackToWhite, Gpu)
+{
+	SkipUnlessRendererShadersCompiled();
+	SkipUnlessCompiled(kBindlessFixturePath);
+
+	LoggerFixture logs(LogLevel::Warn, kRenderChannelMask);
+	{
+		TestRenderer test;
+		TestTarget target = CreateTarget(test.Device, kExtent);
+		const GPUTextureHandle preview = test.CreateOutputTarget({ kExtent.width, kExtent.height });
+		RenderFrame(test, target, MakeDepthPreviewPacket(test, preview, { 0.5f, 1.0f }));
+
+		std::vector<Texel> expected = Solid(kWhite);
+		Paint(expected, { 0, 0 }, { kExtent.width, 2 }, kCleared);
+		ExpectImage(SampleRenderTarget(test, preview), expected, "0.5 at the bottom of the range, 1 at its top", 1);
+	}
+	ExpectNoVulkanDebugMessages(logs);
+}
+
+// The preview pass hands its target to the GUI through the blackboard, so the GUI shows this frame's preview, and the graph
+// puts the barrier between them that synchronization validation would otherwise flag
+CDL_TEST_CASE(Renderer, GuiShowsThePreviewDrawnThatFrame, Gpu)
+{
+	SkipUnlessRendererShadersCompiled();
+
+	LoggerFixture logs(LogLevel::Warn, kRenderChannelMask);
+	{
+		TestRenderer test;
+		TestTarget target = CreateTarget(test.Device, kExtent);
+		const GPUTextureHandle preview = test.CreateOutputTarget({ kExtent.width, kExtent.height });
+
+		FramePacket packet = MakeDepthPreviewPacket(test, preview, { 0.0f, 1.0f });
+		packet.GuiDrawData = MakeGuiDrawData(kDisplaySize);
+		AddGuiQuad(packet.GuiDrawData, { 0.0f, 0.0f }, kDisplaySize, preview);
+
+		std::vector<Texel> expected = Solid(kWhite);
+		Paint(expected, { 0, 0 }, { kExtent.width, 2 }, kMidGrey);
+		ExpectImage(RenderFrame(test, target, packet), expected, "the GUI over the whole target, showing the preview", 1);
+	}
+	ExpectNoVulkanDebugMessages(logs);
+}
+
+// Imports are in the texture inspector, and a name the graph doesn't have may just be from a frame that had it
+CDL_TEST_CASE(Renderer, PreviewSkipsImportsAndNamesNotInTheGraph, Gpu)
+{
+	SkipUnlessRendererShadersCompiled();
+
+	LoggerFixture logs(LogLevel::Warn, kRenderChannelMask);
+	{
+		TestRenderer test;
+		TestTarget target = CreateTarget(test.Device, kExtent);
+		const GPUTextureHandle preview = test.CreateOutputTarget({ kExtent.width, kExtent.height });
+
+		for (const char* name : { "SwapChain", "Missing" })
+		{
+			CDL_NOTE(name);
+			FramePacket packet = MakeDepthPreviewPacket(test, preview, { 0.0f, 1.0f });
+			packet.FrameGraphCapture.PreviewTexture = name;
+			RenderFrame(test, target, packet);
+
+			FrameGraphSnapshot snapshot;
+			test.SceneRenderer.CaptureFrameGraph(snapshot);
+			CDL_EXPECT_FALSE(HasPreviewPass(snapshot));
+		}
+	}
+	ExpectNoVulkanDebugMessages(logs);
+}
+
+// With no preview asked for, the module adds nothing, rather than a pass for culling to throw away
+CDL_TEST_CASE(Renderer, CaptureFrameGraphListsTheFramesPasses, Gpu)
+{
+	SkipUnlessRendererShadersCompiled();
+
+	LoggerFixture logs(LogLevel::Warn, kRenderChannelMask);
+	{
+		TestRenderer test;
+		TestTarget target = CreateTarget(test.Device, kExtent);
+		const GPUTextureHandle texture = test.CreateSolidTexture(kBright);
+		FramePacket packet = MakeScenePacket(test.CreateQuad(), texture);
+		AddGuiQuad(packet.GuiDrawData, { 0.0f, 0.0f }, { 1.0f, 1.0f }, texture);	// With nothing to draw, the GUI adds no pass
+		RenderFrame(test, target, packet);
+
+		FrameGraphSnapshot snapshot;
+		test.SceneRenderer.CaptureFrameGraph(snapshot);
+
+		for (const std::string_view name : { "ComputePass", "TrianglePass", "GuiPass" })
+		{
+			const auto pass = std::ranges::find(snapshot.Passes, name, &FrameGraphSnapshot::Pass::Name);
+			CDL_EXPECT_MSG(pass != snapshot.Passes.end() && pass->Live, std::format("{} isn't a live pass in the snapshot", name));
+		}
+		for (const std::string_view name : { "ComputeOutput", "Depth", "SwapChain" })
+			CDL_EXPECT_MSG(std::ranges::contains(snapshot.Textures, name, &FrameGraphSnapshot::Texture::Name), std::format("{} isn't in the snapshot", name));
+		CDL_EXPECT_FALSE(HasPreviewPass(snapshot));
 	}
 	ExpectNoVulkanDebugMessages(logs);
 }

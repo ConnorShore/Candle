@@ -8,6 +8,7 @@
 #include <Candle/Core/MainThreadLogSink.h>
 #include <Candle/Debug/ConsoleManager.h>
 #include <Candle/Debug/DebugUIManager.h>
+#include <Candle/Render/FrameGraph/FrameGraphCapture.h>
 
 #include <algorithm>
 #include <optional>
@@ -50,9 +51,10 @@ namespace {
 	struct TestDebugUI
 	{
 		TestTextures Textures;
+		FrameGraphCapture Capture{ Textures.Pool, vk::Format::eR8G8B8A8Unorm };
 		ConsoleManager Console;
 		MainThreadLogSink LogSink{ 64 };
-		std::optional<DebugUIManager> Manager{ std::in_place, Console, LogSink, Textures.Pool };
+		std::optional<DebugUIManager> Manager{ std::in_place, Console, LogSink, Textures.Pool, Capture };
 	};
 
 	int CountUnknownCommands(const std::vector<LogRecord>& records)
@@ -106,7 +108,7 @@ CDL_TEST_CASE(DebugUIManager, EveryEnginePanelHasACommandUnderDebug, Gpu)
 	{
 		TestDebugUI test;
 
-		for (const std::string_view panel : { "Frame", "FrameGraph", "Console", "TextureInspector", "GPUResources" })
+		for (const std::string_view panel : { "Frame", "FrameGraph", "Console", "TextureInspector", "GPUResources", "RenderGraph" })
 			test.Console.ExecuteCommand(std::format("Debug{}{}", ConsoleManager::kCommandDelimiter, panel));
 	}
 	CDL_CHECK(Logger::Flush());

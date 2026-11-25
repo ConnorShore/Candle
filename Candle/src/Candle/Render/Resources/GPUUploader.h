@@ -50,6 +50,9 @@ namespace Candle {
 		void UploadBuffers(std::span<const BufferUpload> uploads, vk::PipelineStageFlags2 dstStages, vk::AccessFlags2 dstAccess);
 		void UploadImage(const ImageUploadSpec upload, vk::PipelineStageFlags2 dstStages, vk::AccessFlags2 dstAccess);
 
+		// Moves a colour image out of Undefined with one barrier and submits without waiting. Copies nothing, so it isn't counted as an upload.
+		void TransitionImage(vk::Image image, vk::ImageLayout layout, vk::PipelineStageFlags2 dstStages, vk::AccessFlags2 dstAccess);
+
 		void FreeCompletedStagingBuffers();	// Frees the staging buffers of uploads the GPU has finished
 
 		inline const GPUUploaderStats& GetStats() const { return m_Stats; }

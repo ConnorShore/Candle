@@ -45,7 +45,8 @@ namespace Candle {
 		inline vk::Extent2D GetExtent() const 
 		{
 			CDL_CORE_ASSERT(!m_SwapChainImages.empty(), "Must have images to get extent"); 
-			return m_SwapChainImages.front().GetDesc().Extent; 
+			const glm::uvec2 extent = m_SwapChainImages.front().GetDesc().Extent;
+			return { extent.x, extent.y };
 		}
 
 		inline SwapChainImage& GetImage(uint32_t imageIndex) { return m_SwapChainImages[imageIndex]; }

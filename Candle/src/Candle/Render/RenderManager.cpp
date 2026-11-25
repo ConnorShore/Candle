@@ -48,10 +48,10 @@ namespace Candle {
 		, m_TexturePool(m_GPUAllocator, m_GPUUploader, m_ResourceRegistry, m_BindlessTable)
 		, m_Renderer(m_RenderDevice, m_GeometryPool, m_TexturePool, m_BindlessTable, m_GPUAllocator, {
 			.TargetFormat = m_SwapChain.GetSurfaceFormat().format,
-			.TargetExtent = m_SwapChain.GetExtent(),
 			.ShaderDirectory = engineAssetDir / "shaders/bin",
 			.PipelineCacheDirectory = savedDir / "pipelines",
 			.RenderToSwapChain = renderSpec.RenderToSwapChain })
+		, m_FrameGraphCapture(m_TexturePool, m_Renderer.GetTargetFormat())
 		, m_CommandPoolManager(m_RenderDevice, jobSystem.GetNumWorkers())
 		, m_RenderThread({
 			.Name = "Candle-RenderThread",
@@ -128,6 +128,7 @@ namespace Candle {
 		m_GPUUploader.FreeCompletedStagingBuffers();
 		m_ResourceRegistry.ReturnRecycledSlotsToPools(packet);
 		m_ResourceRegistry.MoveReleasedSlotsIntoPacket(packet);
+		m_FrameGraphCapture.ExchangeWithPacket(packet);
 		return packet;
 	}
 
@@ -176,6 +177,9 @@ namespace Candle {
 		if (!packet)
 			return;	// Closed by JoinRenderThread
 
+		// Cleared up front, so a frame that returns early draws nothing and doesn't hand back the last snapshot this packet carried
+		packet->FrameGraphSnapshot.Captured = false;
+
 		CDL_PROFILE_SCOPE_METADATA(packet->FrameIndex);
 		m_GPUAllocator.UpdateFrameCount(packet->FrameIndex);
 
@@ -215,19 +219,15 @@ namespace Candle {
 			CDL_CORE_PANIC(LogChannel::Render, "Failed to acquire swap chain image: {}", vk::to_string(result));
 		}
 
-		// The application resizes the output target, and depth must cover it. The newest retire value is the last frame that could
-		// still be using the old depth image, so it is freed once the GPU passes that rather than waited on here.
-		if (!m_Specification.RenderToSwapChain)
-		{
-			uint64_t lastUseValue = 0;
-			for (const FrameContext& context : m_FrameContexts)
-				lastUseValue = std::max(lastUseValue, context.RetireValue);
-
-			m_Renderer.MatchDepthToOutput(m_TexturePool.GetTextureInfo(packet->OutputTarget).Extent, lastUseValue);
-		}
-
 		// Record command buffers for rendering
 		m_Renderer.Render(*packet, frameContext, m_SwapChain.GetImage(imageIndex));
+
+		if (packet->FrameGraphCapture.Snapshot)
+		{
+			m_Renderer.CaptureFrameGraph(packet->FrameGraphSnapshot);
+			packet->FrameGraphSnapshot.FrameIndex = packet->FrameIndex;
+			packet->FrameGraphSnapshot.Captured = true;
+		}
 
 		// Submit the command buffer to the graphics queue, waiting on the acquire semaphore and signaling the present semaphore
 		vk::CommandBufferSubmitInfo commandBufferInfo{ .commandBuffer = *frameContext.CommandBuffer };
@@ -307,9 +307,6 @@ namespace Candle {
 
 		// The reported extent, not Window::GetSize(): Window is main thread only, and this will run on the render thread
 		m_SwapChain.Recreate(surfaceExtent);
-
-		// The swapchain's real extent, not surfaceExtent: the surface may override the request, and a stale packet's size is one
-		m_Renderer.RecreateTargets(m_SwapChain.GetExtent(), m_GPUAllocator);
 	}
 
 }

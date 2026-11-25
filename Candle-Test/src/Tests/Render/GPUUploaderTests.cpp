@@ -332,3 +332,37 @@ CDL_TEST_CASE(GPUUploader, ImageAndBufferUploadsBackToBackBothLand, Gpu)
 	}
 	ExpectNoVulkanDebugMessages(logs);
 }
+
+// The readback's barrier claims TransferSrc, which validation checks against where the image really is at submit
+CDL_TEST_CASE(GPUUploader, TransitionImageLeavesTheImageInItsLayout, Gpu)
+{
+	LoggerFixture logs(LogLevel::Warn, kRenderChannelMask);
+	{
+		TestAllocator gpu;
+		GPUUploader uploader(gpu.Device, gpu.Allocator);
+		constexpr vk::Extent2D kExtent{ 2, 2 };
+		OwnedImage image = CreateUploadTarget(gpu.Device, kExtent);
+
+		uploader.TransitionImage(*image.Handle, kTransferSrcState.Layout, kTransferSrcState.Stage, kTransferSrcState.Access);
+		ReadBackImage(gpu, *image.Handle, kExtent, kTransferSrcState);
+	}
+	ExpectNoVulkanDebugMessages(logs);
+}
+
+// Render targets are transitioned when they're created, and those aren't uploads in the panel
+CDL_TEST_CASE(GPUUploader, TransitionsAreNotCountedAsUploads, Gpu)
+{
+	LoggerFixture logs(LogLevel::Warn, kRenderChannelMask);
+	{
+		TestAllocator gpu;
+		GPUUploader uploader(gpu.Device, gpu.Allocator);
+		OwnedImage image = CreateUploadTarget(gpu.Device, { 1, 1 });
+
+		uploader.TransitionImage(*image.Handle, kTransferSrcState.Layout, kTransferSrcState.Stage, kTransferSrcState.Access);
+
+		CDL_EXPECT_EQ(uploader.GetStats().TotalUploads, 0u);
+		CDL_EXPECT_EQ(uploader.GetStats().TotalBytes, 0u);
+		WaitForGPU(gpu);
+	}
+	ExpectNoVulkanDebugMessages(logs);
+}

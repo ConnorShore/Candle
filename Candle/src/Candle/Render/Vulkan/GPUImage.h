@@ -1,5 +1,7 @@
 #pragma once
 
+#include "Candle/Render/Vulkan/Image.h"
+
 #include <vulkan/vulkan_raii.hpp>
 #include <vk_mem_alloc.h>
 
@@ -36,7 +38,7 @@ namespace Candle {
 		// Move constructor and assignment operator
 		GPUImage(GPUImage&& other) noexcept
 			: m_Allocator(other.m_Allocator), m_Image(other.m_Image), m_ImageView(std::move(other.m_ImageView)), m_Allocation(other.m_Allocation)
-			, m_Format(other.m_Format), m_Usage(other.m_Usage), m_MipLevels(other.m_MipLevels)
+			, m_Desc(other.m_Desc)
 		{
 			other.m_Image = nullptr;
 			other.m_Allocator = nullptr;
@@ -51,9 +53,7 @@ namespace Candle {
 				m_Image = other.m_Image;
 				m_ImageView = std::move(other.m_ImageView);
 				m_Allocation = other.m_Allocation;
-				m_Format = other.m_Format;
-				m_Usage = other.m_Usage;
-				m_MipLevels = other.m_MipLevels;
+				m_Desc = other.m_Desc;
 				other.m_Allocator = nullptr;
 				other.m_Allocation = nullptr;
 				other.m_Image = nullptr;
@@ -67,9 +67,10 @@ namespace Candle {
 		inline vk::ImageView GetImageView() const { return *m_ImageView; }	// Non-owning, so handing it out leaves the image const
 		inline VmaAllocation GetAllocation() const { return m_Allocation; }
 
-		inline vk::Format GetFormat() const { return m_Format; }
-		inline vk::ImageUsageFlags GetUsage() const { return m_Usage; }
-		inline uint8_t GetMipLevels() const { return m_MipLevels; }
+		inline const ImageDesc& GetDesc() const { return m_Desc; }
+		inline vk::Format GetFormat() const { return m_Desc.Format; }
+		inline vk::ImageUsageFlags GetUsage() const { return m_Desc.Usage; }
+		inline uint8_t GetMipLevels() const { return m_Desc.MipLevels; }
 		uint32_t GetSizeBytes() const;
 
 	private:
@@ -82,9 +83,7 @@ namespace Candle {
 		VmaAllocation m_Allocation{ nullptr };
 		vk::raii::ImageView m_ImageView{ nullptr };
 
-		vk::Format m_Format{ vk::Format::eUndefined };
-		vk::ImageUsageFlags m_Usage{};
-		uint8_t m_MipLevels{ 1 };
+		ImageDesc m_Desc;
 	};
 
 }

@@ -50,6 +50,23 @@ CDL_TEST_CASE(Image, BarrierRunsFromTheFirstStateToTheSecond, Unit)
 	CDL_EXPECT_EQ(barrier.dstQueueFamilyIndex, VK_QUEUE_FAMILY_IGNORED);
 }
 
+// The frame graph builds both its views and its barriers from this, so a depth-stencil format missing its stencil
+// aspect fails validation on every barrier
+CDL_TEST_CASE(Image, AspectMaskCoversEveryAspectOfTheFormat, Unit)
+{
+	constexpr vk::ImageAspectFlags kDepthStencil = vk::ImageAspectFlagBits::eDepth | vk::ImageAspectFlagBits::eStencil;
+
+	CDL_EXPECT(GetAspectMask(vk::Format::eR8G8B8A8Unorm) == vk::ImageAspectFlagBits::eColor);
+	CDL_EXPECT(GetAspectMask(vk::Format::eR32Uint) == vk::ImageAspectFlagBits::eColor);
+	CDL_EXPECT(GetAspectMask(vk::Format::eD16Unorm) == vk::ImageAspectFlagBits::eDepth);
+	CDL_EXPECT(GetAspectMask(vk::Format::eX8D24UnormPack32) == vk::ImageAspectFlagBits::eDepth);
+	CDL_EXPECT(GetAspectMask(vk::Format::eD32Sfloat) == vk::ImageAspectFlagBits::eDepth);
+	CDL_EXPECT(GetAspectMask(vk::Format::eS8Uint) == vk::ImageAspectFlagBits::eStencil);
+	CDL_EXPECT(GetAspectMask(vk::Format::eD16UnormS8Uint) == kDepthStencil);
+	CDL_EXPECT(GetAspectMask(vk::Format::eD24UnormS8Uint) == kDepthStencil);
+	CDL_EXPECT(GetAspectMask(vk::Format::eD32SfloatS8Uint) == kDepthStencil);
+}
+
 // An upload's shape over a mip chain: from a fresh ImageState to TransferDst, written, then on to sampled. The clear
 // checks every mip reached TransferDst, and the second barrier's oldLayout every mip that stayed there, so a barrier
 // covering less than its range fails validation. Starting from ImageState{} also checks the default is a fresh image.
