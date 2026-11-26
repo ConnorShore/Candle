@@ -19,6 +19,7 @@
 #include "Candle/Render/Resources/GPUUploader.h"
 #include "Candle/Render/Resources/GeometryPool.h"
 #include "Candle/Render/Resources/TexturePool.h"
+#include "Candle/Render/Resources/GPUArenaAllocator.h"
 
 #include "Candle/Render/FrameGraph/FrameGraphCapture.h"
 
@@ -27,6 +28,9 @@
 
 #include <atomic>
 #include <thread>
+#include <array>
+#include <vector>
+#include <filesystem>
 
 namespace Candle {
 

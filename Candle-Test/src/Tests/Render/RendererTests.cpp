@@ -40,7 +40,7 @@ namespace {
 	constexpr vk::Format kTargetFormat = vk::Format::eR8G8B8A8Unorm;	// UNORM, so the shader's result is stored unconverted
 	constexpr vk::Extent2D kExtent{ 4, 4 };
 	const glm::vec2 kDisplaySize{ kExtent.width, kExtent.height };	// ImGui's display, one unit per target pixel
-	constexpr uint32_t kMaxTestTransforms = 4;
+	constexpr uint32_t kTestFrameArenaCapacity = 64 * 1024;
 
 	// Covers clip space at z = 0, wound counter-clockwise like kTriangleVertices so culling keeps it
 	const std::array<GPU::Vertex, 4> kQuadVertices = { {
@@ -58,7 +58,7 @@ namespace {
 	// Render leaves its target ready to present, with no stage or access, which is the state SwapChainImage then tracks
 	constexpr ImageState kPresentState{ .Layout = vk::ImageLayout::ePresentSrcKHR };
 
-	// One slot of what RenderManager::CreateFrameContexts builds, with room for the few transforms a test draws
+	// One slot of what RenderManager::CreateFrameContexts builds, with an arena sized for the little a test draws
 	FrameContext CreateFrameContext(TestAllocator& gpu)
 	{
 		FrameContext frame;
@@ -68,14 +68,7 @@ namespace {
 		vk::CommandBufferAllocateInfo allocInfo{ .commandPool = *frame.CommandPool, .level = vk::CommandBufferLevel::ePrimary, .commandBufferCount = 1 };
 		frame.CommandBuffer = std::move(vk::raii::CommandBuffers(gpu.Device.GetDevice(), allocInfo).front());
 
-		frame.FrameData = gpu.Allocator.CreateBuffer({
-			.Size = sizeof(GPU::FrameData),
-			.Usage = vk::BufferUsageFlagBits::eShaderDeviceAddress,
-			.Flags = VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT | VMA_ALLOCATION_CREATE_MAPPED_BIT });
-		frame.TransformData = gpu.Allocator.CreateBuffer({
-			.Size = kMaxTestTransforms * sizeof(glm::mat4),
-			.Usage = vk::BufferUsageFlagBits::eShaderDeviceAddress,
-			.Flags = VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT | VMA_ALLOCATION_CREATE_MAPPED_BIT });
+		frame.FrameArena = GPUFrameArena(gpu.Allocator, kTestFrameArenaCapacity, "Test FrameDataArena");
 		return frame;
 	}
 
@@ -130,6 +123,7 @@ namespace {
 	std::vector<Texel> RenderFrame(TestRenderer& test, TestTarget& target, const FramePacket& packet)
 	{
 		test.Frame.CommandPool.reset();
+		test.Frame.FrameArena.Reset();
 		test.SceneRenderer.Render(packet, test.Frame, target.Image);
 		SubmitAndWait(test.Device, test.Frame.CommandBuffer);
 

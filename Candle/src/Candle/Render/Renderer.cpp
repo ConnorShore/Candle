@@ -25,8 +25,6 @@
 namespace Candle {
 
 	namespace {
-		// A float time steps ~0.24 ms at an hour; wrapping keeps shader animation smooth for one jump per period
-		constexpr double kShaderTimeWrapSeconds = 3600.0;
 
 		vk::Format FindDepthFormat(RenderDevice& device)
 		{
@@ -53,7 +51,6 @@ namespace Candle {
 		, m_GeometryPool(geometryPool)
 		, m_TexturePool(texturePool)
 		, m_BindlessTable(bindlessTable)
-		, m_GPUAllocator(allocator)
 		, m_PipelineStore(renderDevice, bindlessTable, info.PipelineCacheDirectory)
 		, m_FrameGraph({ .Allocator = allocator, .BindlessTable = bindlessTable, .TexturePool = texturePool, .PipelineStore = m_PipelineStore })
 		, m_RenderToSwapChain(info.RenderToSwapChain)
@@ -67,9 +64,9 @@ namespace Candle {
 			.ShaderDirectory = info.ShaderDirectory
 		};
 		m_RenderModules.emplace_back(ScopedPtr<SceneModule>::Create(sceneModuleSpec, geometryPool, texturePool));
-		m_RenderModules.emplace_back(ScopedPtr<DebugModule>::Create(sceneModuleSpec, renderDevice, allocator));
+		m_RenderModules.emplace_back(ScopedPtr<DebugModule>::Create(sceneModuleSpec, renderDevice));
 		m_RenderModules.emplace_back(ScopedPtr<FrameGraphPreviewModule>::Create(sceneModuleSpec));
-		m_RenderModules.emplace_back(ScopedPtr<GuiModule>::Create(sceneModuleSpec, texturePool, allocator));
+		m_RenderModules.emplace_back(ScopedPtr<GuiModule>::Create(sceneModuleSpec, texturePool));
 
 		// Save the pipeline cache to disk so that it can be loaded next time the engine is run
 		m_PipelineStore.SaveCache();
@@ -77,33 +74,6 @@ namespace Candle {
 
 	void Renderer::Render(const FramePacket& packet, FrameContext& frame, SwapChainImage& target)
 	{
-		CDL_PROFILE_SCOPE("Renderer::Render");
-
-		// Write the transform data into the frame's TransformData buffer, if any
-		std::span<const glm::mat4> transforms = packet.TransformData;
-		if (transforms.size() > kMaxTransforms)
-		{
-			// Checked in every config, since the write below would run past the end of the buffer
-			CDL_CORE_ASSERT(false, "FramePacket has more transforms than kMaxTransforms");
-			transforms = transforms.first(kMaxTransforms);
-		}
-
-		if (!transforms.empty())
-			frame.TransformData.Write(std::as_bytes(transforms));
-
-		// Safe to overwrite: RenderManager waited on this slot's RetireValue, and vkQueueSubmit makes host writes visible to the GPU
-		const GPU::FrameData frameData{
-			.ViewProjection = packet.RenderView.Projection * packet.RenderView.View,
-			.TransformData = frame.TransformData.GetDeviceAddress(),
-			.TransformCount = static_cast<uint32_t>(transforms.size()),
-			.Time = static_cast<float>(std::fmod(packet.Time, kShaderTimeWrapSeconds))
-		};
-		frame.FrameData.Write(std::as_bytes(std::span(&frameData, 1)));
-
-		const GPU::GlobalPushConstants global{
-			.Frame = frame.FrameData.GetDeviceAddress()
-		};
-
 		const glm::uvec2 sceneExtent = m_RenderToSwapChain ? target.GetDesc().Extent : m_TexturePool.GetTextureInfo(packet.OutputTarget).Desc.Extent;
 		m_FrameGraph.Reset(sceneExtent);
 
@@ -118,6 +88,11 @@ namespace Candle {
 			.Output = sceneColor
 		};
 		blackboard.Set<FrameTargetData>(outputData);
+		CDL_PROFILE_SCOPE("Renderer::Render");
+
+		const GPU::GlobalPushConstants global{
+			.Frame = frame.FrameData.Address
+		};
 
 		RenderFrameInputs inputs{
 			.Packet = packet,

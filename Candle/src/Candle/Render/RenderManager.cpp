@@ -23,6 +23,9 @@ namespace Candle {
 
 	namespace {
 
+		// A float time steps ~0.24 ms at an hour; wrapping keeps shader animation smooth for one jump per period
+		constexpr double kShaderTimeWrapSeconds = 3600.0;
+
 		RenderInstanceSpecification CreateRenderInstanceSpec(const RenderSpecification& renderSpec, const ApplicationInfo& appInfo)
 		{
 			return {
@@ -196,7 +199,10 @@ namespace Candle {
 
 		// Once the GPU reaches the slot's retire value, its command pools and acquire semaphore are free to reuse
 		m_RenderDevice.WaitFor(QueueType::Graphics, frameContext.RetireValue);
+
+		frameContext.FrameArena.Reset();
 		frameContext.CommandPool.reset();
+
 		m_CommandPoolManager.BeginFrame(m_FrameIndex);
 
 		// Rebuild before acquiring: an image acquired and then abandoned leaves its acquire semaphore signaled
@@ -218,6 +224,28 @@ namespace Candle {
 			// Error codes already threw inside acquireNextImage, and eTimeout or eNotReady can't happen with no timeout
 			CDL_CORE_PANIC(LogChannel::Render, "Failed to acquire swap chain image: {}", vk::to_string(result));
 		}
+
+		// Copy the packet's frame data and transform data into the GPU buffers for this frame context, so shaders can read them by address
+		// Write the transform data into the frame's TransformData buffer, if any
+		std::span<const glm::mat4> transforms = packet->TransformData;
+		if (transforms.size() > kMaxTransforms)
+		{
+			// Checked in every config, since the write below would run past the end of the buffer
+			CDL_CORE_ASSERT(false, "FramePacket has more transforms than kMaxTransforms");
+			transforms = transforms.first(kMaxTransforms);
+		}
+
+		if (!transforms.empty())
+			frameContext.TransformData = frameContext.FrameArena.Push(std::as_bytes(transforms));
+
+		// Safe to overwrite: RenderManager waited on this slot's RetireValue, and vkQueueSubmit makes host writes visible to the GPU
+		const GPU::FrameData frameData{
+			.ViewProjection = packet->RenderView.Projection * packet->RenderView.View,
+			.TransformData = frameContext.TransformData.Address,
+			.TransformCount = static_cast<uint32_t>(transforms.size()),
+			.Time = static_cast<float>(std::fmod(packet->Time, kShaderTimeWrapSeconds))
+		};
+		frameContext.FrameData = frameContext.FrameArena.Push(std::as_bytes(std::span(&frameData, 1)));
 
 		// Record command buffers for rendering
 		m_Renderer.Render(*packet, frameContext, m_SwapChain.GetImage(imageIndex));
@@ -287,17 +315,7 @@ namespace Candle {
 			m_RenderDevice.SetDebugName(*frameContext.CommandBuffer, std::format("Command Buffer [frame {}]", i));
 
 			// Written by the CPU every frame and read once per draw, so host-visible rather than staged into device memory
-			frameContext.FrameData = m_GPUAllocator.CreateBuffer({
-				.Size = sizeof(GPU::FrameData),
-				.Usage = vk::BufferUsageFlagBits::eShaderDeviceAddress,
-				.Flags = VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT | VMA_ALLOCATION_CREATE_MAPPED_BIT,
-				.DebugName = std::format("FrameData [frame {}]", i) });
-
-			frameContext.TransformData = m_GPUAllocator.CreateBuffer({
-				.Size = kMaxTransforms * sizeof(glm::mat4),
-				.Usage = vk::BufferUsageFlagBits::eShaderDeviceAddress,
-				.Flags = VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT | VMA_ALLOCATION_CREATE_MAPPED_BIT,
-				.DebugName = std::format("TransformData [frame {}]", i) });
+			frameContext.FrameArena = GPUFrameArena(m_GPUAllocator, kFrameDataArenaCapacity, std::format("FrameDataArena [frame {}]", i));
 		}
 	}
 

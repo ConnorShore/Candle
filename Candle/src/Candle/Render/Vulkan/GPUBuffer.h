@@ -4,6 +4,7 @@
 #include <vk_mem_alloc.h>
 
 #include <span>
+#include <cstddef>
 #include <string>
 
 namespace Candle {
@@ -60,6 +61,9 @@ namespace Candle {
 		// Copies into the buffer, flushing if its memory isn't host-coherent. Needs a host-visible allocation (a
 		// VMA_ALLOCATION_CREATE_HOST_ACCESS_* flag). Not synchronized: the caller guarantees the GPU isn't reading the range.
 		void Write(std::span<const std::byte> data, vk::DeviceSize offset = 0);
+		void FlushRange(vk::DeviceSize offset, vk::DeviceSize size);
+
+		std::span<std::byte> GetMappedMemory(vk::DeviceSize offset = 0, vk::DeviceSize size = VK_WHOLE_SIZE);
 
 		inline vk::Buffer GetBuffer() const { return m_Buffer; }
 		inline vk::DeviceSize GetSize() const { return m_Size; }

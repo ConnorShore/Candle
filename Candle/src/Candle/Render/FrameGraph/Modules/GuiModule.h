@@ -8,12 +8,11 @@ namespace Candle {
 	class FrameGraph;
 	class PipelineStore;
 	class TexturePool;
-	class GPUAllocator;
 
 	class GuiModule : public RenderModule
 	{
 	public:
-		GuiModule(const RenderModuleSpec& spec, TexturePool& texturePool, GPUAllocator& allocator);
+		GuiModule(const RenderModuleSpec& spec, TexturePool& texturePool);
 		virtual ~GuiModule() = default;
 
 		void AddPasses(const RenderFrameInputs& inputs) override;
@@ -29,7 +28,6 @@ namespace Candle {
 		FrameGraph& m_FrameGraph;
 		PipelineStore& m_PipelineStore;
 		TexturePool& m_TexturePool;
-		GPUAllocator& m_GPUAllocator;
 
 		GPUPipelineHandle m_GuiPipeline;
 	};

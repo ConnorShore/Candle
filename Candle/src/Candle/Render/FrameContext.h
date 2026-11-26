@@ -2,6 +2,7 @@
 
 #include "Candle/Render/Vulkan/Image.h"
 #include "Candle/Render/Vulkan/GPUBuffer.h"
+#include "Candle/Render/Resources/GPUArenaAllocator.h"
 
 #include <vulkan/vulkan_raii.hpp>
 
@@ -12,13 +13,19 @@ namespace Candle {
 	{
 		vk::raii::CommandPool CommandPool{ nullptr };		// The render thread's own; workers record from RenderCommandPoolManager
 		vk::raii::CommandBuffer CommandBuffer{ nullptr };
+		GPUFrameArena FrameArena;
 		// TODO: In future have a GPUArenaAllocator instead of separate buffers for frame data, transform data, etc, 
 		//	 so the GPU can allocate from it instead of the CPU writing into a buffer
-		GPUBuffer FrameData;				// Host-written only once RetireValue is reached; shaders read it by address
-		GPUBuffer TransformData;			// Host-written only once RetireValue is reached; shaders read it by address
-		GPUBuffer GuiVertices;				// Host-written only once RetireValue is reached; shaders read it by address
-		GPUBuffer GuiIndices;				// Host-written only once RetireValue is reached; shaders read it by address
-		GPUBuffer DebugDrawVertices;		// Host-written only once RetireValue is reached; shaders read it by address
+		//GPUBuffer FrameData;				// Host-written only once RetireValue is reached; shaders read it by address
+		//GPUBuffer TransformData;			// Host-written only once RetireValue is reached; shaders read it by address
+		//GPUBuffer GuiVertices;				// Host-written only once RetireValue is reached; shaders read it by address
+		//GPUBuffer GuiIndices;				// Host-written only once RetireValue is reached; shaders read it by address
+		//GPUBuffer DebugDrawVertices;		// Host-written only once RetireValue is reached; shaders read it by address
+		GPUFrameAllocation FrameData;			// Host-written only once RetireValue is reached; shaders read it by address
+		GPUFrameAllocation TransformData;		// Host-written only once RetireValue is reached; shaders read it by address
+		GPUFrameAllocation GuiVertices;		// Host-written only once RetireValue is reached; shaders read it by address
+		GPUFrameAllocation GuiIndices;		// Host-written only once RetireValue is reached; shaders read it by address
+		GPUFrameAllocation DebugDrawVertices;	// Host-written only once RetireValue is reached; shaders read it by address
 		uint64_t RetireValue{ 0 };			// Used for the timeline semaphore to know when the GPU has finished with this frame context and it can be reused
 	};
 }

@@ -14,8 +14,8 @@ namespace Candle {
 	{
 		if (auto* value = TryGet<T>())
 			return *value;
-		else
-			CDL_CORE_ASSERT(false, "Blackboard does not contain a value of type {}", typeid(T).name());
+
+		CDL_CORE_PANIC(LogChannel::Render, "Blackboard does not contain a value of type {}", typeid(T).name());
 	}
 
 	template<typename T>
@@ -26,6 +26,8 @@ namespace Candle {
 			if (type == std::type_index(typeid(T)))
 				return &std::any_cast<T&>(value);
 		}
+
+		return nullptr;
 	}
 
 	template<typename T>
@@ -33,8 +35,8 @@ namespace Candle {
 	{
 		if (auto* value = TryGet<T>())
 			return *value;
-		else
-			CDL_CORE_ASSERT(false, "Blackboard does not contain a value of type {}", typeid(T).name());
+		
+		CDL_CORE_PANIC(LogChannel::Render, "Blackboard does not contain a value of type {}", typeid(T).name());
 	}
 
 	template<typename T>
@@ -45,6 +47,8 @@ namespace Candle {
 			if (type == std::type_index(typeid(T)))
 				return &std::any_cast<const T&>(value);
 		}
+
+		return nullptr;
 	}
 
 	inline void Blackboard::Clear()

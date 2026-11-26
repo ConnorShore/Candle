@@ -7,7 +7,7 @@
 #include "Candle/Render/Pipelines/TriangleInterop.h"
 #include "Candle/Render/Pipelines/DebugDrawInterop.h"
 #include "Candle/Render/Vulkan/RenderDevice.h"
-#include "Candle/Render/Vulkan/GPUAllocator.h"
+#include "Candle/Render/Resources/GPUArenaAllocator.h"
 
 namespace Candle {
 
@@ -23,27 +23,12 @@ namespace Candle {
 			return { range[0], range[1] };
 		}
 
-		// TODO NOW: Figure out way to make this a shared utility function
-		void EnsureCapacity(GPUAllocator& allocator,GPUBuffer& buffer, size_t size, vk::BufferUsageFlags usage, std::string_view name)
-		{
-			if (buffer.GetSize() >= size)
-				return;
-
-			buffer = allocator.CreateBuffer({
-				.Size = std::max<size_t>(size, buffer.GetSize() * 2),   // Doubling, so a growing UI doesn't reallocate every frame
-				.Usage = usage,
-				.Flags = VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT | VMA_ALLOCATION_CREATE_MAPPED_BIT,
-				.DebugName = std::string(name)
-				});
-		}
-
 	}
 
-	DebugModule::DebugModule(const RenderModuleSpec& spec, RenderDevice& renderDevice, GPUAllocator& allocator)
+	DebugModule::DebugModule(const RenderModuleSpec& spec, RenderDevice& renderDevice)
 		: m_FrameGraph(spec.Graph)
 		, m_PipelineStore(spec.Pipelines)
 		, m_LineWidthRange(FindLineWidthRange(renderDevice))
-		, m_GPUAllocator(allocator)
 	{
 		m_DebugDrawPipeline = spec.Pipelines.CreatePipeline(GraphicsPipelineSpecification{
 			.Shader = LoadEngineShader("DebugDrawPipeline", spec.ShaderDirectory / "DebugDraw.spv"),
@@ -79,15 +64,13 @@ namespace Candle {
 					return;
 				}
 
-				// TODO: Will probably be handled be linear allocator for frame data
 				const DebugDrawData& debugDraw = inputs.Packet.DebugDraw;
-				EnsureCapacity(m_GPUAllocator, inputs.Frame.DebugDrawVertices, debugDraw.Vertices.size() * sizeof(GPU::DebugDrawVertex), vk::BufferUsageFlagBits::eShaderDeviceAddress, "DebugDrawVertices");
-				inputs.Frame.DebugDrawVertices.Write(std::as_bytes(std::span(debugDraw.Vertices)));
+				inputs.Frame.DebugDrawVertices = inputs.Frame.FrameArena.Push(std::as_bytes(std::span(debugDraw.Vertices)));
 
 				vk::CommandBuffer commandBuffer = ctx.GetCommandBuffer();
 				ctx.BindPipeline(vk::PipelineBindPoint::eGraphics, debugDrawPipeline);
 
-				const vk::DeviceAddress vertexBase = inputs.Frame.DebugDrawVertices.GetDeviceAddress();
+				const vk::DeviceAddress vertexBase = inputs.Frame.DebugDrawVertices.Address;
 				std::optional<DebugDrawBucket> currentBucket;
 				for (const DebugDrawBatch& batch : debugDraw.Batches)
 				{

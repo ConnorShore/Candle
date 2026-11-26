@@ -42,7 +42,7 @@ namespace Candle {
 	{
 	public:
 		Renderer(RenderDevice& renderDevice, GeometryPool& geometryPool, TexturePool& texturePool, BindlessTable& bindlessTable,
-					GPUAllocator& allocator, const RendererCreationInfo& info);
+			GPUAllocator& allocator, const RendererCreationInfo& info);
 
 		void Render(const FramePacket& packet, FrameContext& frame, SwapChainImage& target);
 
@@ -57,7 +57,6 @@ namespace Candle {
 		GeometryPool& m_GeometryPool;
 		TexturePool& m_TexturePool;
 		BindlessTable& m_BindlessTable;
-		GPUAllocator& m_GPUAllocator;
 		PipelineStore m_PipelineStore;
 		FrameGraph m_FrameGraph;
 

@@ -10,12 +10,11 @@ namespace Candle {
 	class FrameGraph;
 	class PipelineStore;
 	class RenderDevice;
-	class GPUAllocator;
 
 	class DebugModule : public RenderModule
 	{
 	public:
-		DebugModule(const RenderModuleSpec& spec, RenderDevice& renderDevice, GPUAllocator& allocator);
+		DebugModule(const RenderModuleSpec& spec, RenderDevice& renderDevice);
 		virtual ~DebugModule() = default;
 
 		void AddPasses(const RenderFrameInputs& inputs) override;
@@ -31,7 +30,6 @@ namespace Candle {
 	private:
 		FrameGraph& m_FrameGraph;
 		PipelineStore& m_PipelineStore;
-		GPUAllocator& m_GPUAllocator;
 
 		GPUPipelineHandle m_DebugDrawPipeline;
 		glm::vec2 m_LineWidthRange;
