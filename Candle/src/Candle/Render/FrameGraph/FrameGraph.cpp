@@ -49,6 +49,7 @@ namespace Candle {
 		, m_FrameArena(kFrameArenaSize)
 		, m_ExecuteArena(kExecuteArenaSize)
 		, m_ResourceCache(spec.Allocator, spec.BindlessTable)
+		, m_Blackboard(m_FrameArena)
 	{
 	}
 

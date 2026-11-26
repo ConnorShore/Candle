@@ -315,7 +315,7 @@ namespace Candle {
 			m_RenderDevice.SetDebugName(*frameContext.CommandBuffer, std::format("Command Buffer [frame {}]", i));
 
 			// Written by the CPU every frame and read once per draw, so host-visible rather than staged into device memory
-			frameContext.FrameArena = GPUFrameArena(m_GPUAllocator, kFrameDataArenaCapacity, std::format("FrameDataArena [frame {}]", i));
+			frameContext.FrameArena = GPUArenaAllocator(m_GPUAllocator, kFrameDataArenaCapacity, std::format("FrameDataArena [frame {}]", i));
 		}
 	}
 
