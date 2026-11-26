@@ -4,6 +4,7 @@
 #include "Candle/Render/Vulkan/GPUAllocator.h"
 #include "Candle/Render/Resources/GPUResourcePool.h"
 #include "Candle/Render/Resources/GPUUploader.h"
+#include "Candle/Render/Resources/GPUArenaAllocator.h"
 
 namespace Candle {
 
@@ -21,6 +22,7 @@ namespace Candle {
 	struct RenderStats
 	{
 		ThreadFrameTimings Timings;
+		GPUArenaStats FrameArena;	// The last drawn frame's use of its slot, the most any slot has used, and one slot's capacity
 	};
 
 }

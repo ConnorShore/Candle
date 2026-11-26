@@ -48,13 +48,15 @@ namespace Candle {
 
 		void RenderToolbar(const GPUResourceStats& stats);
 		void RenderMemorySection(const GPUAllocatorStats& stats);
-		void RenderPoolsSection(const GPUResourceStats& stats);
+		void RenderPoolsSection(const GPUResourceStats& stats, const GPUArenaStats& frameArena);
+		void RenderArenasSection(const GPUArenaStats& frameArena);
 		void RenderActivitySection(const GPUResourceStats& stats);
 		void RenderHistorySection();
 
 		void RenderHeapStats(uint32_t index, const GPUHeapStats& stats);
 		void RenderPoolStats(const char* poolName, const GPUResourcePoolStats& stats, const GPUResourcePoolStats* baseline, const PoolActivity& activity);
-		void RenderOtherMemory(const GPUResourceStats& stats);
+		void RenderArenaStats(const char* arenaName, const char* description, const GPUArenaStats& stats, uint32_t count);
+		void RenderOtherMemory(const GPUResourceStats& stats, uint64_t frameArenaBytes);
 		void DrawHistoryGraph(uint32_t sampleCount);
 
 		const ResourceSample& SampleAtAge(uint32_t age) const;	// 0 is the newest sample; age must be below the sample count

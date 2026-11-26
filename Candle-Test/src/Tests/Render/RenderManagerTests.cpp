@@ -379,6 +379,29 @@ CDL_TEST_CASE(RenderManager, RenderStatsKeepComingWhileFramesAreSkipped, Gpu)
 	ExpectNoVulkanDebugMessages(logs);
 }
 
+// The frame arena's use comes back with the timings. A skipped frame writes nothing into its slot, so it repeats the last
+// drawn frame's rather than reporting an arena that looks empty. Every frame here draws the same, so it uses the same.
+CDL_TEST_CASE(RenderManager, FrameArenaStatsComeBackAndOutlastSkippedFrames, Gpu)
+{
+	SkipUnlessRendererShadersCompiled();
+
+	LoggerFixture logs(LogLevel::Warn, kRenderChannelMask);
+	{
+		TestRenderManager test;
+		const GPUMeshHandle mesh = test.CreateTriangle();
+
+		SubmitFrames(test, kReleaseRoundTrip, mesh, WindowSurface(test.AppWindow));
+		const GPUArenaStats drawn = test.Manager.GetRenderStats().FrameArena;
+		CDL_EXPECT_GT(drawn.UsedBytes, 0u);
+		CDL_EXPECT_GE(drawn.PeakBytes, drawn.UsedBytes);
+		CDL_EXPECT_EQ(drawn.CapacityBytes, uint64_t{ kFrameDataArenaCapacity });
+
+		SubmitFrames(test, kReleaseRoundTrip, mesh, { .Size = test.AppWindow.GetSize(), .Minimized = true });
+		CDL_EXPECT_EQ(test.Manager.GetRenderStats().FrameArena.UsedBytes, drawn.UsedBytes);
+	}
+	ExpectNoVulkanDebugMessages(logs);
+}
+
 // The application's path for meshes: RenderManager hands its mesh handler to the AssetManager, which uploads on load.
 CDL_TEST_CASE(RenderManager, RegisteredHandlersUploadMeshAssets, Gpu)
 {

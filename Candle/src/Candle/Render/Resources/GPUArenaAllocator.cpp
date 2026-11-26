@@ -47,6 +47,7 @@ namespace Candle {
 
 		// Update the offset for the next allocation
 		m_Offset += size;
+		m_Peak = std::max(m_Peak, m_Offset);
 
 		return allocation;
 	}

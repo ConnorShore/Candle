@@ -19,6 +19,13 @@ namespace Candle {
 		vk::DeviceSize Offset{ 0 };
 	};
 
+	struct GPUArenaStats
+	{
+		uint64_t UsedBytes{ 0 };
+		uint64_t PeakBytes{ 0 };
+		uint64_t CapacityBytes{ 0 };
+	};
+
 	// Threading: render thread only
 	class GPUArenaAllocator
 	{
@@ -49,10 +56,14 @@ namespace Candle {
 		void Reset();   // Only once the frame's RetireValue is reached
 		void Flush();   // One flush of the used range before submit, for non-coherent memory
 
+		// Peak survives Reset, so it's the most any one frame has used: what to size the capacity by
+		inline GPUArenaStats GetStats() const { return { .UsedBytes = m_Offset, .PeakBytes = m_Peak, .CapacityBytes = m_Capacity }; }
+
 	private:
 		GPUBuffer m_Buffer;
 		vk::DeviceSize m_Capacity{ 0 };
 		vk::DeviceSize m_Offset{ 0 };
+		vk::DeviceSize m_Peak{ 0 };
 
 		std::string m_DebugName;
 	};
