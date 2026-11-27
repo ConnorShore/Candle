@@ -46,6 +46,23 @@ namespace Candle {
 		CDL_CORE_ASSERT(result == VK_SUCCESS, "vmaCopyMemoryToAllocation failed; is the allocation host-visible?");
 	}
 
+	void GPUBuffer::FlushRange(vk::DeviceSize offset, vk::DeviceSize size)
+	{
+		CDL_CORE_ASSERT(m_Allocation, "Flushing an empty GPUBuffer");
+		CDL_CORE_ASSERT(offset + size <= m_Size, "GPUBuffer flush out of bounds");
+
+		vmaFlushAllocation(m_Allocator, m_Allocation, offset, size);
+	}
+
+	std::span<std::byte> GPUBuffer::GetMappedMemory(vk::DeviceSize offset /*= 0*/, vk::DeviceSize size /*= VK_WHOLE_SIZE*/)
+	{
+		size_t mappedSize = (size == VK_WHOLE_SIZE) ? m_Size - offset : size;
+		VmaAllocationInfo allocInfo;
+		vmaGetAllocationInfo(m_Allocator, m_Allocation, &allocInfo);
+		std::byte* mappedPtr = static_cast<std::byte*>(allocInfo.pMappedData) + offset;
+		return std::span<std::byte>(mappedPtr, mappedSize);
+	}
+
 	void GPUBuffer::Destroy()
 	{
 		// Immediate, so the owner keeps the buffer alive until the GPU is done with it (a DeletionQueue or a pool slot)

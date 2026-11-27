@@ -27,7 +27,9 @@ namespace Candle {
 		// Returns nullptr for an invalid or not ready handle (i.e hasn't fully built yet)
 		// TODO: Probably need some async creation for this to be useful, but for now we just block until the pipeline is ready
 		vk::Pipeline TryGetPipeline(GPUPipelineHandle handle);
-		std::expected<ShaderEntryPoint, std::string> GetEntryPoint(GPUPipelineHandle handle, ShaderStage stage) const;
+
+		// Points into the pipeline's shader rather than copying it, since the render thread asks every frame. Look it up each use instead of holding on to it.
+		std::expected<const ShaderEntryPoint*, std::string> GetEntryPoint(GPUPipelineHandle handle, ShaderStage stage) const;
 
 		void SaveCache();
 

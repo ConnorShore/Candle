@@ -8,6 +8,7 @@
 #include <new>
 #include <type_traits>
 #include <utility>
+#include <span>
 
 namespace Candle {
 
@@ -45,6 +46,16 @@ namespace Candle {
 				CDL_CORE_PANIC(LogChannel::Memory, "ArenaAllocator is out of memory: {} more bytes with {} of {} used; raise its capacity", sizeof(T), m_Offset, m_Capacity);
 
 			return ::new (memory) T(std::forward<Args>(args)...);
+		}
+
+		template<IsTrivial T>
+		inline std::span<T> NewArray(size_t count)
+		{
+			void* memory = Allocate(sizeof(T) * count, alignof(T));
+			if (!memory)
+				CDL_CORE_PANIC(LogChannel::Memory, "ArenaAllocator is out of memory: {} more bytes with {} of {} used; raise its capacity", sizeof(T) * count, m_Offset, m_Capacity);
+			T* array = static_cast<T*>(memory);
+			return std::span<T>(array, count);
 		}
 
 		inline void Reset()

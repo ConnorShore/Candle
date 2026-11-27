@@ -147,9 +147,10 @@ namespace Candle {
 		TexturePool& m_TexturePool;
 		PipelineStore& m_PipelineStore;
 		ArenaAllocator m_FrameArena;
+		ArenaAllocator m_ExecuteArena;
 		ResourceCache m_ResourceCache;
 		FGCompiledGraph m_CompiledGraph;
-		Blackboard m_Blackboard;
+		Blackboard m_Blackboard;	// After m_FrameArena, which holds its values
 
 		glm::uvec2 m_OutputExtent{ 0, 0 };
 		std::vector<FrameGraphPassNode> m_Passes;

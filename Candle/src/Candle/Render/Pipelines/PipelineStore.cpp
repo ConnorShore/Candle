@@ -240,15 +240,15 @@ namespace Candle {
 		}
 	}
 
-	std::expected<ShaderEntryPoint, std::string> PipelineStore::GetEntryPoint(GPUPipelineHandle handle, ShaderStage stage) const
+	std::expected<const ShaderEntryPoint*, std::string> PipelineStore::GetEntryPoint(GPUPipelineHandle handle, ShaderStage stage) const
 	{
 		if (auto valid = ValidateHandle(handle); !valid.has_value())
 			return std::unexpected(valid.error());
 
 		size_t stageIndex = static_cast<size_t>(stage);
 		return std::visit(Overloaded{
-			[&](const GraphicsPipelineSpecification& spec) -> ShaderEntryPoint { return spec.Shader->GetEntryPoints()[stageIndex]; },
-			[&](const ComputePipelineSpecification& spec) -> ShaderEntryPoint { return spec.Shader->GetEntryPoints()[stageIndex]; }
+			[&](const GraphicsPipelineSpecification& spec) -> const ShaderEntryPoint* { return &spec.Shader->GetEntryPoints()[stageIndex]; },
+			[&](const ComputePipelineSpecification& spec) -> const ShaderEntryPoint* { return &spec.Shader->GetEntryPoints()[stageIndex]; }
 			}, m_Pipelines[handle.Index].Spec);
 	}
 

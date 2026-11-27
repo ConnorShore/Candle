@@ -15,4 +15,6 @@ namespace Candle {
 	constexpr uint32_t kMaxTextures = (16 * 1024) + kMaxFrameGraphTextures;
 	constexpr uint32_t kMaxTransforms = 16 * 1024;		// Same size as meshes for now
 
+	constexpr uint32_t kFrameDataArenaCapacity = 16 * 1024 * 1024;	// 16 MB (per frame) for the frame's data, transform data, etc, so the GPU can allocate from it instead of the CPU writing into a buffer
+
 }

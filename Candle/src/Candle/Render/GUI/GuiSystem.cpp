@@ -4,6 +4,7 @@
 #include "Candle/Platform/SDL/SDLPlatform.h"
 #include "Candle/Render/Resources/TexturePool.h"
 #include "Candle/Render/GUI/GuiTextureID.h"
+#include "Candle/Core/Memory/GlobalAllocation.h"
 
 #include <imgui.h>
 #include <imgui_internal.h>
@@ -45,6 +46,10 @@ namespace Candle {
 		CDL_STATIC_ASSERT(offsetof(Candle::GPU::GuiVertex, Color) == offsetof(ImDrawVert, col));
 		CDL_STATIC_ASSERT(sizeof(GuiIndex) == sizeof(ImDrawIdx));
 
+		// Process-wide in ImGui, and a context frees through whatever is set when it's destroyed, so it goes in before the context exists
+		ImGui::SetAllocatorFunctions(
+			[](size_t size, void*) { return Memory::Allocate(size); },
+			[](void* ptr, void*) { Memory::Free(ptr); });
 		ImGui::CreateContext();
 		ImGuiIO& io = ImGui::GetIO(); (void)io;
 		io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;       // Enable Keyboard Controls
@@ -197,30 +202,32 @@ namespace Candle {
 		}
 	}
 
-	GuiDrawData GuiSystem::ExtractDrawData() const
+	void GuiSystem::ExtractDrawData(GuiDrawData& outData) const
 	{
 		const ImDrawData* drawData = ImGui::GetDrawData();
-		GuiDrawData out{
-				.DisplayPos = { drawData->DisplayPos.x, drawData->DisplayPos.y },
-				.DisplaySize = { drawData->DisplaySize.x, drawData->DisplaySize.y }
-		};
-		out.Vertices.resize(drawData->TotalVtxCount);
-		out.Indices.resize(drawData->TotalIdxCount);
+
+		outData.Commands.clear();
+
+		outData.DisplayPos = { drawData->DisplayPos.x, drawData->DisplayPos.y };
+		outData.DisplaySize = { drawData->DisplaySize.x, drawData->DisplaySize.y };
+
+		outData.Vertices.resize(drawData->TotalVtxCount);
+		outData.Indices.resize(drawData->TotalIdxCount);
 
 		const ImVec2 pos = drawData->DisplayPos;
 		const ImVec2 scale = drawData->FramebufferScale;
 		uint32_t vertexBase = 0, indexBase = 0;
 		for (const ImDrawList* list : drawData->CmdLists)
 		{
-			std::memcpy(out.Vertices.data() + vertexBase, list->VtxBuffer.Data, list->VtxBuffer.size_in_bytes());
-			std::memcpy(out.Indices.data() + indexBase, list->IdxBuffer.Data, list->IdxBuffer.size_in_bytes());
+			std::memcpy(outData.Vertices.data() + vertexBase, list->VtxBuffer.Data, list->VtxBuffer.size_in_bytes());
+			std::memcpy(outData.Indices.data() + indexBase, list->IdxBuffer.Data, list->IdxBuffer.size_in_bytes());
 
 			for (const ImDrawCmd& cmd : list->CmdBuffer)
 			{
 				if (cmd.UserCallback)   // TODO: Support user callbacks in the future if we need them
 					continue;
 
-				out.Commands.push_back({
+				outData.Commands.push_back({
 						.ClipRect = { (cmd.ClipRect.x - pos.x) * scale.x, (cmd.ClipRect.y - pos.y) * scale.y,
 										(cmd.ClipRect.z - pos.x) * scale.x, (cmd.ClipRect.w - pos.y) * scale.y },
 						.Texture = ToTextureHandle(cmd.GetTexID()),
@@ -233,7 +240,6 @@ namespace Candle {
 			vertexBase += list->VtxBuffer.Size;
 			indexBase += list->IdxBuffer.Size;
 		}
-		return out;
 	}
 
 }

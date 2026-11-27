@@ -1,6 +1,7 @@
 #include "cdlpch.h"
 #include "GPUResourceInspectorPanel.h"
 #include "Candle/Debug/DebugFormat.h"
+#include "Candle/Render/RenderConstants.h"
 
 #include <imgui.h>
 
@@ -79,10 +80,15 @@ namespace Candle {
 			return total;
 		}
 
-		// What VMA holds that no pool owns. Saturates since the render thread can free a payload between the two captures.
-		uint64_t OtherBytes(const GPUResourceStats& stats)
+		uint64_t FrameArenaBytes(const GPUArenaStats& stats)
 		{
-			return BytesAbove(TotalAllocationBytes(stats.AllocatorStats), stats.GeometryPoolStats.SizeBytes + stats.TexturePoolStats.SizeBytes);
+			return stats.CapacityBytes * kMaxFramesInFlight;
+		}
+
+		// What VMA holds that no pool or frame arena owns. Saturates since the render thread can free a payload between the two captures.
+		uint64_t OtherBytes(const GPUResourceStats& stats, uint64_t frameArenaBytes)
+		{
+			return BytesAbove(TotalAllocationBytes(stats.AllocatorStats), stats.GeometryPoolStats.SizeBytes + stats.TexturePoolStats.SizeBytes + frameArenaBytes);
 		}
 
 		std::string FormatBytesDelta(uint64_t now, uint64_t then)
@@ -265,7 +271,8 @@ namespace Candle {
 			const GPUResourceStats& stats = context.Resources;
 			RenderToolbar(stats);
 			RenderMemorySection(stats.AllocatorStats);
-			RenderPoolsSection(stats);
+			RenderPoolsSection(stats, context.Render.FrameArena);
+			RenderArenasSection(context.Render.FrameArena);
 			RenderActivitySection(stats);
 			RenderHistorySection();
 		}
@@ -371,7 +378,7 @@ namespace Candle {
 		DrawNumberCell(std::to_string(stats.BlockCount));
 	}
 
-	void GPUResourceInspectorPanel::RenderPoolsSection(const GPUResourceStats& stats)
+	void GPUResourceInspectorPanel::RenderPoolsSection(const GPUResourceStats& stats, const GPUArenaStats& frameArena)
 	{
 		ImGui::SeparatorText("Resources");
 
@@ -392,7 +399,7 @@ namespace Candle {
 
 			RenderPoolStats("Meshes", stats.GeometryPoolStats, m_Baseline ? &m_Baseline->GeometryPoolStats : nullptr, m_MeshActivity);
 			RenderPoolStats("Textures", stats.TexturePoolStats, m_Baseline ? &m_Baseline->TexturePoolStats : nullptr, m_TextureActivity);
-			RenderOtherMemory(stats);
+			RenderOtherMemory(stats, FrameArenaBytes(frameArena));
 
 			ImGui::EndTable();
 		}
@@ -458,15 +465,75 @@ namespace Candle {
 		DrawNumberCell(std::format("{}, {}", liveDeltaText, FormatBytesDelta(stats.SizeBytes, baseline->SizeBytes)), grew ? kWarnColor : TextColor());
 	}
 
-	void GPUResourceInspectorPanel::RenderOtherMemory(const GPUResourceStats& stats)
+	void GPUResourceInspectorPanel::RenderArenasSection(const GPUArenaStats& frameArena)
+	{
+		ImGui::SeparatorText("Arenas");
+
+		ImGui::PushStyleVar(ImGuiStyleVar_CellPadding, kTableCellPadding);
+		if (ImGui::BeginTable("##Arenas", 7, kStatTableFlags))
+		{
+			ImGui::TableSetupColumn("Arena", ImGuiTableColumnFlags_WidthFixed);
+			ImGui::TableSetupColumn("Usage", ImGuiTableColumnFlags_WidthStretch);
+			SetupNumberColumn("Used", "000.00 GB");
+			SetupNumberColumn("Peak", "000.00 GB");
+			SetupNumberColumn("Capacity", "000.00 GB");
+			SetupNumberColumn("Count", "000");
+			SetupNumberColumn("Memory", "000.00 GB");
+			DrawHeadersRow(2);
+
+			RenderArenaStats("Frame data", "One per frame in flight for what the CPU writes each frame for the GPU to read, each rewound once its frame retires",
+				frameArena, kMaxFramesInFlight);
+
+			ImGui::EndTable();
+		}
+		ImGui::PopStyleVar();
+
+		DrawLegendEntry(kLiveColor, "Used last frame");
+		DrawLegendEntry(kMarkerColor, "Peak");
+		ImGui::NewLine();
+	}
+
+	void GPUResourceInspectorPanel::RenderArenaStats(const char* arenaName, const char* description, const GPUArenaStats& stats, uint32_t count)
+	{
+		const float usedFraction = Fraction(stats.UsedBytes, stats.CapacityBytes);
+		const float peakFraction = Fraction(stats.PeakBytes, stats.CapacityBytes);
+
+		ImGui::TableNextRow();
+		ImGui::TableNextColumn();
+		ImGui::TextUnformatted(arenaName);
+		ImGui::SetItemTooltip("%s", description);
+
+		ImGui::TableNextColumn();
+		const std::array<BarSegment, 1> segments = { BarSegment{ usedFraction, kLiveColor } };
+		DrawBar(segments, peakFraction);
+		ImGui::SetItemTooltip("%.2f%% of an arena used last frame, %.2f%% at its peak", usedFraction * 100.0f, peakFraction * 100.0f);
+
+		ImGui::TableNextColumn();
+		DrawNumberCell(FormatBytes(stats.UsedBytes));
+
+		ImGui::TableNextColumn();
+		DrawNumberCell(FormatBytes(stats.PeakBytes), SeverityColor(peakFraction));
+		ImGui::SetItemTooltip("The most one frame has used of an arena. Running out is fatal, so raise its capacity before this gets close.");
+
+		ImGui::TableNextColumn();
+		DrawNumberCell(FormatBytes(stats.CapacityBytes));
+
+		ImGui::TableNextColumn();
+		DrawNumberCell(std::to_string(count));
+
+		ImGui::TableNextColumn();
+		DrawNumberCell(FormatBytes(stats.CapacityBytes * count));
+	}
+
+	void GPUResourceInspectorPanel::RenderOtherMemory(const GPUResourceStats& stats, uint64_t frameArenaBytes)
 	{
 		ImGui::TableNextRow();
 		ImGui::TableNextColumn();
 		ImGui::TextUnformatted("Other");
-		ImGui::SetItemTooltip("Everything VMA holds outside the pools: staging, frame buffers, depth and the GUI. Released resources count here until the GPU retires them.");
+		ImGui::SetItemTooltip("Everything VMA holds outside the pools and frame arenas, such as staging and the frame graph's transients. Released resources count here until the GPU retires them.");
 
 		ImGui::TableSetColumnIndex(7);
-		const uint64_t otherBytes = OtherBytes(stats);
+		const uint64_t otherBytes = OtherBytes(stats, frameArenaBytes);
 		DrawNumberCell(FormatBytes(otherBytes));
 
 		ImGui::TableSetColumnIndex(9);
@@ -477,7 +544,8 @@ namespace Candle {
 			return;
 		}
 
-		const uint64_t baselineBytes = OtherBytes(*m_Baseline);
+		// The arenas are allocated once at startup, so the baseline held the same
+		const uint64_t baselineBytes = OtherBytes(*m_Baseline, frameArenaBytes);
 		DrawNumberCell(FormatBytesDelta(otherBytes, baselineBytes), otherBytes > baselineBytes ? kWarnColor : TextColor());
 	}
 

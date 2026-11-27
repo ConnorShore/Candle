@@ -19,7 +19,7 @@ workspace "Candle"
    -- Workspace-wide so every TU including Tracy.hpp agrees; a mismatch is silent ODR breakage.
    -- No TRACY_ON_DEMAND: it drops everything before the viewer connects, which hides startup.
    filter "configurations:Profile"
-      defines { "TRACY_ENABLE" }
+      defines { "TRACY_ENABLE", "CDL_PROFILE_ENABLED" }
    filter {}
 
 outputdir = "%{cfg.buildcfg}-%{cfg.system}-%{cfg.architecture}"

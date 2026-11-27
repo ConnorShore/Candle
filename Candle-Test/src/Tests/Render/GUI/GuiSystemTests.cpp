@@ -18,6 +18,7 @@
 #include <cstring>
 #include <format>
 #include <optional>
+#include <utility>
 #include <vector>
 
 using namespace Candle;
@@ -42,14 +43,23 @@ namespace {
 		}
 	};
 
-	// One GUI frame as Application::Run brackets OnUpdate, with draw making the application's ImGui calls.
+	// One GUI frame as Application::Run brackets OnUpdate, with draw making the application's ImGui calls. Extracts into
+	// out, as Application does into the packet it reuses.
 	template<typename Fn>
-	GuiDrawData RunGuiFrame(GuiSystem& gui, Fn&& draw)
+	void RunGuiFrame(GuiSystem& gui, GuiDrawData& out, Fn&& draw)
 	{
 		gui.StartFrame();
 		draw();
 		gui.EndFrame();
-		return gui.ExtractDrawData();
+		gui.ExtractDrawData(out);
+	}
+
+	template<typename Fn>
+	GuiDrawData RunGuiFrame(GuiSystem& gui, Fn&& draw)
+	{
+		GuiDrawData out;
+		RunGuiFrame(gui, out, std::forward<Fn>(draw));
+		return out;
 	}
 
 	// Placed and sized up front: ImGui hides a new auto-sized window for its first frame while it measures it, so a test
@@ -311,7 +321,8 @@ CDL_TEST_CASE(GuiSystem, ClipRectsAreExtractedInFramebufferPixels, Gpu)
 		drawData->DisplayPos = pos;
 		drawData->FramebufferScale = scale;
 
-		const GuiDrawData gui = test.Gui->ExtractDrawData();
+		GuiDrawData gui;
+		test.Gui->ExtractDrawData(gui);
 		CDL_EXPECT(gui.DisplayPos == glm::vec2(pos.x, pos.y));
 
 		const auto imguiCommands = DrawableCommands(*drawData);
@@ -349,6 +360,32 @@ CDL_TEST_CASE(GuiSystem, ExtractionSkipsUserCallbacks, Gpu)
 		CDL_CHECK_EQ(callbacks, 1);
 		CDL_EXPECT_EQ(gui.Commands.size(), DrawableCommands(*drawData).size());
 		CDL_EXPECT_FALSE(gui.Commands.empty());
+	}
+	ExpectNoVulkanDebugMessages(logs);
+}
+
+// Application extracts into a packet it reuses, so what the packet held from its last frame has to be replaced, not added
+// to. A command left over can name a texture released since, which the GUI pass then asks the pool about.
+CDL_TEST_CASE(GuiSystem, ExtractionReplacesWhatTheReusedDataHeld, Gpu)
+{
+	LoggerFixture logs(LogLevel::Warn, kRenderChannelMask);
+	{
+		TestGui test;
+		GuiDrawData gui;
+		RunGuiFrame(*test.Gui, gui, DrawTwoWindows);
+		CDL_CHECK_FALSE(gui.Commands.empty());
+
+		RunGuiFrame(*test.Gui, gui, [] {
+			BeginTestWindow("First");
+			ImGui::Text("Hello");
+			ImGui::End();
+		});
+		const ImDrawData* drawData = ImGui::GetDrawData();
+		CDL_CHECK(drawData);
+
+		CDL_EXPECT_EQ(gui.Commands.size(), DrawableCommands(*drawData).size());
+		CDL_EXPECT_EQ(gui.Vertices.size(), static_cast<size_t>(drawData->TotalVtxCount));
+		CDL_EXPECT_EQ(gui.Indices.size(), static_cast<size_t>(drawData->TotalIdxCount));
 	}
 	ExpectNoVulkanDebugMessages(logs);
 }

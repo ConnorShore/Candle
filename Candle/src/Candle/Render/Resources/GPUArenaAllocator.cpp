@@ -1,0 +1,74 @@
+#include "cdlpch.h"
+#include "GPUArenaAllocator.h"
+
+#include "Candle/Render/Vulkan/GPUAllocator.h"
+
+namespace Candle {
+
+	namespace {
+
+		constexpr uint8_t kMinAlignment = 16;	// Minimum alignment for GPU buffers (matches spir-v direct buffer alignment requirements)
+
+	}
+
+	GPUArenaAllocator::GPUArenaAllocator(GPUAllocator& allocator, uint32_t capacityBytes, const std::string& debugName/* = "GPUArenaAllocator"*/)
+		: m_Capacity(capacityBytes), m_Offset(0), m_DebugName(debugName)
+	{
+		m_Buffer = allocator.CreateBuffer({
+			.Size = capacityBytes,
+			.Usage = vk::BufferUsageFlagBits::eStorageBuffer | vk::BufferUsageFlagBits::eShaderDeviceAddress | vk::BufferUsageFlagBits::eTransferDst | vk::BufferUsageFlagBits::eIndexBuffer,
+			.Flags = VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT | VMA_ALLOCATION_CREATE_MAPPED_BIT,
+			.DebugName = debugName 
+		});
+	}
+
+	GPUArenaAllocator::~GPUArenaAllocator()
+	{
+	}
+
+	GPUArenaAllocation GPUArenaAllocator::Allocate(vk::DeviceSize size, vk::DeviceSize alignment)
+	{
+		CDL_CORE_ASSERT(size > 0, "GPUArenaAllocator [{}] allocation size must be greater than 0", m_DebugName);
+
+		// Force minimum alignment to match spir-v direct buffer alignment requirements
+		if (alignment < kMinAlignment)
+			alignment = kMinAlignment; 
+
+		// Align the offset to the requested alignment
+		m_Offset = (m_Offset + alignment - 1) & ~(alignment - 1);	// Align the offset
+
+		// Ensure we have enough space in the arena for the allocation
+		if (m_Offset + size > m_Capacity)
+			CDL_CORE_PANIC(LogChannel::Memory, "GPUArenaAllocator [{}] out of memory: {} more bytes with {} of {} used; raise its capacity", m_DebugName, size, m_Offset, m_Capacity);
+		
+		GPUArenaAllocation allocation{
+			.Mapped = m_Buffer.GetMappedMemory(m_Offset, size),
+			.Address = m_Buffer.GetDeviceAddress() + m_Offset,
+			.Buffer = m_Buffer.GetBuffer(),
+			.Offset = m_Offset
+		};
+
+		// Update the offset for the next allocation
+		m_Offset += size;
+		m_Peak = std::max(m_Peak, m_Offset);
+
+		return allocation;
+	}
+
+	void GPUArenaAllocator::Write(std::span<const std::byte> data, GPUArenaAllocation& allocation)
+	{
+		CDL_CORE_ASSERT(allocation.Mapped.size() >= data.size(), "GPUArenaAllocator write out of bounds");
+		std::memcpy(allocation.Mapped.data(), data.data(), data.size());
+	}
+
+	void GPUArenaAllocator::Reset()
+	{
+		m_Offset = 0;
+	}
+
+	void GPUArenaAllocator::Flush()
+	{
+		m_Buffer.FlushRange(0, m_Offset);	// Flush the used range before submit, for non-coherent memory
+	}
+
+}

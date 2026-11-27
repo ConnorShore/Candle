@@ -4,35 +4,16 @@
 
 #include "Candle/Render/FrameGraph/FrameGraph.h"
 #include "Candle/Render/Pipelines/PipelineStore.h"
-#include "Candle/Render/Vulkan/GPUAllocator.h"
+#include "Candle/Render/Resources/GPUArenaAllocator.h"
 #include "Candle/Render/Resources/TexturePool.h"
 #include "Candle/Render/GUI/GuiInterop.h"
 
 namespace Candle {
 
-	namespace {
-
-		// TODO NOW: Figure out way to make this a shared utility function
-		void EnsureCapacity(GPUAllocator& allocator, GPUBuffer& buffer, size_t size, vk::BufferUsageFlags usage, std::string_view name)
-		{
-			if (buffer.GetSize() >= size)
-				return;
-
-			buffer = allocator.CreateBuffer({
-				.Size = std::max<size_t>(size, buffer.GetSize() * 2),   // Doubling, so a growing UI doesn't reallocate every frame
-				.Usage = usage,
-				.Flags = VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT | VMA_ALLOCATION_CREATE_MAPPED_BIT,
-				.DebugName = std::string(name)
-				});
-		}
-
-	}
-
-	GuiModule::GuiModule(const RenderModuleSpec& spec, TexturePool& texturePool, GPUAllocator& allocator)
+	GuiModule::GuiModule(const RenderModuleSpec& spec, TexturePool& texturePool)
 		: m_FrameGraph(spec.Graph)
 		, m_PipelineStore(spec.Pipelines)
 		, m_TexturePool(texturePool)
-		, m_GPUAllocator(allocator)
 	{
 		m_GuiPipeline = m_PipelineStore.CreatePipeline(GraphicsPipelineSpecification{
 			.Shader = LoadEngineShader("GuiPipeline", spec.ShaderDirectory / "Gui.spv"),
@@ -85,13 +66,10 @@ namespace Candle {
 					return;
 				}
 
-				EnsureCapacity(m_GPUAllocator, inputs.Frame.GuiVertices, gui.Vertices.size() * sizeof(Candle::GPU::GuiVertex), vk::BufferUsageFlagBits::eShaderDeviceAddress, "GuiVertices");
-				EnsureCapacity(m_GPUAllocator, inputs.Frame.GuiIndices, gui.Indices.size() * sizeof(GuiIndex), vk::BufferUsageFlagBits::eIndexBuffer, "GuiIndices");
-				inputs.Frame.GuiVertices.Write(std::as_bytes(std::span(gui.Vertices)));
-				inputs.Frame.GuiIndices.Write(std::as_bytes(std::span(gui.Indices)));
+				inputs.Frame.GuiVertices = inputs.Frame.FrameArena.Push(std::as_bytes(std::span(gui.Vertices)));
+				inputs.Frame.GuiIndices = inputs.Frame.FrameArena.Push(std::as_bytes(std::span(gui.Indices)));
 
 				ctx.BindPipeline(vk::PipelineBindPoint::eGraphics, guiPipeline);
-
 				ctx.EnableDepthTest(false);
 
 				// Override viewport so not upside down
@@ -101,8 +79,8 @@ namespace Candle {
 				const glm::vec2 scale = 2.0f / gui.DisplaySize;
 				const glm::vec2 translate = -1.0f - gui.DisplayPos * scale;
 
-				ctx.BindIndexBuffer(inputs.Frame.GuiIndices.GetBuffer(), 0, vk::IndexType::eUint16);
-				const vk::DeviceAddress vertexBase = inputs.Frame.GuiVertices.GetDeviceAddress();
+				ctx.BindIndexBuffer(inputs.Frame.GuiIndices.Buffer, inputs.Frame.GuiIndices.Offset, vk::IndexType::eUint16);
+				const vk::DeviceAddress vertexBase = inputs.Frame.GuiVertices.Address;
 
 				const uint32_t samplerIndex = static_cast<uint32_t>(SamplerType::LinearClamp);
 				for (const GuiDrawCommand& cmd : gui.Commands)

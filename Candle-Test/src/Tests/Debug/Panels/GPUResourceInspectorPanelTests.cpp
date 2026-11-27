@@ -5,7 +5,9 @@
 #include "TestHelpers.h"
 #include "PanelTestHelpers.h"
 
+#include <Candle/Debug/DebugFormat.h>
 #include <Candle/Debug/Panels/GPUResourceInspectorPanel.h>
+#include <Candle/Render/RenderConstants.h>
 
 #include <string>
 #include <string_view>
@@ -28,10 +30,11 @@ namespace {
 		panel.OnUpdate(context);
 	}
 
-	std::string Drawn(HeadlessGui& gui, GPUResourceInspectorPanel& panel, const GPUResourceStats& stats = {})
+	std::string Drawn(HeadlessGui& gui, GPUResourceInspectorPanel& panel, const GPUResourceStats& stats = {}, const GPUArenaStats& frameArena = {})
 	{
 		DebugContext context;
 		context.Resources = stats;
+		context.Render.FrameArena = frameArena;
 		return gui.Capture([&] { panel.OnRender(context); });
 	}
 
@@ -240,6 +243,35 @@ CDL_TEST_CASE(GPUResourceInspectorPanel, OtherMemoryIsWhatNoPoolOwnsAndNeverWrap
 	stats.AllocatorStats.Heaps[0].AllocationBytes = 1 * kMegabyte;
 	const std::string other = RowOf(Drawn(gui, panel, stats), "Other");
 	CDL_EXPECT_MSG(other.contains("0 B") && !other.contains("GB"), other);
+}
+
+// Used, Peak and Capacity are one frame slot's arena, while Memory is every slot's together
+CDL_TEST_CASE(GPUResourceInspectorPanel, ShowsTheFrameDataArenasBytes, Unit)
+{
+	HeadlessGui gui;
+	GPUResourceInspectorPanel panel;
+
+	const GPUArenaStats frameArena{ .UsedBytes = 3 * kMegabyte, .PeakBytes = 4 * kMegabyte, .CapacityBytes = 16 * kMegabyte };
+	const std::string text = Drawn(gui, panel, {}, frameArena);
+	const std::string frameData = RowOf(text, "Frame data");
+	for (const std::string& value : { std::string("3.0 MB"), std::string("4.0 MB"), std::string("16.0 MB"), FormatBytes(16 * kMegabyte * kMaxFramesInFlight) })
+		CDL_EXPECT_MSG(frameData.contains(value), text);
+}
+
+// The arenas have a table of their own, so Other leaves out every one of them
+CDL_TEST_CASE(GPUResourceInspectorPanel, OtherMemoryLeavesOutTheFrameArenas, Unit)
+{
+	HeadlessGui gui;
+	GPUResourceInspectorPanel panel;
+
+	const GPUArenaStats frameArena{ .CapacityBytes = 2 * kMegabyte };
+	GPUResourceStats stats;
+	stats.AllocatorStats.HeapCount = 1;
+	stats.AllocatorStats.Heaps[0].AllocationBytes = 2 * kMegabyte * kMaxFramesInFlight + 5 * kMegabyte;
+	stats.GeometryPoolStats.SizeBytes = 1 * kMegabyte;
+
+	const std::string other = RowOf(Drawn(gui, panel, stats, frameArena), "Other");
+	CDL_EXPECT_MSG(other.contains("4.0 MB"), other);
 }
 
 CDL_TEST_CASE(GPUResourceInspectorPanel, BaselineShowsGrowthSinceItWasMarked, Unit)

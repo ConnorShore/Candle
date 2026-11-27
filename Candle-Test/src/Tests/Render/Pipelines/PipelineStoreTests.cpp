@@ -289,11 +289,38 @@ CDL_TEST_CASE(PipelineStore, GetEntryPointReturnsTheComputeEntryPointWithItsGrou
 		const GPUPipelineHandle handle = store.CreatePipeline(PipelineFixtureComputeSpec(LoadTestShader("PipelineFixture", kFixturePath)));
 		CDL_CHECK(store.TryGetPipeline(handle));
 
-		const std::expected<ShaderEntryPoint, std::string> entryPoint = store.GetEntryPoint(handle, ShaderStage::Compute);
+		const std::expected<const ShaderEntryPoint*, std::string> entryPoint = store.GetEntryPoint(handle, ShaderStage::Compute);
 		CDL_CHECK_MSG(entryPoint.has_value(), entryPoint.error());
-		CDL_EXPECT_EQ(entryPoint->Name, std::string("pipelineCompute"));
-		CDL_EXPECT_EQ(entryPoint->Stage, ShaderStage::Compute);
-		ExpectGroupSize(entryPoint->LocalSize, kFixtureComputeGroupSize, "pipelineCompute");
+		CDL_CHECK(*entryPoint != nullptr);
+		CDL_EXPECT_EQ((*entryPoint)->Name, std::string("pipelineCompute"));
+		CDL_EXPECT_EQ((*entryPoint)->Stage, ShaderStage::Compute);
+		ExpectGroupSize((*entryPoint)->LocalSize, kFixtureComputeGroupSize, "pipelineCompute");
+	}
+	ExpectNoVulkanDebugMessages(logs);
+}
+
+// The render thread asks for its compute entry point every frame, so the store hands back the shader's own rather than a copy
+CDL_TEST_CASE(PipelineStore, GetEntryPointPointsIntoThePipelinesShader, Gpu)
+{
+	SkipUnlessCompiled(kFixturePath);
+
+	LoggerFixture logs(LogLevel::Warn, kRenderChannelMask);
+	{
+		TestDevice gpu;
+		BindlessTable bindless(gpu.Device);
+		TestPipelineStore store(gpu.Device, bindless);
+		const SharedPtr<Shader> shader = LoadTestShader("PipelineFixture", kFixturePath);
+		const GPUPipelineHandle handle = store.CreatePipeline(PipelineFixtureComputeSpec(shader));
+		CDL_CHECK(store.TryGetPipeline(handle));
+
+		const std::expected<const ShaderEntryPoint*, std::string> first = store.GetEntryPoint(handle, ShaderStage::Compute);
+		const std::expected<const ShaderEntryPoint*, std::string> second = store.GetEntryPoint(handle, ShaderStage::Compute);
+		CDL_CHECK_MSG(first.has_value(), first.error());
+		CDL_CHECK_MSG(second.has_value(), second.error());
+
+		const bool ownedByShader = std::ranges::any_of(shader->GetEntryPoints(), [&](const ShaderEntryPoint& owned) { return &owned == *first; });
+		CDL_EXPECT(ownedByShader);
+		CDL_EXPECT(*first == *second);
 	}
 	ExpectNoVulkanDebugMessages(logs);
 }
@@ -316,10 +343,11 @@ CDL_TEST_CASE(PipelineStore, GetEntryPointReturnsEachStageOfAGraphicsPipeline, G
 			{ ShaderStage::Fragment, "pipelineFragment" } };
 		for (const auto& [stage, name] : kStages)
 		{
-			const std::expected<ShaderEntryPoint, std::string> entryPoint = store.GetEntryPoint(handle, stage);
+			const std::expected<const ShaderEntryPoint*, std::string> entryPoint = store.GetEntryPoint(handle, stage);
 			CDL_CHECK_MSG(entryPoint.has_value(), entryPoint.error());
-			CDL_EXPECT_EQ(entryPoint->Name, std::string(name));
-			CDL_EXPECT_EQ(entryPoint->Stage, stage);
+			CDL_CHECK(*entryPoint != nullptr);
+			CDL_EXPECT_EQ((*entryPoint)->Name, std::string(name));
+			CDL_EXPECT_EQ((*entryPoint)->Stage, stage);
 		}
 	}
 	ExpectNoVulkanDebugMessages(logs);

@@ -40,7 +40,7 @@ namespace {
 	constexpr vk::Format kTargetFormat = vk::Format::eR8G8B8A8Unorm;	// UNORM, so the shader's result is stored unconverted
 	constexpr vk::Extent2D kExtent{ 4, 4 };
 	const glm::vec2 kDisplaySize{ kExtent.width, kExtent.height };	// ImGui's display, one unit per target pixel
-	constexpr uint32_t kMaxTestTransforms = 4;
+	constexpr uint32_t kTestFrameArenaCapacity = 64 * 1024;
 
 	// Covers clip space at z = 0, wound counter-clockwise like kTriangleVertices so culling keeps it
 	const std::array<GPU::Vertex, 4> kQuadVertices = { {
@@ -58,7 +58,7 @@ namespace {
 	// Render leaves its target ready to present, with no stage or access, which is the state SwapChainImage then tracks
 	constexpr ImageState kPresentState{ .Layout = vk::ImageLayout::ePresentSrcKHR };
 
-	// One slot of what RenderManager::CreateFrameContexts builds, with room for the few transforms a test draws
+	// One slot of what RenderManager::CreateFrameContexts builds, with an arena sized for the little a test draws
 	FrameContext CreateFrameContext(TestAllocator& gpu)
 	{
 		FrameContext frame;
@@ -68,14 +68,7 @@ namespace {
 		vk::CommandBufferAllocateInfo allocInfo{ .commandPool = *frame.CommandPool, .level = vk::CommandBufferLevel::ePrimary, .commandBufferCount = 1 };
 		frame.CommandBuffer = std::move(vk::raii::CommandBuffers(gpu.Device.GetDevice(), allocInfo).front());
 
-		frame.FrameData = gpu.Allocator.CreateBuffer({
-			.Size = sizeof(GPU::FrameData),
-			.Usage = vk::BufferUsageFlagBits::eShaderDeviceAddress,
-			.Flags = VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT | VMA_ALLOCATION_CREATE_MAPPED_BIT });
-		frame.TransformData = gpu.Allocator.CreateBuffer({
-			.Size = kMaxTestTransforms * sizeof(glm::mat4),
-			.Usage = vk::BufferUsageFlagBits::eShaderDeviceAddress,
-			.Flags = VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT | VMA_ALLOCATION_CREATE_MAPPED_BIT });
+		frame.FrameArena = GPUArenaAllocator(gpu.Allocator, kTestFrameArenaCapacity, "Test FrameDataArena");
 		return frame;
 	}
 
@@ -130,6 +123,20 @@ namespace {
 	std::vector<Texel> RenderFrame(TestRenderer& test, TestTarget& target, const FramePacket& packet)
 	{
 		test.Frame.CommandPool.reset();
+		test.Frame.FrameArena.Reset();
+
+		// RenderManager writes these into the slot's arena before Render, which only reads them by address
+		if (!packet.TransformData.empty())
+			test.Frame.TransformData = test.Frame.FrameArena.Push(std::as_bytes(std::span(packet.TransformData)));
+
+		const GPU::FrameData frameData{
+			.ViewProjection = packet.RenderView.Projection * packet.RenderView.View,
+			.TransformData = test.Frame.TransformData.Address,
+			.TransformCount = static_cast<uint32_t>(packet.TransformData.size()),
+			.Time = static_cast<float>(packet.Time)
+		};
+		test.Frame.FrameData = test.Frame.FrameArena.Push(std::as_bytes(std::span(&frameData, 1)));
+
 		test.SceneRenderer.Render(packet, test.Frame, target.Image);
 		SubmitAndWait(test.Device, test.Frame.CommandBuffer);
 
@@ -595,9 +602,9 @@ CDL_TEST_CASE(Renderer, DrawsEachGuiCommandFromItsOwnOffsets, Gpu)
 	ExpectNoVulkanDebugMessages(logs);
 }
 
-// A frame slot keeps its GUI buffers between frames: they grow to at least double, so a growing UI doesn't reallocate
-// every frame, and are written again as they are while the GUI fits.
-CDL_TEST_CASE(Renderer, GuiBuffersGrowByDoublingAndAreReusedWhileTheGuiFits, Gpu)
+// The GUI's vertices and indices come out of the frame slot's arena, the same buffer as its frame data, sized to what the
+// GUI needs. The slot rewinds the arena each frame, so a growing UI takes more of that buffer from the same place.
+CDL_TEST_CASE(Renderer, GuiDataComesFromTheFrameArenaAndIsReusedEachFrame, Gpu)
 {
 	SkipUnlessRendererShadersCompiled();
 
@@ -617,20 +624,17 @@ CDL_TEST_CASE(Renderer, GuiBuffersGrowByDoublingAndAreReusedWhileTheGuiFits, Gpu
 		};
 
 		RenderFrame(test, target, withQuads(2));
-		CDL_EXPECT_EQ(test.Frame.GuiVertices.GetSize(), 2 * kQuadVertexBytes);
-		CDL_EXPECT_EQ(test.Frame.GuiIndices.GetSize(), 2 * kQuadIndexBytes);
+		CDL_EXPECT_EQ(test.Frame.GuiVertices.Mapped.size(), 2 * kQuadVertexBytes);
+		CDL_EXPECT_EQ(test.Frame.GuiIndices.Mapped.size(), 2 * kQuadIndexBytes);
+		CDL_EXPECT(test.Frame.GuiVertices.Buffer == test.Frame.FrameData.Buffer);
+		CDL_EXPECT(test.Frame.GuiIndices.Buffer == test.Frame.FrameData.Buffer);
+		const vk::DeviceAddress firstVertices = test.Frame.GuiVertices.Address;
 
-		// Three quads need half as much again, so doubling, not the need, sets the new size
 		RenderFrame(test, target, withQuads(3));
-		CDL_EXPECT_EQ(test.Frame.GuiVertices.GetSize(), 4 * kQuadVertexBytes);
-		CDL_EXPECT_EQ(test.Frame.GuiIndices.GetSize(), 4 * kQuadIndexBytes);
-		const vk::DeviceAddress grownVertices = test.Frame.GuiVertices.GetDeviceAddress();
-		const vk::Buffer grownIndices = test.Frame.GuiIndices.GetBuffer();
-
-		RenderFrame(test, target, withQuads(1));
-		CDL_EXPECT_EQ(test.Frame.GuiVertices.GetDeviceAddress(), grownVertices);
-		CDL_EXPECT(test.Frame.GuiIndices.GetBuffer() == grownIndices);
-		CDL_EXPECT_EQ(test.Frame.GuiVertices.GetSize(), 4 * kQuadVertexBytes);
+		CDL_EXPECT_EQ(test.Frame.GuiVertices.Mapped.size(), 3 * kQuadVertexBytes);
+		CDL_EXPECT_EQ(test.Frame.GuiIndices.Mapped.size(), 3 * kQuadIndexBytes);
+		CDL_EXPECT_EQ(test.Frame.GuiVertices.Address, firstVertices);
+		CDL_EXPECT(test.Frame.GuiIndices.Buffer == test.Frame.FrameData.Buffer);
 	}
 	ExpectNoVulkanDebugMessages(logs);
 }

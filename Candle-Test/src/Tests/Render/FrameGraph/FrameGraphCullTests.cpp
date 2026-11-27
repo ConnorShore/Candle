@@ -458,6 +458,30 @@ CDL_TEST_CASE(FrameGraphCull, ProducerTwoKeptPassesReadRunsOnce, Gpu)
 	ExpectNoVulkanDebugMessages(logs);
 }
 
+// Lighting samples all three GBuffer targets, so it names the GBuffer pass three times, and each read queues it again
+// until it's marked kept. The walk queues more entries than the graph has passes.
+CDL_TEST_CASE(FrameGraphCull, ProducerOnePassReadsThreeTimesRunsOnce, Gpu)
+{
+	LoggerFixture logs(LogLevel::Warn, kRenderChannelMask);
+	{
+		TestFrameGraph test;
+		test.Graph.Reset(kOutputExtent);
+
+		FGTextureHandle albedo, normals, material;
+		DeclareRasterPass(test, "GBuffer", [&](FrameGraphBuilder& builder)
+			{
+				albedo = builder.ColorAttachment(builder.CreateTexture("Albedo", OutputSized()), FGLoad::Clear, kClearColor);
+				normals = builder.ColorAttachment(builder.CreateTexture("Normals", OutputSized()), FGLoad::Clear, kClearColor);
+				material = builder.ColorAttachment(builder.CreateTexture("Material", OutputSized()), FGLoad::Clear, kClearColor);
+			});
+		DrawToOutput(test, "Lighting", { albedo, normals, material });
+		test.RunFrame(1);
+
+		ExpectRan(test.Ran, { "GBuffer", "Lighting" });
+	}
+	ExpectNoVulkanDebugMessages(logs);
+}
+
 // The editor's scene window: the scene draws into the viewport target and the editor samples it into the window. The
 // scene is kept for writing an import and again for the editor's read, and still runs once.
 CDL_TEST_CASE(FrameGraphCull, ImportWriterAnotherKeptPassReadsRunsOnce, Gpu)

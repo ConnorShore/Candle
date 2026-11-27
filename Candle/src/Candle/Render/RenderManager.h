@@ -19,6 +19,7 @@
 #include "Candle/Render/Resources/GPUUploader.h"
 #include "Candle/Render/Resources/GeometryPool.h"
 #include "Candle/Render/Resources/TexturePool.h"
+#include "Candle/Render/Resources/GPUArenaAllocator.h"
 
 #include "Candle/Render/FrameGraph/FrameGraphCapture.h"
 
@@ -27,6 +28,9 @@
 
 #include <atomic>
 #include <thread>
+#include <array>
+#include <vector>
+#include <filesystem>
 
 namespace Candle {
 
@@ -100,6 +104,7 @@ namespace Candle {
 		uint32_t m_FrameIndex{ 0 };
 
 		RenderStats m_CompletedRenderStats;	// Render thread only: its last completed frame, written into each packet it releases
+		GPUArenaStats m_FrameArenaStats{ .CapacityBytes = kFrameDataArenaCapacity };	// Render thread only: the last drawn frame's, so skipped frames repeat it
 		RenderStats m_LatestRenderStats;	// Main thread only: copied out of each packet as it is acquired for writing
 	};
 
