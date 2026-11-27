@@ -75,7 +75,8 @@ namespace Candle {
 	{
 		CDL_PROFILE_SCOPE("FrameGraph CullPasses");
 
-		std::span<uint32_t> livePasses = m_ExecuteArena.NewArray<uint32_t>(m_Passes.size());
+		// Size to passes + accesses, since a pass may be live because it writes to a texture that is read by another pass, and that texture may have been written to by an earlier pass
+		std::span<uint32_t> livePasses = m_ExecuteArena.NewArray<uint32_t>(m_Passes.size() + m_Accesses.size());
 		uint32_t livePassCount = 0;
 
 		// Walk the passes and mark any that are NeverCull or write to an imported texture as live. The rest will be culled.

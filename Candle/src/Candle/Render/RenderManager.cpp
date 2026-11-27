@@ -251,6 +251,9 @@ namespace Candle {
 		// Record command buffers for rendering
 		m_Renderer.Render(*packet, frameContext, m_SwapChain.GetImage(imageIndex));
 
+		// Flush the used range of the frame arena before submit, for non-coherent memory
+		frameContext.FrameArena.Flush();
+
 		// Every module has pushed by the time Render returns
 		m_FrameArenaStats = frameContext.FrameArena.GetStats();
 		for (const FrameContext& slot : m_FrameContexts)

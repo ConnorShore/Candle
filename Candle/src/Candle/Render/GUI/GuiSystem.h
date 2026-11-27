@@ -22,7 +22,7 @@ namespace Candle {
 
 		void StartFrame();
 		void EndFrame();
-		GuiDrawData ExtractDrawData() const;
+		void ExtractDrawData(GuiDrawData& outData) const;
 
 		void SetNavigationEnabled(bool enabled);
 		inline bool IsNavigationEnabled() const { return m_NavigationEnabled; }

@@ -239,11 +239,12 @@ namespace Candle {
 
 		packet.RenderView = m_ActiveWorld.RenderView;
 		packet.Time = m_FrameStats.TotalTime;
-		packet.GuiDrawData = m_GuiSystem ? m_GuiSystem->ExtractDrawData() : GuiDrawData{};
 		packet.OutputTarget = m_RenderContext.GetOutputTexture();
 		packet.Minimized = m_Window->IsMinimized();
 		packet.SurfaceSize = m_Window->GetSize();
 		m_DebugDrawManager.ExtractDebugDrawData(packet.DebugDraw, m_FrameStats.DeltaTime);
+		if (m_GuiSystem)
+			m_GuiSystem->ExtractDrawData(packet.GuiDrawData);
 	}
 
 }

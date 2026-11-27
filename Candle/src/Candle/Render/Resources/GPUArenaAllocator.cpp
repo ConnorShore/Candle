@@ -5,6 +5,11 @@
 
 namespace Candle {
 
+	namespace {
+
+		constexpr uint8_t kMinAlignment = 16;	// Minimum alignment for GPU buffers (matches spir-v direct buffer alignment requirements)
+
+	}
 
 	GPUArenaAllocator::GPUArenaAllocator(GPUAllocator& allocator, uint32_t capacityBytes, const std::string& debugName/* = "GPUArenaAllocator"*/)
 		: m_Capacity(capacityBytes), m_Offset(0), m_DebugName(debugName)
@@ -25,18 +30,16 @@ namespace Candle {
 	{
 		CDL_CORE_ASSERT(size > 0, "GPUArenaAllocator [{}] allocation size must be greater than 0", m_DebugName);
 
-		// TODO NOW: Determine if this is needed
-		if (alignment < 16)
-		{
-			alignment = 16;	// Minimum alignment for a storage buffer
-			//CDL_CORE_WARN(LogChannel::Render, "GPUArenaAllocator [{}] allocation size {} is not aligned to 16 bytes; aligning it", m_DebugName, size);
-		}
+		// Force minimum alignment to match spir-v direct buffer alignment requirements
+		if (alignment < kMinAlignment)
+			alignment = kMinAlignment; 
 
 		// Align the offset to the requested alignment
 		m_Offset = (m_Offset + alignment - 1) & ~(alignment - 1);	// Align the offset
 
 		// Ensure we have enough space in the arena for the allocation
-		CDL_CORE_ASSERT(m_Offset + size <= m_Capacity, "GPUArenaAllocator [{}] out of memory: {} more bytes with {} of {} used; raise its capacity", m_DebugName, size, m_Offset, m_Capacity);
+		if (m_Offset + size > m_Capacity)
+			CDL_CORE_PANIC(LogChannel::Memory, "GPUArenaAllocator [{}] out of memory: {} more bytes with {} of {} used; raise its capacity", m_DebugName, size, m_Offset, m_Capacity);
 		
 		GPUArenaAllocation allocation{
 			.Mapped = m_Buffer.GetMappedMemory(m_Offset, size),

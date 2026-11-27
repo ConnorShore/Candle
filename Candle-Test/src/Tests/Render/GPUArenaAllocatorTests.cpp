@@ -8,7 +8,10 @@
 #include <Candle/Render/Resources/GPUArenaAllocator.h>
 #include <Candle/Render/Vulkan/GPUAllocator.h>
 
+#include <array>
 #include <cstdint>
+#include <cstring>
+#include <span>
 #include <type_traits>
 #include <utility>
 
@@ -72,6 +75,71 @@ CDL_TEST_CASE(GPUArenaAllocator, MoveKeepsItsBufferAndWhatItHandedOut, Gpu)
 		const GPUArenaAllocation second = slot.Allocate(64, 16);
 		CDL_EXPECT(second.Buffer == first.Buffer);
 		CDL_EXPECT_EQ(second.Address, first.Address + 64);
+	}
+	ExpectNoVulkanDebugMessages(logs);
+}
+
+// Each push lands in its own bytes of the buffer the GPU reads. Write-combined memory is slow to read back, but that's
+// fine for a few bytes.
+CDL_TEST_CASE(GPUArenaAllocator, PushesKeepTheirOwnBytesInMappedMemory, Gpu)
+{
+	LoggerFixture logs(LogLevel::Warn, kRenderChannelMask);
+	{
+		TestAllocator gpu;
+		GPUArenaAllocator arena(gpu.Allocator, kCapacity, "Test Arena");
+
+		const std::array<uint32_t, 3> first{ 0x11111111, 0x22222222, 0x33333333 };
+		const std::array<uint32_t, 5> second{ 0xAAAAAAAA, 0xBBBBBBBB, 0xCCCCCCCC, 0xDDDDDDDD, 0xEEEEEEEE };
+		const GPUArenaAllocation firstAllocation = arena.Push(std::as_bytes(std::span<const uint32_t>(first)));
+		const GPUArenaAllocation secondAllocation = arena.Push(std::as_bytes(std::span<const uint32_t>(second)));
+
+		CDL_CHECK_EQ(firstAllocation.Mapped.size(), sizeof(first));
+		CDL_CHECK_EQ(secondAllocation.Mapped.size(), sizeof(second));
+		CDL_EXPECT(std::memcmp(firstAllocation.Mapped.data(), first.data(), sizeof(first)) == 0);
+		CDL_EXPECT(std::memcmp(secondAllocation.Mapped.data(), second.data(), sizeof(second)) == 0);
+	}
+	ExpectNoVulkanDebugMessages(logs);
+}
+
+// Shaders load through the address, so it's the address that has to be aligned, not just the offset. A push of bytes
+// asks for an alignment of 1 and still gets 16, and a larger alignment is kept.
+CDL_TEST_CASE(GPUArenaAllocator, AllocationsAreAlignedToAtLeast16Bytes, Gpu)
+{
+	LoggerFixture logs(LogLevel::Warn, kRenderChannelMask);
+	{
+		TestAllocator gpu;
+		GPUArenaAllocator arena(gpu.Allocator, kCapacity, "Test Arena");
+
+		const GPUArenaAllocation first = arena.Allocate(1, 1);
+		const GPUArenaAllocation second = arena.Allocate(1, 1);
+		const GPUArenaAllocation overAligned = arena.Allocate(1, 256);
+
+		CDL_EXPECT_EQ(second.Offset, 16u);
+		CDL_EXPECT_EQ(overAligned.Offset, 256u);
+		CDL_EXPECT_EQ(first.Address % 16, 0u);
+		CDL_EXPECT_EQ(second.Address % 16, 0u);
+		CDL_EXPECT_EQ(overAligned.Address % 16, 0u);
+	}
+	ExpectNoVulkanDebugMessages(logs);
+}
+
+// A frame slot gets the same memory back each time its frame comes round: Reset rewinds, it doesn't free or allocate
+CDL_TEST_CASE(GPUArenaAllocator, ResetHandsOutTheSameMemoryAgain, Gpu)
+{
+	LoggerFixture logs(LogLevel::Warn, kRenderChannelMask);
+	{
+		TestAllocator gpu;
+		GPUArenaAllocator arena(gpu.Allocator, kCapacity, "Test Arena");
+
+		const GPUArenaAllocation before = arena.Allocate(64, 16);
+		arena.Allocate(128, 16);
+		arena.Reset();
+		const GPUArenaAllocation after = arena.Allocate(64, 16);
+
+		CDL_EXPECT_EQ(after.Offset, 0u);
+		CDL_EXPECT_EQ(after.Address, before.Address);
+		CDL_EXPECT(after.Mapped.data() == before.Mapped.data());
+		CDL_EXPECT_EQ(LiveAllocations(gpu.Allocator), 1u);
 	}
 	ExpectNoVulkanDebugMessages(logs);
 }
